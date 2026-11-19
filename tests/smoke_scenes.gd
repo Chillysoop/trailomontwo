@@ -6,6 +6,7 @@ const SCENES := [
 	"res://scenes/title_screen.tscn",
 	"res://scenes/travel_preview.tscn",
 	"res://scenes/battle_preview.tscn",
+	"res://scenes/expedition.tscn",
 ]
 
 

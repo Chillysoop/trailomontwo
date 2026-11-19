@@ -2,6 +2,7 @@ extends Node2D
 ## Title screen over the scrolling travel scenery.
 
 const SCENES := {
+	"Start expedition": "res://scenes/expedition.tscn",
 	"Travel preview": "res://scenes/travel_preview.tscn",
 	"Battle layout preview": "res://scenes/battle_preview.tscn",
 }
@@ -28,7 +29,7 @@ func _ready() -> void:
 	title.add_theme_color_override("font_outline_color", Color("2b2030"))
 	title.add_theme_constant_override("outline_size", 8)
 	col.add_child(title)
-	var sub := PreviewHud.label("Phase 0 build: visual previews", 9)
+	var sub := PreviewHud.label("Trailomon Advanced: early test build", 9)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_color_override("font_outline_color", Color("2b2030"))
 	sub.add_theme_constant_override("outline_size", 4)

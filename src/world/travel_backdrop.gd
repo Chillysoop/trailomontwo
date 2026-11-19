@@ -17,11 +17,23 @@ const LAYERS := [
 const FOREGROUND_SPEED := 46.0
 
 @export var speed_scale := 1.0
+@export var moving := true
+
+var _layers: Array[Parallax2D] = []
+var _speeds: Array[float] = []
 
 
 func _ready() -> void:
 	for entry in LAYERS:
 		add_child(_layer(entry[0], entry[1]))
+	set_moving(moving)
+
+
+## Start or stop the scenery scrolling (the wagon is travelling or halted).
+func set_moving(on: bool) -> void:
+	moving = on
+	for i in _layers.size():
+		_layers[i].autoscroll = Vector2(-_speeds[i] * speed_scale if on else 0.0, 0)
 
 
 func add_foreground(parent: Node) -> Node2D:
@@ -43,5 +55,7 @@ func _layer(file: String, speed: float) -> Node2D:
 	p.repeat_times = 2
 	p.autoscroll = Vector2(-speed * speed_scale, 0)
 	p.ignore_camera_scroll = true
+	_layers.append(p)
+	_speeds.append(speed)
 	p.add_child(sprite)
 	return p
