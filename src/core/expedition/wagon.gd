@@ -1,0 +1,54 @@
+class_name Wagon
+extends RefCounted
+## The wagon's condition: integrity, wear and which assembly (if any) is broken.
+##
+## Wear builds with distance, steep ground, heavy loads and pushing. Past WARN_WEAR the wagon
+## shows a breakdown warning, and each travel day has a growing chance of breaking an assembly.
+## A breakdown costs integrity, but one routine roll can't wreck a healthy wagon.
+
+enum Part { NONE, RUNNING_GEAR, HARNESS, CANOPY }
+
+const EMPTY_MASS := 80.0
+const CAPACITY := 240.0
+const WARN_WEAR := 60.0
+const BREAKDOWN_DAMAGE := 20
+const HARNESS_PENALTY := 0.75
+const CANOPY_WATER_PENALTY := 1.25
+const PART_NAMES := {Part.RUNNING_GEAR: "axle", Part.HARNESS: "harness", Part.CANOPY: "canopy"}
+
+var integrity := 100
+var wear := 0.0
+var broken := Part.NONE
+
+
+## Wear added by one travel day.
+static func wear_per_day(terrain_factor: float, cargo_weight: float, pushing: bool) -> float:
+	var load_ratio := clampf(cargo_weight / CAPACITY, 0.0, 1.5)
+	return 3.0 * terrain_factor * (0.6 + 0.8 * load_ratio) * (2.0 if pushing else 1.0)
+
+
+## Chance that today's travel breaks an assembly, from 0 below WARN_WEAR up to 50% at full wear.
+static func breakdown_chance(wear_level: float) -> float:
+	return clampf((wear_level - WARN_WEAR) / 80.0, 0.0, 0.5)
+
+
+func warning() -> bool:
+	return wear >= WARN_WEAR
+
+
+func break_part(part: Part) -> void:
+	broken = part
+	integrity = maxi(0, integrity - BREAKDOWN_DAMAGE)
+
+
+func repair(with_kit: bool) -> void:
+	broken = Part.NONE
+	wear = maxf(0.0, wear - (50.0 if with_kit else 25.0))
+	if with_kit:
+		integrity = mini(100, integrity + 10)
+	else:
+		integrity = maxi(0, integrity - 10)
+
+
+func part_name() -> String:
+	return PART_NAMES.get(broken, "")
