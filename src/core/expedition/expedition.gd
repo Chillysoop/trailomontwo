@@ -161,6 +161,11 @@ func spend_day() -> String:
 
 var trip := {}
 var trip_days_left := 0
+## The event waiting for the player's choice (empty when none). Travel pauses until resolve_event().
+var pending_event := {}
+var _trip_had_event := false
+## Tests can switch random events off.
+var events_enabled := true
 
 
 ## Commit to a segment. Returns false if it can't be travelled. Then call step_day() until it returns false.
@@ -171,6 +176,7 @@ func start_trip(seg: Dictionary) -> bool:
 	trip = seg
 	trip["pushing"] = f["hauling"] == Hauling.Result.PUSH
 	trip_days_left = f["days"]
+	_trip_had_event = false
 	state = State.TRAVELLING
 	return true
 
@@ -179,12 +185,20 @@ func start_trip(seg: Dictionary) -> bool:
 func step_day() -> bool:
 	if state != State.TRAVELLING:
 		return false
+	if not pending_event.is_empty():
+		return true
 	journal.append(spend_day())
 	if state == State.FAILED:
 		return false
 	_wear_day(float(trip["terrain_factor"]), trip["pushing"])
 	if state == State.FAILED:
 		return false
+	if events_enabled and not _trip_had_event and rng.randf() < TrailEvents.daily_chance(int(trip["risk"])):
+		var options := TrailEvents.for_segment(trip)
+		if not options.is_empty():
+			pending_event = options[rng.randi_range(0, options.size() - 1)]
+			_trip_had_event = true
+			journal.append(pending_event["title"] + "!")
 	trip_days_left -= 1
 	if trip_days_left > 0:
 		return true
@@ -196,13 +210,25 @@ func step_day() -> bool:
 	return false
 
 
-## Commit to a segment and resolve the whole trip at once.
+## Commit to a segment and resolve the whole trip at once (events take the safe choice).
 func travel(seg: Dictionary) -> bool:
 	if not start_trip(seg):
 		return false
 	while step_day():
-		pass
+		if not pending_event.is_empty():
+			resolve_event(safe_choice(pending_event))
+	if not pending_event.is_empty():
+		resolve_event(safe_choice(pending_event))
 	return true
+
+
+## Index of the event's no-roll choice.
+func safe_choice(event: Dictionary) -> int:
+	var choices: Array = event["choices"]
+	for i in choices.size():
+		if not choices[i].has("cap"):
+			return i
+	return 0
 
 
 ## Wagon wear, hauler fatigue and a possible breakdown for one travel day.
@@ -269,3 +295,82 @@ func toggle_hauler(id: String) -> void:
 		haulers.erase(id)
 	else:
 		haulers.append(id)
+
+
+# ---------- events ----------
+
+## The best creature in the roster for a capability, or "" if none has it.
+func best_helper(cap: String) -> String:
+	var best := ""
+	var best_rank := 0
+	for id in roster:
+		var r := Species.capability(id, cap)
+		if r > best_rank:
+			best_rank = r
+			best = id
+	return best
+
+
+## What each choice of an event looks like: helper, odds (or safe).
+func event_choices(event: Dictionary) -> Array:
+	var out: Array = []
+	for c in event["choices"]:
+		var view := {"label": c["label"], "safe": not c.has("cap"), "helper": "", "odds": {}}
+		if c.has("cap"):
+			var helper := best_helper(c["cap"])
+			var score := Species.capability(helper, c["cap"]) * TrailEvents.RANK_SCORE if helper != "" else 0
+			view["helper"] = helper
+			view["odds"] = CheckOdds.for_scores(score, int(c["difficulty"]))
+		out.append(view)
+	return out
+
+
+## Resolve the pending event with a choice. roll is 0-99 (random if negative).
+## Returns {"outcome": "success"|"mixed"|"failure", "text": String}.
+func resolve_event(choice: int, roll := -1) -> Dictionary:
+	if pending_event.is_empty():
+		return {}
+	var c: Dictionary = pending_event["choices"][choice]
+	var outcome := "success"
+	if c.has("cap"):
+		var odds: Dictionary = event_choices(pending_event)[choice]["odds"]
+		if roll < 0:
+			roll = rng.randi_range(0, 99)
+		if roll >= odds["success"] + odds["mixed"]:
+			outcome = "failure"
+		elif roll >= odds["success"]:
+			outcome = "mixed"
+	var fx: Dictionary = c[outcome]
+	pending_event = {}
+	var text: String = fx["text"]
+	journal.append(text)
+	_apply_effects(fx)
+	return {"outcome": outcome, "text": text}
+
+
+func _apply_effects(fx: Dictionary) -> void:
+	provisions = maxf(0.0, provisions - float(fx.get("provisions", 0)))
+	water = maxf(0.0, water - float(fx.get("water", 0)))
+	wagon.wear = minf(100.0, wagon.wear + float(fx.get("wear", 0)))
+	wagon.integrity = maxi(0, wagon.integrity - int(fx.get("integrity", 0)))
+	for id in haulers:
+		fatigue[id] = minf(100.0, float(fatigue.get(id, 0.0)) + float(fx.get("fatigue", 0)))
+	for i in int(fx.get("lose_cargo", 0)):
+		if cargo.is_empty():
+			break
+		var lost: Dictionary = cargo.pop_at(rng.randi_range(0, cargo.size() - 1))
+		journal.append("Lost the %s." % String(lost["name"]).to_lower())
+	health -= int(fx.get("health", 0))
+	if health <= 0:
+		health = 0
+		state = State.FAILED
+		fail_reason = "Your traveller couldn't go on."
+		return
+	if wagon.integrity <= 0:
+		state = State.FAILED
+		fail_reason = "The wagon fell apart on the trail."
+		return
+	for i in int(fx.get("days", 0)):
+		journal.append(spend_day())
+		if state == State.FAILED:
+			return
