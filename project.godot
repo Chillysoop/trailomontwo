@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="Trailomon"
+config/name="Trailomon Advanced"
 config/description="An expedition RPG about crossing a dangerous continent with a wagon and a team of creatures."
 config/version="0.0.1"
 run/main_scene="res://scenes/title_screen.tscn"

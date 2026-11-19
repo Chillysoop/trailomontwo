@@ -87,5 +87,5 @@ jobs:
             gh release edit latest --notes "$notes"
           else
             gh release create latest builds/windows/Trailomon.exe builds/version.txt \
-              --title "Latest build" --notes "$notes" --target "$GITHUB_SHA" --latest
+              --title "Trailomon Advanced (latest build)" --notes "$notes" --target "$GITHUB_SHA" --latest
           fi
