@@ -2,8 +2,8 @@ extends Node2D
 ## Travel view preview: the haulers pull the wagon down a narrow trail while the scenery scrolls past.
 
 const ROAD_FEET_Y := 300.0
-const WAGON_FEET := Vector2(232, 300)
-const HITCH := Vector2(308, 262)
+const WAGON_FEET := Vector2(220, 302)
+const HITCH := Vector2(326, 241)
 
 var _backdrop: TravelBackdrop
 
@@ -16,19 +16,19 @@ func _ready() -> void:
 	cast.y_sort_enabled = false
 	add_child(cast)
 
-	var companion := Stand.sprite(load("res://assets/creatures/rimehare.png"), Vector2(122, ROAD_FEET_Y + 8))
+	var companion := Stand.sprite(load("res://assets/creatures/rimehare.png"), Vector2(78, ROAD_FEET_Y + 10))
 	cast.add_child(companion)
 	Stand.bob(companion, 1, 0.5)
 
-	var wagon := Stand.sprite(load("res://assets/wagon/wagon_travel.png"), WAGON_FEET)
+	var wagon := Stand.sprite(load("res://assets/wagon/wagon.png"), WAGON_FEET)
 	cast.add_child(wagon)
 	Stand.bob(wagon, 1, 1.2)
 
-	var lead := Stand.sprite(load("res://assets/creatures/brambleback.png"), Vector2(472, ROAD_FEET_Y - 2))
-	var hauler := Stand.sprite(load("res://assets/creatures/coilhusk.png"), Vector2(392, ROAD_FEET_Y + 6))
-	cast.add_child(_rope(HITCH, Vector2(478, ROAD_FEET_Y - 30)))
+	var lead := Stand.sprite(load("res://assets/creatures/brambleback.png"), Vector2(486, ROAD_FEET_Y - 2))
+	var hauler := Stand.sprite(load("res://assets/creatures/coilhusk.png"), Vector2(404, ROAD_FEET_Y + 6))
+	cast.add_child(_rope(HITCH, Vector2(492, ROAD_FEET_Y - 30)))
 	cast.add_child(lead)
-	cast.add_child(_rope(HITCH + Vector2(0, 4), Vector2(398, ROAD_FEET_Y - 26)))
+	cast.add_child(_rope(HITCH + Vector2(0, 4), Vector2(410, ROAD_FEET_Y - 26)))
 	cast.add_child(hauler)
 	Stand.bob(lead, 1, 0.6, 0.15)
 	Stand.bob(hauler, 1, 0.7)

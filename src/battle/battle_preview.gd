@@ -23,7 +23,7 @@ func _ready() -> void:
 	bg.centered = false
 	add_child(bg)
 
-	add_child(Stand.sprite(load("res://assets/wagon/wagon_battle.png"), Formation.WAGON_FEET))
+	add_child(Stand.sprite(load("res://assets/wagon/wagon.png"), Formation.WAGON_FEET))
 
 	_grid = FormationGrid.new()
 	add_child(_grid)
