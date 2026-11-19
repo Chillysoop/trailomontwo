@@ -24,11 +24,17 @@ var _hauler_list: VBoxContainer
 var _cargo_list: VBoxContainer
 var _rest: Button
 var _repair: Button
-var _routes: VBoxContainer
+var _routes: GridContainer
 var _card: Label
 var _go: Button
 var _log: Label
 var _end: PanelContainer
+var _event: PanelContainer
+var _event_title: Label
+var _event_text: Label
+var _event_choices: VBoxContainer
+var _event_result: Label
+var _event_continue: Button
 var _picked: Dictionary = {}
 var _day_timer := 0.0
 
@@ -50,6 +56,7 @@ func start_new() -> void:
 	_caravan.set_walking(false)
 	_backdrop.set_moving(false)
 	_end.visible = false
+	_event.visible = false
 	_map.expedition = crossing
 	_show_junction()
 
@@ -63,7 +70,8 @@ func _show_junction() -> void:
 		c.queue_free()
 	var exits := crossing.exits()
 	for seg in exits:
-		var b := _button("%s  ·  %s, %d day%s" % [TestRoute.junction_name(seg["to"]), seg["terrain"], seg["days"], "" if seg["days"] == 1 else "s"], 9)
+		var b := _button("%s\n%s, %d day%s" % [TestRoute.junction_name(seg["to"]), seg["terrain"], seg["days"], "" if seg["days"] == 1 else "s"], 8)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_pick.bind(seg))
 		_routes.add_child(b)
 	_pick(exits[0])
@@ -115,7 +123,7 @@ func _set_off() -> void:
 
 
 func _process(delta: float) -> void:
-	if crossing == null or crossing.state != Expedition.State.TRAVELLING:
+	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible:
 		return
 	_day_timer -= delta
 	if _day_timer > 0.0:
@@ -125,14 +133,71 @@ func _process(delta: float) -> void:
 	var more := crossing.step_day()
 	_log.text = "   ".join(crossing.journal.slice(before))
 	_refresh_hud()
+	if not crossing.pending_event.is_empty():
+		_backdrop.set_moving(false)
+		_caravan.set_walking(false)
+		_show_event()
+		return
 	if more:
 		return
+	_after_trip()
+
+
+func _after_trip() -> void:
 	_backdrop.set_moving(false)
 	_caravan.set_walking(false)
 	match crossing.state:
 		Expedition.State.AT_JUNCTION: _show_junction()
 		Expedition.State.ARRIVED: _show_end(true)
 		Expedition.State.FAILED: _show_end(false)
+
+
+# ---------- events ----------
+
+func _show_event() -> void:
+	var ev := crossing.pending_event
+	_event.visible = true
+	_event_title.text = ev["title"]
+	_event_text.text = ev["text"]
+	_event_result.visible = false
+	_event_continue.visible = false
+	for c in _event_choices.get_children():
+		c.queue_free()
+	var views := crossing.event_choices(ev)
+	for i in views.size():
+		var v: Dictionary = views[i]
+		var line: String = v["label"]
+		if not v["safe"]:
+			var odds: Dictionary = v["odds"]
+			var who: String = Species.info(v["helper"])["name"] + " helps" if v["helper"] != "" else "nobody can help"
+			line += "\n    %s:  %d%% success, %d%% mixed, %d%% bad" % [who, odds["success"], odds["mixed"], odds["failure"]]
+		var b := _button(line, 8)
+		b.pressed.connect(_choose_event.bind(i))
+		_event_choices.add_child(b)
+	_event_choices.get_child(0).grab_focus.call_deferred()
+
+
+func _choose_event(i: int) -> void:
+	var r := crossing.resolve_event(i)
+	for c in _event_choices.get_children():
+		c.queue_free()
+	var head: String = {"success": "It went well.", "mixed": "It went partly well.", "failure": "It went badly."}[r["outcome"]]
+	_event_result.text = "%s %s" % [head, r["text"]]
+	_event_result.add_theme_color_override("font_color", {"success": Color("9fe0a0"), "mixed": Color("f0d27a"), "failure": Color("ff8a7a")}[r["outcome"]])
+	_event_result.visible = true
+	_event_continue.visible = true
+	_event_continue.grab_focus.call_deferred()
+	_refresh_hud()
+
+
+func _continue_after_event() -> void:
+	_event.visible = false
+	if crossing.state == Expedition.State.TRAVELLING:
+		_backdrop.set_moving(true)
+		_caravan.set_walking(true)
+		_day_timer = SECONDS_PER_DAY
+	else:
+		_after_trip()
 
 
 # ---------- wagon & cargo ----------
@@ -285,10 +350,12 @@ func _build_ui() -> void:
 	_route_page.add_theme_constant_override("separation", 3)
 	col.add_child(_route_page)
 	_map = RouteMapView.new()
-	_map.custom_minimum_size = Vector2(296 - 12, 134)
+	_map.custom_minimum_size = Vector2(296 - 12, 128)
 	_route_page.add_child(_map)
-	_routes = VBoxContainer.new()
-	_routes.add_theme_constant_override("separation", 2)
+	_routes = GridContainer.new()
+	_routes.columns = 2
+	_routes.add_theme_constant_override("h_separation", 3)
+	_routes.add_theme_constant_override("v_separation", 3)
 	_route_page.add_child(_routes)
 	_card = PreviewHud.label("", 8)
 	_route_page.add_child(_card)
@@ -326,6 +393,32 @@ func _build_ui() -> void:
 	_log.add_theme_color_override("font_outline_color", Color("2b2030"))
 	_log.add_theme_constant_override("outline_size", 4)
 	_ui.add_child(_log)
+
+	_event = PanelContainer.new()
+	_event.position = Vector2(150, 64)
+	_event.custom_minimum_size = Vector2(340, 0)
+	_event.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.94)))
+	var vcol := VBoxContainer.new()
+	vcol.add_theme_constant_override("separation", 5)
+	_event.add_child(vcol)
+	_event_title = PreviewHud.label("", 14)
+	vcol.add_child(_event_title)
+	_event_text = PreviewHud.label("", 9)
+	_event_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_event_text.custom_minimum_size = Vector2(328, 0)
+	vcol.add_child(_event_text)
+	_event_choices = VBoxContainer.new()
+	_event_choices.add_theme_constant_override("separation", 3)
+	vcol.add_child(_event_choices)
+	_event_result = PreviewHud.label("", 9)
+	_event_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_event_result.custom_minimum_size = Vector2(328, 0)
+	vcol.add_child(_event_result)
+	_event_continue = _button("Continue", 10)
+	_event_continue.pressed.connect(_continue_after_event)
+	vcol.add_child(_event_continue)
+	_event.visible = false
+	_ui.add_child(_event)
 
 	_end = PanelContainer.new()
 	_end.position = Vector2(170, 110)

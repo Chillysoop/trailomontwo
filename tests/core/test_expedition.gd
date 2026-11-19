@@ -1,6 +1,13 @@
 extends TestCase
 
 
+## A crossing with random events off, so day and supply counts are exact.
+func _fresh() -> Expedition:
+	var e := Expedition.new_default(1)
+	e.events_enabled = false
+	return e
+
+
 func _seg(from: String, to: String) -> Dictionary:
 	for s in TestRoute.exits(from):
 		if s["to"] == to:
@@ -9,7 +16,7 @@ func _seg(from: String, to: String) -> Dictionary:
 
 
 func test_daily_upkeep_matches_design() -> void:
-	var e := Expedition.new_default()
+	var e := _fresh()
 	# 1 human + large 2 + large 2 + medium 1 + small 0.5 + small 0.5 + large 2
 	check_near(e.daily_provisions(), 9.0)
 	check_near(e.daily_water(), 1.0 + 0.5 * 6)
@@ -29,7 +36,7 @@ func test_every_junction_can_reach_the_goal() -> void:
 
 
 func test_travel_spends_days_and_supplies() -> void:
-	var e := Expedition.new_default()
+	var e := _fresh()
 	var food := e.provisions
 	check(e.travel(_seg("eastgate", "mossford")), "forest segment should be travelable")
 	check_eq(e.at, "mossford")
@@ -38,7 +45,7 @@ func test_travel_spends_days_and_supplies() -> void:
 
 
 func test_forest_route_reaches_westwatch_with_default_supplies() -> void:
-	var e := Expedition.new_default()
+	var e := _fresh()
 	for pair in [["eastgate", "mossford"], ["mossford", "rail_bridge"], ["rail_bridge", "thornmarsh"], ["thornmarsh", "westwatch"]]:
 		check(e.travel(_seg(pair[0], pair[1])), "could not travel %s" % [pair])
 	check_eq(e.state, Expedition.State.ARRIVED)
@@ -46,7 +53,7 @@ func test_forest_route_reaches_westwatch_with_default_supplies() -> void:
 
 
 func test_running_out_of_food_and_water_fails_the_crossing() -> void:
-	var e := Expedition.new_default()
+	var e := _fresh()
 	e.provisions = 0.0
 	e.water = 0.0
 	for i in 10:
@@ -56,7 +63,7 @@ func test_running_out_of_food_and_water_fails_the_crossing() -> void:
 
 
 func test_overloaded_wagon_is_blocked_on_steep_ground() -> void:
-	var e := Expedition.new_default()
+	var e := _fresh()
 	e.cargo.append({"name": "Iron rails", "weight": 200.0})
 	var f := e.forecast(_seg("cogspire", "westwatch"))
 	check_eq(f["hauling"], Hauling.Result.BLOCKED)
@@ -64,7 +71,7 @@ func test_overloaded_wagon_is_blocked_on_steep_ground() -> void:
 
 
 func test_pushing_takes_longer() -> void:
-	var e := Expedition.new_default()
+	var e := _fresh()
 	e.cargo.append({"name": "Spare wheels", "weight": 40.0})
 	var seg := _seg("eastgate", "ridge_fork")
 	var f := e.forecast(seg)
