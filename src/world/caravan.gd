@@ -5,14 +5,14 @@ extends Node2D
 const ROAD_FEET_Y := 300.0
 const WAGON_FEET := Vector2(220, 302)
 const HITCH := Vector2(326, 241)
-## Feet positions for up to two haulers, nearest the wagon first.
-const HAULER_SLOTS := [Vector2(404, ROAD_FEET_Y + 6), Vector2(486, ROAD_FEET_Y - 2)]
+## Feet positions for up to three haulers, nearest the wagon first.
+const HAULER_SLOTS := [Vector2(404, ROAD_FEET_Y + 6), Vector2(486, ROAD_FEET_Y - 2), Vector2(566, ROAD_FEET_Y + 4)]
 const COMPANION_FEET := Vector2(78, ROAD_FEET_Y + 10)
 
 var _bobbing: Array[Node2D] = []
 
 
-## haulers: species ids pulling the wagon (first two are shown). companion: optional species id walking behind.
+## haulers: species ids pulling the wagon (first three are shown). companion: optional species id walking behind.
 func setup(haulers: Array, companion := "") -> void:
 	for c in get_children():
 		c.queue_free()
@@ -28,7 +28,8 @@ func setup(haulers: Array, companion := "") -> void:
 	var shown := haulers.slice(0, HAULER_SLOTS.size())
 	for i in range(shown.size() - 1, -1, -1):
 		var feet: Vector2 = HAULER_SLOTS[i]
-		add_child(_rope(HITCH + Vector2(0, 4 * (1 - i)), feet + Vector2(6, -30 + 4 * (1 - i))))
+		var from: Vector2 = HITCH + Vector2(0, 4 * (1 - i)) if i < 2 else HAULER_SLOTS[i - 1] + Vector2(10, -28)
+		add_child(_rope(from, feet + Vector2(6, -30 + 4 * (1 - i))))
 		var h := Stand.sprite(load("res://assets/creatures/%s.png" % shown[i]), feet)
 		add_child(h)
 		_bobbing.append(h)
