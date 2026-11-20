@@ -35,14 +35,22 @@ var cargo: Array[Dictionary] = []
 var rng := RandomNumberGenerator.new()
 var visited: Array[String] = []
 var journal: Array[String] = []
+## Current health of each roster creature (0 = knocked out). Carries between battles.
+var creature_hp := {}
+## Battle lineup: Vector2i(row, lane) -> species. Row 0 is the front, 1 the second row.
+var lineup := {}
+## Separate dice for battles, so adding battles doesn't change which trail events roll.
+var battle_rng := RandomNumberGenerator.new()
 
 
 static func new_default(rng_seed := -1) -> Expedition:
 	var e := Expedition.new()
 	if rng_seed >= 0:
 		e.rng.seed = rng_seed
+		e.battle_rng.seed = rng_seed + 7919
 	else:
 		e.rng.randomize()
+		e.battle_rng.randomize()
 	e.roster = ["brambleback", "coilhusk", "reedwake", "mirelamp", "rimehare", "scythelk"]
 	e.haulers = ["brambleback", "coilhusk"]
 	e.cargo = [
@@ -52,6 +60,8 @@ static func new_default(rng_seed := -1) -> Expedition:
 	]
 	for id in e.roster:
 		e.fatigue[id] = 0.0
+		e.creature_hp[id] = e.max_hp(id)
+	e.tidy_lineup()
 	e.visited = [TestRoute.START]
 	return e
 
@@ -94,7 +104,8 @@ func cargo_weight() -> float:
 func hauling_available() -> float:
 	var strengths: Array = []
 	for id in haulers:
-		strengths.append(hauler_strength(id))
+		if conscious(id):
+			strengths.append(hauler_strength(id))
 	var total := Hauling.available(strengths)
 	return total * (Wagon.HARNESS_PENALTY if wagon.broken == Wagon.Part.HARNESS else 1.0)
 
@@ -126,7 +137,7 @@ func forecast(seg: Dictionary) -> Dictionary:
 		"water": daily_water() * days,
 		"enough_food": provisions >= daily_provisions() * days,
 		"enough_water": water >= daily_water() * days,
-		"can_go": result != Hauling.Result.BLOCKED and state == State.AT_JUNCTION and wagon.broken != Wagon.Part.RUNNING_GEAR and not haulers.is_empty(),
+		"can_go": result != Hauling.Result.BLOCKED and state == State.AT_JUNCTION and wagon.broken != Wagon.Part.RUNNING_GEAR and not haulers.is_empty() and available > 0.0,
 	}
 
 
@@ -164,8 +175,20 @@ var trip_days_left := 0
 ## The event waiting for the player's choice (empty when none). Travel pauses until resolve_event().
 var pending_event := {}
 var _trip_had_event := false
-## Tests can switch random events off.
+var _trip_had_battle := false
+## Tests can switch random events (and random battles) off.
 var events_enabled := true
+## The battle waiting to be faced (empty when none): {"pack": Dictionary, "scale": float, "guardian": bool}.
+var pending_encounter := {}
+## The guardian battle on the last stretch to Westwatch. Tests can switch it off.
+var guardian_enabled := true
+var guardian_faced := false
+## Wild battle chance per travel day, plus this much per risk level. At most one per trip.
+const BATTLE_CHANCE := 0.10
+const BATTLE_RISK_CHANCE := 0.07
+## Conscious creatures recover this share of their health each travel day, and this much on a rest day.
+const TRAVEL_HEAL := 0.05
+const REST_HEAL := 0.4
 
 
 ## Commit to a segment. Returns false if it can't be travelled. Then call step_day() until it returns false.
@@ -177,6 +200,7 @@ func start_trip(seg: Dictionary) -> bool:
 	trip["pushing"] = f["hauling"] == Hauling.Result.PUSH
 	trip_days_left = f["days"]
 	_trip_had_event = false
+	_trip_had_battle = false
 	state = State.TRAVELLING
 	return true
 
@@ -185,8 +209,10 @@ func start_trip(seg: Dictionary) -> bool:
 func step_day() -> bool:
 	if state != State.TRAVELLING:
 		return false
-	if not pending_event.is_empty():
+	if not pending_event.is_empty() or not pending_encounter.is_empty():
 		return true
+	if trip_days_left <= 0:
+		return _arrive()
 	journal.append(spend_day())
 	if state == State.FAILED:
 		return false
@@ -199,9 +225,28 @@ func step_day() -> bool:
 			pending_event = options[rng.randi_range(0, options.size() - 1)]
 			_trip_had_event = true
 			journal.append(pending_event["title"] + "!")
+	if pending_event.is_empty() and events_enabled and not _trip_had_battle and battle_rng.randf() < BATTLE_CHANCE + BATTLE_RISK_CHANCE * int(trip["risk"]):
+		var packs := CombatData.packs_for(trip)
+		if not packs.is_empty():
+			var pack: Dictionary = packs[battle_rng.randi_range(0, packs.size() - 1)]
+			pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip["risk"]), 1.0)), "guardian": false}
+			_trip_had_battle = true
+			journal.append(pack["title"] + "!")
+	for id in roster:
+		if conscious(id):
+			creature_hp[id] = minf(max_hp(id), float(creature_hp[id]) + max_hp(id) * TRAVEL_HEAL)
 	trip_days_left -= 1
-	if trip_days_left > 0:
+	if trip_days_left > 0 or not pending_event.is_empty() or not pending_encounter.is_empty():
 		return true
+	if trip["to"] == TestRoute.GOAL and guardian_enabled and not guardian_faced:
+		guardian_faced = true
+		pending_encounter = {"pack": CombatData.GUARDIAN, "scale": CombatData.GUARDIAN_SCALE, "guardian": true}
+		journal.append(CombatData.GUARDIAN["title"] + " blocks the way!")
+		return true
+	return _arrive()
+
+
+func _arrive() -> bool:
 	at = trip["to"]
 	visited.append(at)
 	journal.append("Reached %s." % TestRoute.junction_name(at))
@@ -217,8 +262,8 @@ func travel(seg: Dictionary) -> bool:
 	while step_day():
 		if not pending_event.is_empty():
 			resolve_event(safe_choice(pending_event))
-	if not pending_event.is_empty():
-		resolve_event(safe_choice(pending_event))
+		if not pending_encounter.is_empty():
+			auto_fight()
 	return true
 
 
@@ -258,8 +303,13 @@ func rest() -> void:
 	journal.append(spend_day())
 	for id in fatigue:
 		fatigue[id] = maxf(0.0, float(fatigue[id]) - REST_RECOVERY)
+	var woke := 0
+	for id in roster:
+		if not conscious(id):
+			woke += 1
+		creature_hp[id] = minf(max_hp(id), float(creature_hp.get(id, 0.0)) + max_hp(id) * REST_HEAL)
 	if state != State.FAILED:
-		journal.append("Rested. The haulers recovered.")
+		journal.append("Rested. The haulers recovered and the team licked its wounds%s." % ((", %d back on their feet" % woke) if woke > 0 else ""))
 
 
 ## Repair the wagon: one day with a repair kit, or two days patching without one (costs integrity).
@@ -304,6 +354,8 @@ func best_helper(cap: String) -> String:
 	var best := ""
 	var best_rank := 0
 	for id in roster:
+		if not conscious(id):
+			continue
 		var r := Species.capability(id, cap)
 		if r > best_rank:
 			best_rank = r
@@ -374,3 +426,220 @@ func _apply_effects(fx: Dictionary) -> void:
 		journal.append(spend_day())
 		if state == State.FAILED:
 			return
+
+
+# ---------- creatures and battle lineup ----------
+
+func max_hp(id: String) -> float:
+	return float(CombatData.stats(id)["hp"]) * CombatData.HP_SCALE
+
+
+func conscious(id: String) -> bool:
+	return float(creature_hp.get(id, 0.0)) > 0.0
+
+
+func knocked_out() -> Array[String]:
+	var out: Array[String] = []
+	for id in roster:
+		if not conscious(id):
+			out.append(id)
+	return out
+
+
+func lineup_cell(id: String) -> Variant:
+	for cell in lineup:
+		if lineup[cell] == id:
+			return cell
+	return null
+
+
+## Creatures in the roster but not in the lineup.
+func bench() -> Array[String]:
+	var out: Array[String] = []
+	for id in roster:
+		if lineup_cell(id) == null:
+			out.append(id)
+	return out
+
+
+## Drop creatures that left the roster, and put unplaced ones in free cells
+## (guards and bruisers in the front row first, everyone else in the second row first).
+func tidy_lineup() -> void:
+	for cell in lineup.keys():
+		if not roster.has(lineup[cell]):
+			lineup.erase(cell)
+	for id in bench():
+		if lineup.size() >= 6:
+			break
+		var role: String = CombatData.stats(id)["role"]
+		var rows := [0, 1] if role in ["Guard", "Bruiser", "Striker"] else [1, 0]
+		var placed := false
+		for row in rows:
+			for lane in [1, 0, 2]:
+				if not placed and not lineup.has(Vector2i(row, lane)):
+					lineup[Vector2i(row, lane)] = id
+					placed = true
+
+
+## Put a creature in a cell. Whoever stood there swaps into the creature's old cell
+## (or goes to the bench if the creature came from the bench).
+func place_in_lineup(id: String, cell: Vector2i) -> void:
+	if not roster.has(id):
+		return
+	var old: Variant = lineup_cell(id)
+	var other: String = lineup.get(cell, "")
+	if old != null:
+		lineup.erase(old)
+	lineup[cell] = id
+	if other != "" and other != id and old != null:
+		lineup[old] = other
+
+
+func remove_from_lineup(id: String) -> void:
+	var cell: Variant = lineup_cell(id)
+	if cell != null and lineup.size() > 1:
+		lineup.erase(cell)
+
+
+## Arrange the lineup automatically: guards front centre, healers and supports behind.
+func auto_lineup() -> void:
+	lineup.clear()
+	var order := roster.duplicate()
+	var rank := {"Guard": 0, "Bruiser": 1, "Striker": 2, "Support": 3, "Healer": 4}
+	order.sort_custom(func(a, b): return rank.get(CombatData.stats(a)["role"], 5) < rank.get(CombatData.stats(b)["role"], 5))
+	var cells := [Vector2i(0, 1), Vector2i(0, 0), Vector2i(0, 2), Vector2i(1, 2), Vector2i(1, 0), Vector2i(1, 1)]
+	for i in mini(order.size(), cells.size()):
+		lineup[cells[i]] = order[i]
+
+
+# ---------- encounters ----------
+
+## Choices for the pending encounter, like event choices: Fight, Slip past (scout check),
+## and for wild packs a safe option of throwing them food.
+const SLIP_DIFFICULTY := 8
+const BRIBE_FOOD := 10
+
+func encounter_choices() -> Array:
+	if pending_encounter.is_empty():
+		return []
+	var out: Array = [{"id": "fight", "label": "Fight", "safe": false, "helper": "", "odds": {}}]
+	if not bool(pending_encounter["guardian"]):
+		var helper := best_helper("scout")
+		var score := Species.capability(helper, "scout") * TrailEvents.RANK_SCORE if helper != "" else 0
+		out.append({"id": "slip", "label": "Slip past quietly", "safe": false, "helper": helper,
+			"odds": CheckOdds.for_scores(score, SLIP_DIFFICULTY)})
+		out.append({"id": "bribe", "label": "Throw them food (%d food)" % BRIBE_FOOD, "safe": true, "helper": "", "odds": {}})
+	return out
+
+
+## Resolve a non-fight choice. Returns {"outcome", "text", "fight": bool, "ambush": bool}.
+## "fight" means the battle must still happen (ambush = they struck first).
+func resolve_encounter(choice_id: String, roll := -1) -> Dictionary:
+	if pending_encounter.is_empty():
+		return {}
+	match choice_id:
+		"bribe":
+			provisions = maxf(0.0, provisions - BRIBE_FOOD)
+			pending_encounter = {}
+			var t := "They snatch the food and melt back into the wild."
+			journal.append(t)
+			return {"outcome": "success", "text": t, "fight": false, "ambush": false}
+		"slip":
+			var odds: Dictionary = encounter_choices()[1]["odds"]
+			if roll < 0:
+				roll = battle_rng.randi_range(0, 99)
+			if roll < odds["success"]:
+				pending_encounter = {}
+				var t := "You lead the wagon around them without a sound."
+				journal.append(t)
+				return {"outcome": "success", "text": t, "fight": false, "ambush": false}
+			if roll < odds["success"] + odds["mixed"]:
+				pending_encounter = {}
+				for id in haulers:
+					fatigue[id] = minf(100.0, float(fatigue.get(id, 0.0)) + 15.0)
+				var t := "You get past, but only after a long, tiring detour."
+				journal.append(t)
+				return {"outcome": "mixed", "text": t, "fight": false, "ambush": false}
+			var t := "They spot you and charge before your team is ready!"
+			journal.append(t)
+			return {"outcome": "failure", "text": t, "fight": true, "ambush": true}
+	return {"outcome": "success", "text": "", "fight": true, "ambush": false}
+
+
+## Can anyone fight right now?
+func can_fight() -> bool:
+	for cell in lineup:
+		if conscious(lineup[cell]):
+			return true
+	return false
+
+
+## Build the battle for the pending encounter from the lineup, health and fatigue.
+func make_battle(ambush := false, rng_seed := -1) -> Battle:
+	var pack: Dictionary = pending_encounter.get("pack", CombatData.PACKS[0])
+	var opts := {"ambush": ambush}
+	opts["seed"] = rng_seed if rng_seed >= 0 else battle_rng.randi()
+	return Battle.create(
+		{"slots": lineup.duplicate(), "hp": creature_hp.duplicate(), "fatigue": fatigue.duplicate()},
+		{"front": pack["front"], "back": pack["back"], "boss": pack.get("boss", ""), "scale": float(pending_encounter.get("scale", 1.0))},
+		opts)
+
+
+## What a battle defeat costs (breach): wagon integrity and a share of food and water.
+const BREACH_INTEGRITY := 15
+const BREACH_SUPPLY_SHARE := 0.1
+const RETREAT_FOOD := 5.0
+const RETREAT_WEAR := 8.0
+const VICTORY_FOOD := 6.0
+const VICTORY_WATER := 4.0
+
+## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
+func finish_battle(battle: Battle) -> Array[String]:
+	var lines: Array[String] = []
+	var outcome := Battle.Outcome.DEFEAT if battle == null else battle.outcome
+	if battle != null:
+		var hp := battle.player_hp()
+		for id in hp:
+			creature_hp[id] = float(hp[id])
+	var guardian := bool(pending_encounter.get("guardian", false))
+	pending_encounter = {}
+	match outcome:
+		Battle.Outcome.VICTORY:
+			provisions += VICTORY_FOOD
+			water += VICTORY_WATER
+			lines.append("Victory! %s" % ("The Hollow Stag's pack scatters and the road to Westwatch is clear." if guardian else "The pack scatters."))
+			lines.append("You gather what they left behind: +%d food, +%d water." % [VICTORY_FOOD, VICTORY_WATER])
+		Battle.Outcome.RETREAT, Battle.Outcome.WITHDRAW:
+			provisions = maxf(0.0, provisions - RETREAT_FOOD)
+			wagon.wear = minf(100.0, wagon.wear + RETREAT_WEAR)
+			lines.append("Both sides are exhausted and pull back." if outcome == Battle.Outcome.WITHDRAW else "You pull the team back and the wagon rattles away.")
+			lines.append("The scramble costs %d food and %d wagon wear." % [RETREAT_FOOD, RETREAT_WEAR])
+		_:
+			var food := roundf(provisions * BREACH_SUPPLY_SHARE)
+			var drink := roundf(water * BREACH_SUPPLY_SHARE)
+			provisions -= food
+			water -= drink
+			wagon.integrity = maxi(0, wagon.integrity - BREACH_INTEGRITY)
+			lines.append("Defeat. They break through to the wagon.")
+			lines.append("The wagon takes a beating (-%d%% integrity) and they make off with %d food and %d water." % [BREACH_INTEGRITY, food, drink])
+	var down := knocked_out()
+	if not down.is_empty():
+		var names: Array[String] = []
+		for id in down:
+			names.append(Species.info(id)["name"])
+		lines.append("Knocked out: %s. Rest a day to get them back on their feet." % ", ".join(names))
+	for l in lines:
+		journal.append(l)
+	if wagon.integrity <= 0:
+		state = State.FAILED
+		fail_reason = "The wagon was torn apart in battle."
+	return lines
+
+
+## Fight the pending encounter instantly (used by travel() and tests).
+func auto_fight() -> Array[String]:
+	if not can_fight():
+		return finish_battle(null)
+	var b := make_battle()
+	b.run_to_end()
+	return finish_battle(b)

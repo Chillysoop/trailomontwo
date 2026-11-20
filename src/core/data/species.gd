@@ -25,6 +25,19 @@ const DATA := {
 		"capabilities": {"float": 2, "strength": 2}},
 	"inkhoot": {"name": "Inkhoot", "type": "River", "size": "small", "hauling": 0,
 		"capabilities": {"scout": 3, "float": 1}},
+	# Wild creatures met in battle (not in the starting roster).
+	"thornfang": {"name": "Thornfang", "type": "Forest", "size": "medium", "hauling": 0,
+		"capabilities": {"scout": 2, "guard": 1}},
+	"cairnram": {"name": "Cairnram", "type": "Mountain", "size": "large", "hauling": 120,
+		"capabilities": {"clear": 2, "strength": 3}},
+	"lianetail": {"name": "Lianetail", "type": "Jungle", "size": "small", "hauling": 0,
+		"capabilities": {"scout": 3, "clear": 1}},
+	"frostsnip": {"name": "Frostsnip", "type": "Snow", "size": "small", "hauling": 0,
+		"capabilities": {"cold": 3, "float": 1}},
+	"plateflit": {"name": "Plateflit", "type": "Jungle", "size": "medium", "hauling": 0,
+		"capabilities": {"guard": 2, "scout": 1}},
+	"hollowstag": {"name": "Hollowstag", "type": "Forest", "size": "large", "hauling": 0,
+		"capabilities": {}},
 }
 
 
