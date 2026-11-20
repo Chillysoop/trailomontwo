@@ -35,6 +35,10 @@ var _event_text: Label
 var _event_choices: VBoxContainer
 var _event_result: Label
 var _event_continue: Button
+var _team_status: Label
+var _battle: BattleScreen
+## What happens when the event panel's Continue is pressed: "" resumes travel, "battle" or "ambush" opens a fight.
+var _continue_to := ""
 var _picked: Dictionary = {}
 var _day_timer := 0.0
 
@@ -108,6 +112,8 @@ func _pick(seg: Dictionary) -> void:
 		_go.text = "The axle is broken. Repair the wagon first"
 	elif crossing.haulers.is_empty():
 		_go.text = "No haulers in harness"
+	elif f["available"] <= 0.0:
+		_go.text = "Haulers are knocked out. Rest first"
 	else:
 		_go.text = "Too heavy to travel this way"
 
@@ -123,7 +129,7 @@ func _set_off() -> void:
 
 
 func _process(delta: float) -> void:
-	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible:
+	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null:
 		return
 	_day_timer -= delta
 	if _day_timer > 0.0:
@@ -137,6 +143,11 @@ func _process(delta: float) -> void:
 		_backdrop.set_moving(false)
 		_caravan.set_walking(false)
 		_show_event()
+		return
+	if not crossing.pending_encounter.is_empty():
+		_backdrop.set_moving(false)
+		_caravan.set_walking(false)
+		_show_encounter()
 		return
 	if more:
 		return
@@ -161,6 +172,7 @@ func _show_event() -> void:
 	_event_text.text = ev["text"]
 	_event_result.visible = false
 	_event_continue.visible = false
+	_event_continue.text = "Continue"
 	for c in _event_choices.get_children():
 		c.queue_free()
 	var views := crossing.event_choices(ev)
@@ -192,12 +204,97 @@ func _choose_event(i: int) -> void:
 
 func _continue_after_event() -> void:
 	_event.visible = false
+	var next := _continue_to
+	_continue_to = ""
+	if next != "" and crossing.state == Expedition.State.TRAVELLING:
+		_open_battle(next == "ambush")
+		return
 	if crossing.state == Expedition.State.TRAVELLING:
 		_backdrop.set_moving(true)
 		_caravan.set_walking(true)
 		_day_timer = SECONDS_PER_DAY
 	else:
 		_after_trip()
+
+
+# ---------- battles ----------
+
+func _show_encounter() -> void:
+	var enc := crossing.pending_encounter
+	var pack: Dictionary = enc["pack"]
+	_event.visible = true
+	_event_title.text = pack["title"]
+	_event_text.text = pack["text"]
+	_event_result.visible = false
+	_event_continue.visible = false
+	for c in _event_choices.get_children():
+		c.queue_free()
+	for v in crossing.encounter_choices():
+		var line: String = v["label"]
+		if v["id"] == "fight":
+			line += "  (set your lineup first)" if crossing.can_fight() else "  (nobody can fight: they'll reach the wagon)"
+		elif not v["safe"]:
+			var odds: Dictionary = v["odds"]
+			var who: String = Species.info(v["helper"])["name"] + " scouts" if v["helper"] != "" else "nobody can scout"
+			line += "\n    %s:  %d%% clean, %d%% tiring detour, %d%% ambushed" % [who, odds["success"], odds["mixed"], odds["failure"]]
+		var b := _button(line, 8)
+		b.pressed.connect(_choose_encounter.bind(v["id"]))
+		_event_choices.add_child(b)
+	_event_choices.get_child(0).grab_focus.call_deferred()
+
+
+func _choose_encounter(id: String) -> void:
+	if id == "fight":
+		_event.visible = false
+		_open_battle(false)
+		return
+	var r := crossing.resolve_encounter(id)
+	for c in _event_choices.get_children():
+		c.queue_free()
+	_event_result.text = r["text"]
+	_event_result.add_theme_color_override("font_color", {"success": Color("9fe0a0"), "mixed": Color("f0d27a"), "failure": Color("ff8a7a")}[r["outcome"]])
+	_event_result.visible = true
+	_event_continue.visible = true
+	_event_continue.text = "To battle!" if r["fight"] else "Continue"
+	_continue_to = "ambush" if r["fight"] else ""
+	_event_continue.grab_focus.call_deferred()
+	_refresh_hud()
+
+
+func _open_battle(ambushed: bool) -> void:
+	if not crossing.can_fight():
+		var lines := crossing.finish_battle(null)
+		_event.visible = true
+		_event_title.text = "The wagon is overrun"
+		_event_text.text = ""
+		for c in _event_choices.get_children():
+			c.queue_free()
+		_event_result.text = "\n".join(lines)
+		_event_result.add_theme_color_override("font_color", Color("ff8a7a"))
+		_event_result.visible = true
+		_event_continue.text = "Continue"
+		_event_continue.visible = true
+		_refresh_hud()
+		return
+	_ui.visible = false
+	_backdrop.visible = false
+	_caravan.visible = false
+	_battle = BattleScreen.new()
+	_battle.setup(crossing, ambushed)
+	_battle.finished.connect(_on_battle_finished)
+	add_child(_battle)
+
+
+func _on_battle_finished(lines: Array) -> void:
+	_battle.queue_free()
+	_battle = null
+	_ui.visible = true
+	_backdrop.visible = true
+	_caravan.visible = true
+	_log.text = "   ".join(lines.slice(0, 2))
+	_refresh_hud()
+	_event_continue.text = "Continue"
+	_continue_after_event()
 
 
 # ---------- wagon & cargo ----------
@@ -225,6 +322,14 @@ func _refresh_wagon_page() -> void:
 		status += "\nWorn: it may break down on the trail"
 	status += "\nRepair kits: %d" % crossing.repair_kits
 	_wagon_status.text = status
+	var team: Array[String] = []
+	for id in crossing.roster:
+		var hp := roundi(float(crossing.creature_hp.get(id, 0.0)))
+		team.append("%s %s" % [Species.info(id)["name"], ("%d/%d" % [hp, roundi(crossing.max_hp(id))]) if hp > 0 else "KNOCKED OUT"])
+	var pairs: Array[String] = []
+	for i in range(0, team.size(), 2):
+		pairs.append("   ".join(team.slice(i, i + 2)))
+	_team_status.text = "Team health (rest to heal):\n" + "\n".join(pairs)
 	for c in _hauler_list.get_children():
 		c.queue_free()
 	for id in crossing.roster:
@@ -369,6 +474,8 @@ func _build_ui() -> void:
 	col.add_child(_wagon_page)
 	_wagon_status = PreviewHud.label("", 8)
 	_wagon_page.add_child(_wagon_status)
+	_team_status = PreviewHud.label("", 8)
+	_wagon_page.add_child(_team_status)
 	_wagon_page.add_child(PreviewHud.label("Haulers (click to harness or unhitch)", 9))
 	_hauler_list = VBoxContainer.new()
 	_hauler_list.add_theme_constant_override("separation", 2)
@@ -444,24 +551,7 @@ func _build_ui() -> void:
 
 
 func _button(text: String, size: int) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.add_theme_font_size_override("font_size", size)
-	b.add_theme_stylebox_override("normal", PreviewHud.box(Color(0.22, 0.17, 0.24, 0.9)))
-	b.add_theme_stylebox_override("hover", PreviewHud.box(Color(0.32, 0.24, 0.32, 0.95)))
-	b.add_theme_stylebox_override("focus", PreviewHud.box(Color(0.32, 0.24, 0.32, 0.95)))
-	b.add_theme_stylebox_override("pressed", PreviewHud.box(Color(0.45, 0.33, 0.30, 0.95)))
-	b.add_theme_stylebox_override("disabled", PreviewHud.box(Color(0.18, 0.14, 0.16, 0.7)))
-	# Small buttons get tight padding so lists fit the panel.
-	var pad_y := 1 if size <= 8 else 3
-	for state in ["normal", "hover", "focus", "pressed", "disabled"]:
-		var sb: StyleBoxFlat = b.get_theme_stylebox(state)
-		sb.content_margin_top = pad_y
-		sb.content_margin_bottom = pad_y
-		sb.content_margin_left = 5
-		sb.content_margin_right = 5
-	return b
+	return Ui.button(text, size)
 
 
 func _unhandled_input(event: InputEvent) -> void:
