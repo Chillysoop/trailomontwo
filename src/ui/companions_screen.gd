@@ -21,6 +21,9 @@ var _cards: VBoxContainer
 var _card_nodes: Array[Control] = []
 var _stored: HBoxContainer
 var _level_btn: Button
+## Called after a memory swap instead of refresh(), when the cards are shown somewhere else
+## (the level-up screen borrows _card() as its character sheet).
+var on_swap: Callable
 
 
 static func open(parent: Node, e: Expedition) -> CompanionsScreen:
@@ -161,7 +164,9 @@ func _panel(bg: Color, min_size: Vector2) -> PanelContainer:
 	return p
 
 
-func _card(id: String) -> Control:
+## One Trailomon's card. `highlight` outlines one move slot (the level-up screen marks the
+## slot a new move would replace).
+func _card(id: String, highlight := "") -> Control:
 	var p := _panel(Color(0.18, 0.14, 0.20, 0.95), CARD)
 	if id == "":
 		p.add_child(Rich.label("[color=#%s]Empty spot[/color]" % CreatureCard.MUTED, 8))
@@ -211,7 +216,20 @@ func _card(id: String) -> Control:
 	rule.custom_minimum_size = Vector2(0, 1)
 	col.add_child(rule)
 	for mid in kit:
-		col.add_child(_move_row(id, mid, atk, def, max_hp))
+		var mrow := _move_row(id, mid, atk, def, max_hp)
+		if CombatData.move(mid)["slot"] == highlight:
+			var hl := PanelContainer.new()
+			var hb := StyleBoxFlat.new()
+			hb.bg_color = Color(1.0, 0.55, 0.25, 0.10)
+			hb.border_color = Color(1.0, 0.6, 0.3, 0.9)
+			hb.set_border_width_all(1)
+			hb.set_corner_radius_all(2)
+			hb.set_content_margin_all(1)
+			hl.add_theme_stylebox_override("panel", hb)
+			hl.add_child(mrow)
+			col.add_child(hl)
+		else:
+			col.add_child(mrow)
 	return p
 
 
@@ -283,7 +301,7 @@ func _memory_slot(id: String, slot: String) -> Control:
 			if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
 				crossing.swap_memory(id, slot)
 				Tips.hide_from(null)
-				refresh.call_deferred())
+				(on_swap if on_swap.is_valid() else refresh).call_deferred())
 	return p
 
 
