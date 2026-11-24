@@ -95,8 +95,10 @@ func attack_rate() -> float:
 ## Defense after weaken (and Cairnram's Stubborn).
 func def_now() -> float:
 	var d := def
-	if passive == "stubborn" and hp_fraction() < 0.5:
-		d += float(CombatData.move("stubborn")["amount"])
+	if hp_fraction() < 0.5:
+		var pm := CombatData.move(passive)
+		if passive == "stubborn" or pm.get("kind", "") == "armor_low":
+			d += float(pm["amount"])
 	return d * (1.0 - mod_total("weaken"))
 
 

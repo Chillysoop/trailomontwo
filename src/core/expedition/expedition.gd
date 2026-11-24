@@ -39,9 +39,19 @@ var journal: Array[String] = []
 var creature_hp := {}
 ## Tamed Trailomon kept in storage, not travelling: no upkeep, can't fight or haul.
 var stored: Array[String] = []
-## Level of each tamed Trailomon (team and storage). Everyone starts at 1 until
-## experience and level-ups arrive.
+## Level of each tamed Trailomon (team and storage), starting at 1. See Leveling.
 var levels := {}
+## Experience toward the next level.
+var xp := {}
+## Moves in use when they differ from the species' starting kit: species -> {slot: move id}.
+var kits := {}
+## Stat boosts from level-ups: species -> {"hp", "atk", "def", "spd"}.
+var boosts := {}
+## Learnable moves each creature has picked up (MovePool ids).
+var known := {}
+## Level-ups waiting for the player to choose: [{"id", "level", "options": [...]}], oldest first.
+var pending_levels: Array[Dictionary] = []
+var level_rng := RandomNumberGenerator.new()
 ## Memory slots, one per move slot: species -> {"basic": move id, "passive": ..., "ultimate": ...}.
 ## A stored move can be swapped in between battles. Empty ("") until level-ups teach moves.
 var memory := {}
@@ -56,9 +66,11 @@ static func new_default(rng_seed := -1) -> Expedition:
 	if rng_seed >= 0:
 		e.rng.seed = rng_seed
 		e.battle_rng.seed = rng_seed + 7919
+		e.level_rng.seed = rng_seed + 104729
 	else:
 		e.rng.randomize()
 		e.battle_rng.randomize()
+		e.level_rng.randomize()
 	e.roster = ["brambleback", "coilhusk", "reedwake", "mirelamp", "rimehare", "scythelk"]
 	e.stored = ["gillhorn", "inkhoot"]
 	e.haulers = ["brambleback", "coilhusk"]
@@ -440,7 +452,101 @@ func _apply_effects(fx: Dictionary) -> void:
 # ---------- creatures and battle lineup ----------
 
 func max_hp(id: String) -> float:
-	return CombatData.max_hp(id)
+	return CombatData.max_hp(id) + float(boosts.get(id, {}).get("hp", 0.0))
+
+
+## A creature's current stat after level-up boosts ("atk", "def", "spd").
+func stat(id: String, key: String) -> float:
+	var base := float(CombatData.stats(id)[key])
+	var b := float(boosts.get(id, {}).get(key, 0.0))
+	return maxf(0.6, base - b) if key == "spd" else base + b
+
+
+## The move in use for "basic", "passive" or "ultimate".
+func kit_move(id: String, slot: String) -> String:
+	return String(kits.get(id, {}).get(slot, CombatData.stats(id)[slot]))
+
+
+func kit_moves(id: String) -> Array[String]:
+	return [kit_move(id, "basic"), kit_move(id, "passive"), kit_move(id, "ultimate")]
+
+
+# ---------- levels ----------
+
+## Add experience; every level gained queues a level-up choice. Returns levels gained.
+func gain_xp(id: String, amount: int) -> int:
+	var gained := 0
+	xp[id] = int(xp.get(id, 0)) + amount
+	while level(id) < Leveling.MAX_LEVEL and int(xp[id]) >= Leveling.xp_to_next(level(id)):
+		xp[id] = int(xp[id]) - Leveling.xp_to_next(level(id))
+		levels[id] = level(id) + 1
+		gained += 1
+		_queue_level_up(id, level(id))
+	if level(id) >= Leveling.MAX_LEVEL:
+		xp[id] = 0
+	return gained
+
+
+func _queue_level_up(id: String, lv: int) -> void:
+	var options: Array = []
+	if Leveling.is_ability_level(lv):
+		options = Leveling.ability_options(id, known.get(id, []), level_rng)
+	if options.size() < 2:
+		options = Leveling.stat_options(level_rng)
+	pending_levels.append({"id": id, "level": lv, "options": options})
+
+
+## Apply the player's pick for the oldest waiting level-up. For a move, keep_in_memory
+## stores it in the slot's memory instead of using it now. Returns a line for the journal.
+func choose_level_up(option: int, keep_in_memory := false) -> String:
+	if pending_levels.is_empty():
+		return ""
+	var p: Dictionary = pending_levels.pop_front()
+	var id: String = p["id"]
+	var o: Dictionary = p["options"][option]
+	var name: String = Species.info(id)["name"]
+	if o["kind"] == "stat":
+		var b: Dictionary = boosts.get(id, {})
+		b[o["stat"]] = float(b.get(o["stat"], 0.0)) + float(o["amount"])
+		boosts[id] = b
+		if o["stat"] == "hp":
+			creature_hp[id] = float(creature_hp.get(id, 0.0)) + float(o["amount"])
+		return "%s grew: %s (%s)." % [name, Leveling.boost_text(o["stat"], o["amount"]), Leveling.RARITY_NAMES[o["rarity"]]]
+	var mid: String = o["move"]
+	var slot: String = CombatData.move(mid)["slot"]
+	var k: Array = known.get(id, [])
+	k.append(mid)
+	known[id] = k
+	var mem: Dictionary = memory.get(id, {})
+	if keep_in_memory:
+		mem[slot] = mid
+		memory[id] = mem
+		return "%s learned %s and kept it in memory." % [name, CombatData.move(mid)["name"]]
+	var old := kit_move(id, slot)
+	mem[slot] = old
+	memory[id] = mem
+	var kit: Dictionary = kits.get(id, {})
+	kit[slot] = mid
+	kits[id] = kit
+	return "%s learned %s. %s moved to memory." % [name, CombatData.move(mid)["name"], CombatData.move(old)["name"]]
+
+
+## Swap a slot's move with the one in its memory (between battles).
+func swap_memory(id: String, slot: String) -> bool:
+	var stored := memory_move(id, slot)
+	if stored == "":
+		return false
+	var mem: Dictionary = memory.get(id, {})
+	mem[slot] = kit_move(id, slot)
+	memory[id] = mem
+	var kit: Dictionary = kits.get(id, {})
+	kit[slot] = stored
+	kits[id] = kit
+	return true
+
+
+func pending_count() -> int:
+	return pending_levels.size()
 
 
 func conscious(id: String) -> bool:
@@ -598,7 +704,8 @@ func make_battle(ambush := false, rng_seed := -1) -> Battle:
 	var opts := {"ambush": ambush}
 	opts["seed"] = rng_seed if rng_seed >= 0 else battle_rng.randi()
 	return Battle.create(
-		{"slots": lineup.duplicate(), "hp": creature_hp.duplicate(), "fatigue": fatigue.duplicate()},
+		{"slots": lineup.duplicate(), "hp": creature_hp.duplicate(), "fatigue": fatigue.duplicate(),
+			"kits": kits.duplicate(true), "boosts": boosts.duplicate(true)},
 		{"front": pack["front"], "back": pack["back"], "boss": pack.get("boss", ""), "scale": float(pending_encounter.get("scale", 1.0))},
 		opts)
 
@@ -640,6 +747,19 @@ func finish_battle(battle: Battle) -> Array[String]:
 			wagon.integrity = maxi(0, wagon.integrity - BREACH_INTEGRITY)
 			lines.append("Defeat. They break through to the wagon.")
 			lines.append("The wagon takes a beating (-%d%% integrity) and they make off with %d food and %d water." % [BREACH_INTEGRITY, food, drink])
+	# Experience for everyone who stood in the lineup.
+	if battle != null:
+		var award := Leveling.XP_LOSS
+		match outcome:
+			Battle.Outcome.VICTORY: award = Leveling.XP_GUARDIAN if guardian else Leveling.XP_WIN
+			Battle.Outcome.RETREAT, Battle.Outcome.WITHDRAW: award = Leveling.XP_RETREAT
+		var grew: Array[String] = []
+		for f in battle.side_fighters(Formation.Side.PLAYER):
+			if gain_xp(f.species, award) > 0:
+				grew.append("%s (Lv %d)" % [Species.info(f.species)["name"], level(f.species)])
+		lines.append("Everyone who fought gains %d experience." % award)
+		if not grew.is_empty():
+			lines.append("Level up! %s. Choose their upgrades from the Companions screen." % ", ".join(grew))
 	var down := knocked_out()
 	if not down.is_empty():
 		var names: Array[String] = []
