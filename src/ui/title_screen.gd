@@ -4,7 +4,7 @@ extends Node2D
 const SCENES := {
 	"Start expedition": "res://scenes/expedition.tscn",
 	"Travel preview": "res://scenes/travel_preview.tscn",
-	"Battle layout preview": "res://scenes/battle_preview.tscn",
+	"Practice battle": "res://scenes/battle.tscn",
 }
 
 
