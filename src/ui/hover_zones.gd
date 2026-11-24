@@ -13,6 +13,14 @@ var _current := -1
 var _timer := 0.0
 
 
+## The node of the zone under the mouse, or null.
+func hovered_node() -> Node2D:
+	if _current < 0 or _current >= zones.size():
+		return null
+	var n: Node2D = zones[_current]["node"]
+	return n if is_instance_valid(n) else null
+
+
 func clear() -> void:
 	zones.clear()
 	_current = -1

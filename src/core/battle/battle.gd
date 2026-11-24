@@ -308,6 +308,16 @@ func behind(t: Fighter) -> Fighter:
 	return null
 
 
+## Who `f`'s next basic attack will hit. Ordinary attacks can't touch the second row until
+## the whole front row is down; only moves that name a row (reach) go over it, and a taunt
+## still pulls those.
+func basic_target(f: Fighter) -> Fighter:
+	if not f.alive():
+		return null
+	var reach := bool(CombatData.move(f.basic).get("reach", false)) and not _any_taunting(_opposite(f.side))
+	return _back_row_target(f) if reach else ordinary_target(f.side, f.lane)
+
+
 func _back_row_target(f: Fighter) -> Fighter:
 	var back := _row(_opposite(f.side), Formation.Row.BACK)
 	return _nearest_lane(back, f.lane) if not back.is_empty() else ordinary_target(f.side, f.lane)
@@ -345,28 +355,58 @@ func _pct(f: Fighter, move_id: String, key := "pct") -> float:
 
 func _basic_attack(f: Fighter) -> void:
 	var m := CombatData.move(f.basic)
-	# Reach attacks go over the front row, unless someone is taunting.
-	var reach := bool(m.get("reach", false)) and not _any_taunting(_opposite(f.side))
-	var t := _back_row_target(f) if reach else ordinary_target(f.side, f.lane)
+	var t := basic_target(f)
 	if t == null:
 		return
 	f.attacks += 1
 	f.ult = minf(CombatData.ULT_MAX, f.ult + f.ult_per_attack)
 	events.append({"t": "attack", "src": f.uid, "dst": t.uid, "label": m["name"]})
-	_deal(f, t, _pct(f, f.basic), "basic", m["name"])
+	# Jungle dodge: the attack misses completely.
+	if t.dodge:
+		t.dodge = false
+		events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Dodged"})
+		return
+	var amount := _pct(f, f.basic)
+	match f.basic:
+		"bramble_swipe":
+			amount += f.def * float(m["def_pct"]) / 100.0
+		"trunk_slam":
+			if f.shield > 0.0:
+				amount *= 1.0 + float(m["amount"]) / 100.0
+		"scythe_cut":
+			if t.hp_fraction() < 0.5:
+				amount *= 1.0 + float(m["amount"]) / 100.0
+		"ink_jet":
+			var washed := minf(t.shield, _pct(f, f.basic, "wash"))
+			if washed > 0.0:
+				t.shield -= washed
+				events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Washed"})
+	_deal(f, t, amount, "basic", m["name"])
 	match f.basic:
 		"mending_spray":
 			_heal(f, _weakest_ally(f), _pct(f, f.basic, "heal_pct"))
 		"bog_spit":
 			if t.alive():
 				_poison(f, t, _pct(f, f.basic, "dot"), float(m["secs"]))
-		"frost_kick", "frost_sting":
+		"frost_kick":
 			if t.alive():
 				_slow(f, t, float(m["amount"]) / 100.0, float(m["secs"]))
-		"scythe_cut":
-			var b := behind(t)
-			if b != null:
-				_deal(f, b, _pct(f, f.basic, "behind"), "basic", m["name"])
+		"frost_sting":
+			if t.alive():
+				_slow(f, t, float(m["amount"]) / 100.0, float(m["secs"]))
+				_deal(f, t, amount, "basic", m["name"])
+		"thorn_bite":
+			_give_shield(f, f, _pct(f, f.basic, "shield_pct"))
+		"mud_horn":
+			if t.alive():
+				t.add_mod("weaken", float(m["amount"]) / 100.0, float(m["secs"]))
+				events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Weakened"})
+		"headbutt":
+			if t.alive():
+				t.attack_bar = maxf(0.0, t.attack_bar - float(m["amount"]) / 100.0)
+				events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Staggered"})
+		"wing_bash":
+			f.dodge = true
 		"antler_gore":
 			for a in adjacent(t):
 				_deal(f, a, _pct(f, f.basic, "splash"), "basic", m["name"])
@@ -376,12 +416,17 @@ func _basic_attack(f: Fighter) -> void:
 			var pm := CombatData.move("bark_shell")
 			if f.attacks % int(pm["every"]) == 0:
 				_give_shield(f, f, f.def * float(pm["def_pct"]) / 100.0)
+		"ancient_bark":
+			var pm := CombatData.move("ancient_bark")
+			if f.attacks % int(pm["every"]) == 0:
+				for a in _team(f.side):
+					_give_shield(f, a, f.def * float(pm["def_pct"]) / 100.0)
 		"glide":
 			var b := behind(t)
 			if b != null:
 				_deal(f, b, _pct(f, "glide"), "passive", "Glide")
 	# Thorns on the creature that was hit.
-	if t.alive() and t.passive in ["thorny_hide", "ancient_bark"]:
+	if t.alive() and (t.passive == "thorny_hide" or (t.passive == "thorn_pelt" and t.shield > 0.0)):
 		_deal(t, f, _pct(t, t.passive), "passive", CombatData.move(t.passive)["name"])
 
 
@@ -417,11 +462,10 @@ func _try_ultimate(f: Fighter) -> bool:
 				_deal(f, e, _pct(f, f.ultimate), "ult", m["name"])
 			for a in _team(f.side):
 				_give_shield(f, a, float(m["flat"]))
-		"rend":
+		"bramble_pounce":
+			var before := t.hp + t.shield
 			_deal(f, t, _pct(f, f.ultimate), "ult", m["name"])
-			if t.alive():
-				t.add_mod("ruin", float(m["amount"]) / 100.0, float(m["secs"]))
-				events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Ruined"})
+			_give_shield(f, f, (before - t.hp - t.shield) * float(m["amount"]) / 100.0)
 		"tidewash":
 			for a in _team(f.side):
 				_heal(f, a, a.max_hp * float(m["maxhp_pct"]) / 100.0, "ult")
@@ -456,15 +500,13 @@ func _try_ultimate(f: Fighter) -> bool:
 				back = [t]
 			for e in back:
 				_deal(f, e, _pct(f, f.ultimate), "ult", m["name"])
-				if e.alive():
-					_slow(f, e, float(m["amount"]) / 100.0, float(m["secs"]))
 		"wing_gust":
 			var row := _row(opp, Formation.Row.BACK)
 			if row.is_empty():
 				row = _row(opp, t.row)
 			for e in row:
 				_deal(f, e, _pct(f, f.ultimate), "ult", m["name"])
-			_give_shield(f, f, f.def)
+			f.dodge = true
 	return true
 
 
@@ -535,14 +577,8 @@ func damage_for(src: Fighter, t: Fighter, amount: float, pierce := false) -> flo
 	if src != null:
 		dmg *= CombatData.matchup(src.type, t.type)
 		match src.passive:
-			"pack_hunter":
-				var mates := 0
-				for o in fighters:
-					if o != src and o.side == src.side and o.alive() and o.species == "thornfang":
-						mates += 1
-				dmg *= 1.0 + mates * float(CombatData.move("pack_hunter")["pct"]) / 100.0
 			"mudwallow":
-				if t.poison_secs > 0.0:
+				if t.poison_secs > 0.0 or t.has_mod("weaken"):
 					dmg *= 1.0 + float(CombatData.move("mudwallow")["amount"]) / 100.0
 			"brittle":
 				if t.has_mod("slow"):

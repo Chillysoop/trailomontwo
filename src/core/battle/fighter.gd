@@ -29,6 +29,8 @@ var ult_per_attack := CombatData.ULT_PER_ATTACK
 var ult_per_hit := CombatData.ULT_PER_HIT
 var shield := 0.0
 var taunt := 0.0
+## Jungle dodge: the next basic attack aimed at it misses.
+var dodge := false
 ## Active timed modifiers: {"kind": "haste"|"slow"|"weaken"|"ruin", "amount": fraction, "secs": float}
 var mods: Array = []
 var poison_dps := 0.0

@@ -217,3 +217,63 @@ func test_move_descriptions_fill_in_numbers() -> void:
 		check(not d.contains("{atk") and not d.contains("{def") and not d.contains("{maxhp"), "%s: %s" % [id, d])
 		for k in CombatData.keywords(id):
 			check(Glossary.has(k), "%s mentions unknown keyword %s" % [id, k])
+
+
+func test_basic_attacks_never_skip_a_standing_front_row() -> void:
+	# Over a whole fight, no basic attack from a non-reach creature lands on the second row
+	# while any front-row enemy is still standing.
+	var b := _battle(TEAM, ["thornfang", "", "cairnram"], ["inkhoot", "frostsnip", "inkhoot"], "", 7)
+	var steps := 0
+	while b.outcome == Battle.Outcome.ONGOING and steps < 4000:
+		for f in b.fighters:
+			if f.alive() and f.side == Formation.Side.PLAYER and not CombatData.move(f.basic).get("reach", false):
+				var t := b.basic_target(f)
+				if t != null and not b._row(Formation.Side.ENEMY, Formation.Row.FRONT).is_empty():
+					check_eq(t.row, Formation.Row.FRONT, "%s must hit the front row first" % f.species)
+					if t.row != Formation.Row.FRONT:
+						return
+		b.step()
+		steps += 1
+
+
+func test_reach_is_the_only_basic_that_goes_over() -> void:
+	var b := _battle({Vector2i(1, 1): "lianetail", Vector2i(0, 1): "brambleback"}, ["thornfang", "", ""], ["", "", "inkhoot"])
+	for f in b.fighters:
+		if f.species == "lianetail":
+			check_eq(b.basic_target(f).row, Formation.Row.BACK, "Vine Whip names the second row")
+		elif f.species == "brambleback":
+			check_eq(b.basic_target(f).row, Formation.Row.FRONT)
+
+
+func test_headbutt_staggers_and_wing_bash_dodges() -> void:
+	var b := _battle({Vector2i(0, 1): "cairnram"}, ["", "plateflit", ""], [])
+	var ram: Fighter
+	var flit: Fighter
+	for f in b.fighters:
+		if f.species == "cairnram":
+			ram = f
+		elif f.species == "plateflit":
+			flit = f
+	flit.attack_bar = 0.9
+	b._basic_attack(ram)
+	check(flit.attack_bar < 0.65, "Headbutt knocks the attack bar back")
+	b._basic_attack(flit)
+	check(flit.dodge, "Wing Bash readies a dodge")
+	var hp := flit.hp
+	b._basic_attack(ram)
+	check_eq(flit.hp, hp, "the next basic attack misses")
+	check(not flit.dodge, "the dodge is used up")
+
+
+func test_mud_horn_weakens_and_ink_jet_washes_shields() -> void:
+	var b := _battle({Vector2i(0, 0): "gillhorn", Vector2i(0, 1): "inkhoot"}, ["brambleback", "", ""], [])
+	var bramble := _enemy(b, Formation.Row.FRONT, 0)
+	for f in b.fighters:
+		if f.species == "gillhorn":
+			b._basic_attack(f)
+	check(bramble.has_mod("weaken"), "Mud Horn weakens")
+	bramble.shield = 30.0
+	for f in b.fighters:
+		if f.species == "inkhoot":
+			b._basic_attack(f)
+	check_eq(bramble.shield, 0.0, "Ink Jet washes the shield away first")
