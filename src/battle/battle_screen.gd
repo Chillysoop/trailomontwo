@@ -37,18 +37,19 @@ var _fx: Node2D
 ## Lineup sprites by cell key, and combat views by fighter uid.
 var _views := {}
 var _ui: CanvasLayer
-var _info: Label
+var _hover: HoverZones
+var _info: RichTextLabel
 var _info_panel: PanelContainer
 var _side_panel: PanelContainer
 var _enc_title: Label
-var _enc_text: Label
-var _syn_mine: Label
-var _syn_theirs: Label
+var _enc_text: RichTextLabel
+var _syn_mine: RichTextLabel
+var _syn_theirs: RichTextLabel
 var _fight: Button
 var _bench_btn: Button
 var _foe_btn: Button
 var _combat_bar: PanelContainer
-var _clock: Label
+var _clock: RichTextLabel
 var _pause_btn: Button
 var _speed_btn: Button
 var _retreat_btn: Button
@@ -56,7 +57,7 @@ var _log: Label
 var _log_lines: Array[String] = []
 var _after: PanelContainer
 var _after_title: Label
-var _after_body: Label
+var _after_body: RichTextLabel
 var _after_buttons: HBoxContainer
 var _result_lines: Array[String] = []
 
@@ -85,6 +86,8 @@ func _ready() -> void:
 	_fx = Node2D.new()
 	_fx.z_index = 10
 	add_child(_fx)
+	_hover = HoverZones.new()
+	add_child(_hover)
 	_build_ui()
 	if crossing == null:
 		setup(Expedition.new_default(), false, true)
@@ -109,7 +112,7 @@ func _enter_lineup() -> void:
 	_info_panel.visible = true
 	_combat_bar.visible = false
 	_after.visible = false
-	_log.text = "Ambushed! Your team will be slow to react." if ambush else "Click a creature, then a cell to move it. Click anyone to inspect."
+	_log.text = "Ambushed! Your team will be slow to react." if ambush else "Click a creature, then a cell to move it. Hover anything for details."
 	_refresh_lineup()
 	_fight.grab_focus.call_deferred()
 
@@ -120,9 +123,10 @@ func _refresh_lineup() -> void:
 	for c in _fx.get_children():
 		c.queue_free()
 	_views.clear()
+	_hover.clear()
 	for cell in crossing.lineup:
 		var id: String = crossing.lineup[cell]
-		var v := _add_unit(id, Formation.slot_feet(Formation.Side.PLAYER, cell.x, cell.y), false)
+		var v := _add_unit(id, Formation.slot_feet(Formation.Side.PLAYER, cell.x, cell.y), false, _mine_card.bind(id))
 		if not crossing.conscious(id):
 			v["sprite"].modulate = Color(0.45, 0.45, 0.5, 0.6)
 		elif id == _selected:
@@ -136,12 +140,15 @@ func _refresh_lineup() -> void:
 		var ids: Array = pack["front" if row == Formation.Row.FRONT else "back"]
 		for lane in ids.size():
 			if String(ids[lane]) != "":
-				_add_unit(ids[lane], Formation.slot_feet(Formation.Side.ENEMY, row, lane), true)
+				_add_unit(ids[lane], Formation.slot_feet(Formation.Side.ENEMY, row, lane), true, _foe_card.bind(ids[lane], scale, false))
 	if String(pack.get("boss", "")) != "":
-		_add_unit(pack["boss"], Formation.BOSS_FEET, true)
+		_add_unit(pack["boss"], Formation.BOSS_FEET, true, _foe_card.bind(pack["boss"], scale, true))
 	_enc_title.text = pack["title"] + ("  (ambush!)" if ambush else "")
 	var strength := "weak" if scale < 1.0 else ("tough" if scale > 1.2 else ("strong" if scale > 1.05 else "ordinary"))
-	_enc_text.text = "Foes look %s.%s" % [strength, " Boss is safe until its pack falls." if String(pack.get("boss", "")) != "" else ""]
+	var risk_icons: int = {"weak": 0, "ordinary": 1, "strong": 2, "tough": 3}[strength]
+	Rich.set_text(_enc_text, "%sFoes look %s.%s%s" % ["{i:risk}".repeat(maxi(1, risk_icons)), strength,
+		" {k:role_boss|Boss} is safe until its pack falls." if String(pack.get("boss", "")) != "" else "",
+		" You were caught in an {k:ambush}." if ambush else ""])
 	var mine: Array = []
 	for cell in crossing.lineup:
 		if crossing.conscious(crossing.lineup[cell]):
@@ -152,9 +159,9 @@ func _refresh_lineup() -> void:
 			theirs.append(id)
 	if String(pack.get("boss", "")) != "":
 		theirs.append(pack["boss"])
-	_syn_mine.text = "Your habitat bonuses:\n" + ("\n".join(CombatData.synergy_lines(mine)) if not mine.is_empty() else "nobody can fight")
-	var their_lines := CombatData.synergy_lines(theirs).filter(func(l): return not l.begins_with("Close"))
-	_syn_theirs.text = "Theirs:\n" + ("\n".join(their_lines) if not their_lines.is_empty() else "none")
+	Rich.set_text(_syn_mine, "Your {k:synergy|habitat bonuses}:\n" + (synergy_markup(mine, true) if not mine.is_empty() else "nobody can fight"))
+	var theirs_text := synergy_markup(theirs, false)
+	Rich.set_text(_syn_theirs, "Theirs:\n" + (theirs_text if theirs_text != "" else "none"))
 	_fight.disabled = mine.is_empty()
 	_fight.text = "Fight!" if not mine.is_empty() else "Nobody can fight"
 	_foe_btn.visible = practice
@@ -163,7 +170,7 @@ func _refresh_lineup() -> void:
 	_grid.queue_redraw()
 
 
-func _add_unit(id: String, feet: Vector2, enemy: bool) -> Dictionary:
+func _add_unit(id: String, feet: Vector2, enemy: bool, tip: Variant = null) -> Dictionary:
 	var holder := Node2D.new()
 	holder.position = feet
 	_units.add_child(holder)
@@ -177,35 +184,64 @@ func _add_unit(id: String, feet: Vector2, enemy: bool) -> Dictionary:
 	bar.enemy = enemy
 	holder.add_child(bar)
 	var v := {"holder": holder, "sprite": s, "bar": bar, "home": feet}
+	if tip != null:
+		_hover.add(HoverZones.creature_rect(feet) if feet != Formation.BOSS_FEET else Rect2(feet + Vector2(-32, -72), Vector2(64, 74)), tip, holder)
 	return v
+
+
+## Tooltip for one of your creatures before the fight.
+func _mine_card(id: String) -> String:
+	return CreatureCard.markup(id, {"hp": crossing.creature_hp.get(id, 0.0), "max_hp": crossing.max_hp(id),
+		"fatigue": crossing.fatigue.get(id, 0.0)})
+
+
+func _foe_card(id: String, scale: float, boss: bool) -> String:
+	var t := CreatureCard.markup(id, {"scale": scale, "enemy": true})
+	if boss:
+		t += "\n{k:role_boss|Boss}: can't be hit until its pack is down."
+	return t
+
+
+## Tooltip for a creature during the fight, with live health and statuses.
+func _fighter_card(uid: int) -> String:
+	if battle == null:
+		return ""
+	var f := battle.fighter(uid)
+	if f == null:
+		return ""
+	return CreatureCard.markup(f.species, {"hp": f.hp, "max_hp": f.max_hp, "fighter": f, "enemy": f.side == Formation.Side.ENEMY})
+
+
+## Habitat bonus lines with icons. include_close adds habitats one creature short.
+static func synergy_markup(ids: Array, include_close: bool) -> String:
+	var counts := CombatData.type_counts(ids)
+	var active: Array[String] = []
+	var near: Array[String] = []
+	for t in CombatData.SYNERGIES:
+		var n: int = counts.get(t, 0)
+		if n == 0:
+			continue
+		var tier := CombatData.synergy_tier(t, n)
+		var syn: Dictionary = CombatData.SYNERGIES[t]
+		var hab := Glossary.habitat_id(t)
+		if tier > 0:
+			active.append("{i:%s}x%d %s" % [hab, n, syn["desc"] % int(CombatData.synergy_value(t, tier))])
+		else:
+			near.append("{i:%s}%d/%d" % [hab, n, syn["need"][0]])
+	if include_close and not near.is_empty():
+		active.append("Close: " + " ".join(near))
+	return "\n".join(active)
 
 
 func _show_info() -> void:
 	var id: String = _inspect.get("id", "")
 	if id == "":
-		_info.text = "Click a creature to see what it does."
+		Rich.set_text(_info, "Click a creature to move it. Hover any creature, icon or [u]underlined[/u] word for details.")
 		return
-	var s := CombatData.stats(id)
-	var lines: Array[String] = []
-	var scale := float(_inspect.get("scale", 1.0))
-	var hp_line := ""
-	if _inspect.get("mine", false):
-		hp_line = "HP %d/%d" % [roundi(float(crossing.creature_hp.get(id, 0.0))), roundi(crossing.max_hp(id))]
-		if crossing.fatigue.get(id, 0.0) > 0.0:
-			hp_line += "  tired %d%%" % roundi(float(crossing.fatigue[id]))
-	else:
-		hp_line = "HP %d" % roundi(float(s["hp"]) * CombatData.HP_SCALE * scale)
-	lines.append("%s  ·  %s %s  ·  %s" % [Species.info(id)["name"], CombatData.type_of(id), s["role"], hp_line])
-	lines.append("Might %d  Spirit %d  Guard %d  Tempo %d" % [roundi(s["might"] * scale), roundi(s["spirit"] * scale), s["guard"], s["tempo"]])
-	var t := CombatData.type_of(id)
-	var chart: Array = CombatData.CHART.get(t, ["", ""])
-	lines.append("Hits %s hard, weak against %s" % [chart[0], chart[1]])
-	for a in s["abilities"]:
-		var ab := CombatData.ability(a)
-		lines.append("%s (%ds): %s" % [ab["name"], roundi(ab["cooldown"]), ab["desc"]])
+	var text := _mine_card(id) if _inspect.get("mine", false) else _foe_card(id, float(_inspect.get("scale", 1.0)), id == String(_pack().get("boss", "")))
 	if _inspect.get("mine", false) and not crossing.conscious(id):
-		lines.append("Knocked out. Rest a day at a stop to wake it.")
-	_info.text = "\n".join(lines)
+		text += "\n{k:ko|Knocked out}. Rest a day at a stop to wake it."
+	Rich.set_text(_info, text)
 
 
 func _cell_at(p: Vector2, side: int) -> Variant:
@@ -281,15 +317,16 @@ func _start_combat() -> void:
 	_combat_bar.visible = true
 	paused = false
 	_retreat_btn.disabled = _is_guardian()
-	_retreat_btn.tooltip_text = "There's no way around this one." if _is_guardian() else "Pull back after 3 seconds. Costs food and wagon wear."
+	_retreat_btn.set_meta("tip", "There's no way around this one." if _is_guardian() else "Pull back after 3 seconds. Costs {i:food} food and {i:wagon} wagon wear.")
 	_log_lines.clear()
 	_log.text = "The fight begins!"
 	for c in _units.get_children():
 		c.queue_free()
 	_views.clear()
+	_hover.clear()
 	for f in battle.fighters:
 		var feet := Formation.BOSS_FEET if f.is_boss() else Formation.slot_feet(f.side, f.row, f.lane)
-		var v := _add_unit(f.species, feet, f.side == Formation.Side.ENEMY)
+		var v := _add_unit(f.species, feet, f.side == Formation.Side.ENEMY, _fighter_card.bind(f.uid))
 		_views[f.uid] = v
 		_update_bar(f)
 	_refresh_combat_bar()
@@ -301,9 +338,13 @@ func _process(delta: float) -> void:
 	if not paused:
 		battle.advance(delta * SPEEDS[speed_index])
 	_drain_events()
-	_clock.text = "%ds%s" % [int(battle.time), "  tiring!" if battle.time >= Battle.FATIGUE_START else ""]
+	for f in battle.fighters:
+		if f.alive():
+			_update_bar(f)
+	var clock := "{i:cooldown}%ds%s" % [int(battle.time), "  {k:tired|tiring!}" if battle.time >= Battle.FATIGUE_START else ""]
 	if battle.retreating:
-		_clock.text += "  retreating %.1fs" % maxf(0.0, battle.retreat_left)
+		clock += "  retreating %.1fs" % maxf(0.0, battle.retreat_left)
+	Rich.set_text(_clock, clock)
 	if battle.outcome != Battle.Outcome.ONGOING:
 		_end_combat()
 
@@ -401,6 +442,16 @@ func _update_bar(f: Fighter) -> void:
 	bar.poisoned = f.poison_secs > 0.0
 	bar.taunting = f.taunt > 0.0
 	bar.protected = f.is_boss() and battle != null and _boss_protected()
+	var st: Array[String] = []
+	if f.shield > 0.5:
+		st.append("shield")
+	if f.poison_secs > 0.0:
+		st.append("poison")
+	if f.taunt > 0.0:
+		st.append("taunt")
+	for m in f.mods:
+		st.append(String(m["kind"]))
+	bar.statuses = st
 	bar.queue_redraw()
 
 
@@ -483,7 +534,7 @@ func _end_combat() -> void:
 		_result_lines = lines
 	else:
 		_result_lines = crossing.finish_battle(battle)
-	_after_body.text = "\n".join(_result_lines)
+	Rich.set_text(_after_body, "\n".join(_result_lines))
 	for c in _after_buttons.get_children():
 		c.queue_free()
 	if practice:
@@ -533,9 +584,7 @@ func _build_ui() -> void:
 	info_panel.position = Vector2(6, 6)
 	info_panel.custom_minimum_size = Vector2(318, 0)
 	info_panel.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.85)))
-	_info = PreviewHud.label("", 8)
-	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_info.custom_minimum_size = Vector2(306, 0)
+	_info = Rich.label("", 8, 306)
 	info_panel.add_child(_info)
 
 	_side_panel = PanelContainer.new()
@@ -547,29 +596,27 @@ func _build_ui() -> void:
 	_side_panel.add_child(col)
 	_enc_title = PreviewHud.label("", 12)
 	col.add_child(_enc_title)
-	_enc_text = PreviewHud.label("", 8)
+	_enc_text = Rich.label("", 8, 290)
 	col.add_child(_enc_text)
 	var syn := HBoxContainer.new()
 	syn.add_theme_constant_override("separation", 6)
-	_syn_mine = PreviewHud.label("", 8)
-	_syn_mine.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_syn_mine.custom_minimum_size = Vector2(150, 0)
+	_syn_mine = Rich.label("", 8, 150)
 	syn.add_child(_syn_mine)
-	_syn_theirs = PreviewHud.label("", 8)
-	_syn_theirs.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_syn_theirs.custom_minimum_size = Vector2(134, 0)
+	_syn_theirs = Rich.label("", 8, 134)
 	syn.add_child(_syn_theirs)
 	col.add_child(syn)
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 4)
 	_fight = Ui.button("Fight!", 10)
 	_fight.pressed.connect(_start_combat)
+	Tips.attach(_fight, func(): return "Start the fight. It plays out by itself: your lineup and {k:synergy|habitat bonuses} decide it.")
 	buttons.add_child(_fight)
 	var auto := Ui.button("Auto-arrange", 9)
 	auto.pressed.connect(_auto_arrange)
+	Tips.attach(auto, func(): return "Put {i:role_guard} guards and {i:role_bruiser} bruisers in the {k:front_row}, everyone else in the {k:back_row}.")
 	buttons.add_child(auto)
 	_bench_btn = Ui.button("Sit out", 9)
-	_bench_btn.tooltip_text = "Take the selected creature out of this battle."
+	Tips.attach(_bench_btn, func(): return "Take the selected creature out of this battle.")
 	_bench_btn.pressed.connect(_bench_selected)
 	buttons.add_child(_bench_btn)
 	_foe_btn = Ui.button("Next foe", 9)
@@ -586,7 +633,7 @@ func _build_ui() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	_combat_bar.add_child(row)
-	_clock = PreviewHud.label("0s", 9)
+	_clock = Rich.label("0s", 9)
 	_clock.custom_minimum_size = Vector2(70, 0)
 	row.add_child(_clock)
 	_pause_btn = Ui.button("Pause (Space)", 9)
@@ -600,6 +647,7 @@ func _build_ui() -> void:
 	_retreat_btn = Ui.button("Retreat", 9)
 	_retreat_btn.focus_mode = Control.FOCUS_NONE
 	_retreat_btn.pressed.connect(_retreat)
+	Tips.attach(_retreat_btn, func(): return str(_retreat_btn.get_meta("tip", "")))
 	row.add_child(_retreat_btn)
 	_ui.add_child(_combat_bar)
 
@@ -618,9 +666,7 @@ func _build_ui() -> void:
 	_after.add_child(acol)
 	_after_title = PreviewHud.label("", 16)
 	acol.add_child(_after_title)
-	_after_body = PreviewHud.label("", 9)
-	_after_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_after_body.custom_minimum_size = Vector2(328, 0)
+	_after_body = Rich.label("", 9, 328)
 	acol.add_child(_after_body)
 	_after_buttons = HBoxContainer.new()
 	_after_buttons.add_theme_constant_override("separation", 6)
@@ -654,6 +700,8 @@ class HpBar:
 	var taunting := false
 	var protected := false
 	var enemy := false
+	## Status icon ids shown under the bar.
+	var statuses: Array[String] = []
 
 	func _draw() -> void:
 		var w := 32.0
@@ -668,6 +716,12 @@ class HpBar:
 			draw_rect(Rect2(-1, -1, w + 2, 5), Color("ffd36b"), false, 1.0)
 		if protected:
 			draw_rect(Rect2(-1, -1, w + 2, 5), Color("bfe6ff"), false, 1.0)
+		var x := 0.0
+		for id in statuses:
+			var tex := Rich.icon_tex(id)
+			if tex != null:
+				draw_texture_rect(tex, Rect2(x, 5, 8, 8), false)
+				x += 8
 
 
 class Shadow:
