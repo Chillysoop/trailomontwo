@@ -10,8 +10,10 @@ signal closed
 
 const SCREEN := Vector2(640, 360)
 const CARD := Vector2(204, 0)
-const PIC := 30.0
-const TILE := 30.0
+const PIC := 26.0
+const TILE := 24.0
+## Space left above and to the left of a portrait for its level badge.
+const BADGE_ROOM := Vector2(12, 5)
 
 var crossing: Expedition
 var _cards: VBoxContainer
@@ -66,7 +68,7 @@ func _ready() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 4)
 	col.add_child(head)
-	var title := PreviewHud.label("Companions", 12)
+	var title := PreviewHud.label("Companions", 11)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
 	for dust in [["light_dust", "Light dust"], ["dark_dust", "Dark dust"]]:
@@ -108,7 +110,7 @@ func refresh() -> void:
 			var card := _card(crossing.lineup.get(Vector2i(row, lane), ""))
 			line.add_child(card)
 			_card_nodes.append(card)
-	for i in maxi(10, crossing.stored.size() + 2):
+	for i in maxi(9, crossing.stored.size() + 1):
 		_stored.add_child(_stored_tile(crossing.stored[i] if i < crossing.stored.size() else ""))
 
 
@@ -136,7 +138,7 @@ func _panel(bg: Color, min_size: Vector2) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.custom_minimum_size = min_size
 	var b := PreviewHud.box(bg)
-	b.set_content_margin_all(5)
+	b.set_content_margin_all(4)
 	# Soft borders, so the cards don't compete with the text.
 	b.border_color = Color(0.91, 0.84, 0.66, 0.35 if bg.a > 0.9 else 0.15)
 	p.add_theme_stylebox_override("panel", b)
@@ -153,7 +155,7 @@ func _card(id: String) -> Control:
 	var hp := float(crossing.creature_hp.get(id, 0.0))
 	var max_hp := crossing.max_hp(id)
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 3)
+	col.add_theme_constant_override("separation", 1)
 	p.add_child(col)
 
 	var top := HBoxContainer.new()
@@ -181,7 +183,7 @@ func _card(id: String) -> Control:
 	if hp <= 0.0:
 		text += "  {ik:ko}"
 	var stats := Rich.label(text, 8)
-	stats.add_theme_constant_override("line_separation", 2)
+	stats.add_theme_constant_override("line_separation", 0)
 	stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(stats)
 
@@ -194,18 +196,36 @@ func _card(id: String) -> Control:
 	return p
 
 
-## One move: slot tag and name (hover for what it does), then its memory slot.
+## One move: slot tag and name, a small italic one-line summary with real numbers under
+## it (hover for the full text), then its memory slot.
 func _move_row(id: String, mid: String, atk: float, def: float, max_hp: float) -> Control:
 	var mv := CombatData.move(mid)
 	var slot: String = mv["slot"]
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 2)
+	var text := VBoxContainer.new()
+	text.add_theme_constant_override("separation", -2)
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.mouse_filter = Control.MOUSE_FILTER_PASS
 	var name := Rich.label(CreatureCard.move_header(mid), 8)
-	name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	Tips.attach(name, func(): return "%s\n[color=#%s]%s[/color]" % [CreatureCard.move_header(mid, true), CreatureCard.SOFT, CombatData.describe(mid, atk, def, max_hp)])
-	row.add_child(name)
-	row.add_child(_memory_slot(id, slot))
+	name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(name)
+	# One line at most: no wrapping, and anything too long is clipped.
+	var line := Rich.label("[i][color=#%s]%s[/color][/i]" % [Color(CreatureCard.SOFT).darkened(0.15).to_html(false),
+		CombatData.describe_short(mid, atk, def, max_hp)], 7)
+	line.add_theme_font_size_override("italics_font_size", 7)
+	line.fit_content = false
+	line.clip_contents = true
+	line.custom_minimum_size = Vector2(150, 10)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(line)
+	Tips.attach(text, func(): return "%s\n[color=#%s]%s[/color]" % [CreatureCard.move_header(mid, true), CreatureCard.SOFT, CombatData.describe(mid, atk, def, max_hp)])
+	row.add_child(text)
+	var slot_box := _memory_slot(id, slot)
+	slot_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(slot_box)
 	return row
+
 
 
 func _memory_slot(id: String, slot: String) -> Control:
@@ -238,14 +258,15 @@ func _memory_slot(id: String, slot: String) -> Control:
 
 ## Wraps a portrait so a small level badge sits on its top-left corner.
 func _with_level(pic: TextureRect, lv: int, pic_size: Vector2) -> Control:
+	# The picture sits down and to the right, so the badge has its own corner.
 	var holder := Control.new()
-	holder.custom_minimum_size = pic_size
+	holder.custom_minimum_size = pic_size + BADGE_ROOM
 	holder.mouse_filter = Control.MOUSE_FILTER_PASS
-	pic.position = Vector2.ZERO
+	pic.position = BADGE_ROOM
 	pic.size = pic_size
 	holder.add_child(pic)
 	var badge := PanelContainer.new()
-	badge.position = Vector2(-3, -3)
+	badge.position = Vector2(-2, -2)
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var b := StyleBoxFlat.new()
 	b.bg_color = Color(0.09, 0.07, 0.10, 0.92)
@@ -265,7 +286,7 @@ func _with_level(pic: TextureRect, lv: int, pic_size: Vector2) -> Control:
 
 
 func _stored_tile(id: String) -> Control:
-	var p := _panel(Color(0.18, 0.14, 0.20, 0.95) if id != "" else Color(0.10, 0.08, 0.12, 0.8), Vector2(TILE + 26, TILE + 6))
+	var p := _panel(Color(0.18, 0.14, 0.20, 0.95) if id != "" else Color(0.10, 0.08, 0.12, 0.8), Vector2(TILE + 38, TILE + 13))
 	if id == "":
 		return p
 	var row := HBoxContainer.new()

@@ -54,3 +54,12 @@ func test_every_card_and_stored_tile_shows_a_level() -> void:
 	check_eq(levels, s.crossing.lineup.size() + s.crossing.stored.size(), "a level badge per Trailomon")
 	check_eq(s.crossing.level("coilhusk"), 1, "everyone starts at level 1")
 	s.free()
+
+
+func test_every_move_has_a_one_line_summary_with_numbers() -> void:
+	for mid in CombatData.MOVES:
+		var t := CombatData.describe_short(mid, 30.0, 20.0, 600.0)
+		check(t != "", "%s has a short summary" % mid)
+		check(not t.contains("{"), "%s summary resolved: %s" % [mid, t])
+		check(t.length() <= 52, "%s summary fits one line: %s" % [mid, t])
+	check_eq(CombatData.describe_short("frost_kick", 25.0, 12.0, 560.0), "Hits for 20, slows 20% for 2s")
