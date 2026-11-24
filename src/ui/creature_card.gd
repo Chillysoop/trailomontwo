@@ -22,27 +22,35 @@ static func markup(id: String, opts := {}) -> String:
 		head += "  [color=#ff8a7a]foe[/color]"
 	lines.append(head)
 	lines.append("{k:%s|%s} {k:%s|%s}" % [hab, type, role, s["role"]] if role != "" else "{k:%s|%s}" % [hab, type])
-	var max_hp := float(opts.get("max_hp", float(s["hp"]) * CombatData.HP_SCALE * scale))
+	var f: Fighter = opts.get("fighter", null)
+	var max_hp := float(opts.get("max_hp", CombatData.max_hp(id, scale)))
 	var hp_text := "%d" % roundi(max_hp)
 	if opts.has("hp"):
 		hp_text = "%d/%d" % [roundi(float(opts["hp"])), roundi(max_hp)]
-	var f: Fighter = opts.get("fighter", null)
-	var might := float(s["might"]) * scale
-	var spirit := float(s["spirit"]) * scale
-	var guard := float(s["guard"])
-	var tempo := float(s["tempo"])
+	var atk := float(s["atk"]) * scale
+	var def := float(s["def"])
+	var spd := float(s["spd"])
 	if f != null:
-		might = f.might
-		spirit = f.spirit
-		guard = f.guard_now()
-		tempo = f.tempo_now()
-	lines.append("{i:hp}%s  {i:might}%d  {i:spirit}%d  {i:guard}%d  {i:tempo}%d" % [
-		hp_text, roundi(might), roundi(spirit), roundi(guard), roundi(tempo)])
+		atk = f.atk
+		def = f.def_now()
+		spd = f.spd
+	var dps := atk * float(CombatData.move(s["basic"]).get("pct", 100)) / 100.0 / spd
+	lines.append("[color=#9fe0a0]{k:hp|HP}[/color] %s   [color=#ff8a7a]{k:atk|ATK}[/color] %d   [color=#f0d27a]{k:spd|SPD}[/color] %.1fs" % [hp_text, roundi(atk), spd])
+	var ult_line := ""
+	if f != null:
+		ult_line = "   {i:ultimate}%d%%" % roundi(f.ult / CombatData.ULT_MAX * 100.0)
+	lines.append("[color=#ffb36b]{k:def|DEF}[/color] %d   [color=#e0a070]{k:dps|DPS}[/color] %.1f%s" % [roundi(def), dps, ult_line])
+	var keys: Array[String] = []
+	var slot_names := {"basic": "Basic attack", "passive": "Passive", "ultimate": "Ultimate"}
+	for mid in CombatData.kit_moves(id):
+		var mv := CombatData.move(mid)
+		lines.append("[color=#f0d27a]— %s[/color]  [color=#b8b0c8]{k:%s|%s}[/color]" % [mv["name"], mv["slot"], slot_names[mv["slot"]]])
+		lines.append(CombatData.describe(mid, atk, def, max_hp))
+		for k in CombatData.keywords(mid):
+			if not keys.has(k) and Glossary.has(k) and not k in ["front_row", "back_row"]:
+				keys.append(k)
 	var chart: Array = CombatData.CHART[type]
 	lines.append("Strong vs {i:%s}  weak vs {i:%s}" % [Glossary.habitat_id(chart[0]), Glossary.habitat_id(chart[1])])
-	for a in s["abilities"]:
-		var ab := CombatData.ability(a)
-		lines.append("[color=#f0d27a]%s[/color] {i:cooldown}%ds: %s" % [ab["name"], roundi(ab["cooldown"]), ability_text(a)])
 	var states: Array[String] = []
 	if f != null:
 		if not f.alive():
@@ -70,40 +78,9 @@ static func markup(id: String, opts := {}) -> String:
 		lines.append("Trail: " + ", ".join(parts))
 	if int(info["hauling"]) > 0 and not opts.get("enemy", false):
 		lines[lines.size() - 1] += "  {i:haul}%d" % int(info["hauling"])
+	for k in keys:
+		lines.append("[color=#b8b0c8][b]%s:[/b] %s[/color]" % [Glossary.entry_name(k), Glossary.text(k)])
 	return "\n".join(lines)
-
-
-## An ability's description with its key words turned into hoverable keywords.
-static func ability_text(id: String) -> String:
-	var ab := CombatData.ability(id)
-	var d: String = ab["desc"]
-	var swaps := [
-		["Poisons", "{k:poison|Poisons}"], ["bleeds", "{k:poison|bleeds}"],
-		["Shields", "{k:shield|Shields}"], ["shield", "{k:shield|shield}"], ["shielded", "{k:shield|shielded}"],
-		["slows", "{k:slow|slows}"], ["guard", "{k:guard|guard}"],
-		["attacks 30% faster", "{k:haste|attacks 30% faster}"],
-		["second row", "{k:back_row}"], ["front row", "{k:front_row}"],
-		["Draws every enemy's normal attacks", "{k:taunt|Draws every enemy's normal attacks}"],
-	]
-	# Replace whole words only, longest first, without touching text inside earlier swaps.
-	var out := ""
-	var i := 0
-	while i < d.length():
-		var hit := false
-		for pair in swaps:
-			var w: String = pair[0]
-			if d.substr(i, w.length()) == w and (i == 0 or not _is_letter(d[i - 1])) \
-					and (i + w.length() >= d.length() or not _is_letter(d[i + w.length()])):
-				out += pair[1]
-				i += w.length()
-				hit = true
-				break
-		if not hit:
-			out += d[i]
-			i += 1
-	if ab.get("pierce", false):
-		out = out.replace("Smashes through {k:guard|guard} completely", "Smashes through and {k:pierce}")
-	return out
 
 
 static func _is_letter(c: String) -> bool:

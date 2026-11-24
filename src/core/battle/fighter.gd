@@ -1,6 +1,6 @@
 class_name Fighter
 extends RefCounted
-## One creature during a battle: its slot, stats after bonuses, timers and statuses.
+## One creature during a battle: its slot, stats after bonuses, bars, statuses and tallies.
 
 ## Row index for a boss standing behind its grid.
 const BOSS_ROW := 2
@@ -13,27 +13,44 @@ var lane := 0
 var type := ""
 var max_hp := 1.0
 var hp := 1.0
-var might := 10.0
-var spirit := 10.0
-var guard := 10.0
-var tempo := 60.0
-var basic_timer := 0.0
-## [{"id": String, "cd": float}] in priority order.
-var abilities: Array = []
-var lock := 0.0
+var atk := 10.0
+var def := 10.0
+## Seconds between basic attacks.
+var spd := 2.0
+var basic := ""
+var passive := ""
+var ultimate := ""
+## 0..1: the basic attack fires when it reaches 1.
+var attack_bar := 0.0
+## 0..CombatData.ULT_MAX: the ultimate fires when full.
+var ult := 0.0
+## Ultimate charge per basic attack and per hit taken (kits can override the defaults).
+var ult_per_attack := CombatData.ULT_PER_ATTACK
+var ult_per_hit := CombatData.ULT_PER_HIT
 var shield := 0.0
 var taunt := 0.0
-## Active timed modifiers: {"kind": "haste"|"slow"|"weaken", "amount": float, "secs": float}
+## Active timed modifiers: {"kind": "haste"|"slow"|"weaken"|"ruin", "amount": fraction, "secs": float}
 var mods: Array = []
-## Damage per second and seconds left.
 var poison_dps := 0.0
 var poison_secs := 0.0
 var poison_tick := 1.0
 var poison_from := -1
-## Synergy bonuses resolved at the start (heal_bonus fraction, murk dps, canopy fraction).
+var poison_tag := "basic"
+## How many basic attacks it has made (for "every 3rd attack" passives).
+var attacks := 0
+## Habitat bonuses resolved at the start.
 var heal_bonus := 0.0
-var murk := 0.0
+var poison_bonus := 0.0
 var canopy := 0.0
+
+## Fight tallies for the stats window.
+var dmg_basic := 0.0
+var dmg_ult := 0.0
+var dmg_passive := 0.0
+var shield_done := 0.0
+var heal_done := 0.0
+var taken := 0.0
+var ults_fired := 0
 
 
 func alive() -> bool:
@@ -52,6 +69,10 @@ func hp_fraction() -> float:
 	return hp / max_hp
 
 
+func damage_total() -> float:
+	return dmg_basic + dmg_ult + dmg_passive
+
+
 func mod_total(kind: String) -> float:
 	var t := 0.0
 	for m in mods:
@@ -60,16 +81,26 @@ func mod_total(kind: String) -> float:
 	return t
 
 
-func tempo_now() -> float:
-	return tempo * (1.0 + mod_total("haste")) * (1.0 - mod_total("slow"))
+func has_mod(kind: String) -> bool:
+	return mod_total(kind) > 0.0
 
 
-func guard_now() -> float:
-	return guard * (1.0 - mod_total("weaken"))
+## Attack bar fill per second, after haste and slow.
+func attack_rate() -> float:
+	return maxf(0.1, 1.0 + mod_total("haste") - mod_total("slow")) / spd
 
 
-func basic_interval() -> float:
-	return CombatData.TEMPO_SCALE / maxf(1.0, tempo_now())
+## Defense after weaken (and Cairnram's Stubborn).
+func def_now() -> float:
+	var d := def
+	if passive == "stubborn" and hp_fraction() < 0.5:
+		d += float(CombatData.move("stubborn")["amount"])
+	return d * (1.0 - mod_total("weaken"))
+
+
+## Basic attack damage per second against no Defense, for the stat block.
+func dps() -> float:
+	return atk * float(CombatData.move(basic).get("pct", 100)) / 100.0 / spd
 
 
 func add_mod(kind: String, amount: float, secs: float) -> void:
