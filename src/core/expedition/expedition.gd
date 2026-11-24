@@ -37,6 +37,14 @@ var visited: Array[String] = []
 var journal: Array[String] = []
 ## Current health of each roster creature (0 = knocked out). Carries between battles.
 var creature_hp := {}
+## Tamed Trailomon kept in storage, not travelling: no upkeep, can't fight or haul.
+var stored: Array[String] = []
+## Level of each tamed Trailomon (team and storage). Everyone starts at 1 until
+## experience and level-ups arrive.
+var levels := {}
+## Memory slots, one per move slot: species -> {"basic": move id, "passive": ..., "ultimate": ...}.
+## A stored move can be swapped in between battles. Empty ("") until level-ups teach moves.
+var memory := {}
 ## Battle lineup: Vector2i(row, lane) -> species. Row 0 is the front, 1 the second row.
 var lineup := {}
 ## Separate dice for battles, so adding battles doesn't change which trail events roll.
@@ -52,6 +60,7 @@ static func new_default(rng_seed := -1) -> Expedition:
 		e.rng.randomize()
 		e.battle_rng.randomize()
 	e.roster = ["brambleback", "coilhusk", "reedwake", "mirelamp", "rimehare", "scythelk"]
+	e.stored = ["gillhorn", "inkhoot"]
 	e.haulers = ["brambleback", "coilhusk"]
 	e.cargo = [
 		{"name": "Medicine crates", "weight": 40.0, "value": 120},
@@ -444,6 +453,15 @@ func knocked_out() -> Array[String]:
 		if not conscious(id):
 			out.append(id)
 	return out
+
+
+## The move stored in a creature's memory slot for "basic", "passive" or "ultimate" ("" if empty).
+func level(id: String) -> int:
+	return int(levels.get(id, 1))
+
+
+func memory_move(id: String, slot: String) -> String:
+	return String(memory.get(id, {}).get(slot, ""))
 
 
 func lineup_cell(id: String) -> Variant:

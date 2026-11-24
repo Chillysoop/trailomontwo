@@ -83,6 +83,21 @@ func test_card_shows_live_statuses() -> void:
 
 func test_card_shows_stat_block_and_moves() -> void:
 	var t := CreatureCard.markup("brambleback")
-	check(t.contains("{k:atk|ATK}"), t)
+	for stat in ["hp", "atk", "def", "spd", "dps"]:
+		check(t.contains("{i:%s}" % stat), "stat icon %s: %s" % [stat, t])
 	check(t.contains("Thorny Hide") and t.contains("Briar Wall") and t.contains("Bramble Swipe"), t)
-	check(t.contains("[b]Shield:[/b]"), "keyword box for Shield: " + t)
+	for slot in ["basic", "passive", "ultimate"]:
+		check(t.contains("{i:%s}" % slot), "slot tag %s" % slot)
+	var parts := t.split(Tips.SIDE)
+	check(parts.size() > 1, "keywords open as side popups")
+	check(not parts[0].contains("[b]Shield[/b]"), "keyword text is not in the main card")
+	check(t.contains(Tips.SIDE + "{i:shield} [b]Shield[/b]"), "Shield side popup: " + t)
+
+
+func test_stat_icons_are_distinct() -> void:
+	var seen := {}
+	for stat in ["hp", "atk", "def", "spd", "dps", "basic", "passive", "ultimate"]:
+		var icon := Glossary.icon(stat)
+		check(icon != "" and ResourceLoader.exists(Rich.icon_path(icon)), "icon for %s" % stat)
+		check(not seen.has(icon), "%s shares an icon with %s" % [stat, seen.get(icon, "")])
+		seen[icon] = stat

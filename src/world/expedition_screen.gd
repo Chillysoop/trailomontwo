@@ -44,6 +44,9 @@ var _picked: Dictionary = {}
 var _day_timer := 0.0
 
 
+var _companions: CompanionsScreen
+
+
 func _ready() -> void:
 	_backdrop = TravelBackdrop.new()
 	_backdrop.moving = false
@@ -138,7 +141,7 @@ func _set_off() -> void:
 
 
 func _process(delta: float) -> void:
-	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null:
+	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null or _companions != null:
 		return
 	_day_timer -= delta
 	if _day_timer > 0.0:
@@ -489,6 +492,12 @@ func _build_ui() -> void:
 	row.add_child(_hud)
 	_hud_health = Rich.label("", 9)
 	row.add_child(_hud_health)
+	# Always reachable, at a junction or on the road (travel pauses while it's open).
+	var comp := _button("Companions", 8)
+	comp.focus_mode = Control.FOCUS_NONE
+	comp.pressed.connect(_open_companions)
+	Tips.attach(comp, func(): return "Your team: stats, moves and memory slots, plus the Trailomon in storage. Travel pauses while it's open.")
+	row.add_child(comp)
 	_ui.add_child(bar)
 
 	_panel = PanelContainer.new()
@@ -612,6 +621,13 @@ func _build_ui() -> void:
 	back.pressed.connect(get_tree().change_scene_to_file.bind("res://scenes/title_screen.tscn"))
 	ecol.add_child(back)
 	_ui.add_child(_end)
+
+
+func _open_companions() -> void:
+	if _companions != null and is_instance_valid(_companions):
+		return
+	_companions = CompanionsScreen.open(_ui, crossing)
+	_companions.closed.connect(func(): _companions = null)
 
 
 func _button(text: String, size: int) -> Button:

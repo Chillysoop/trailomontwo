@@ -16,7 +16,17 @@ STYLE = "naturepunk style, bold dark outline, readable silhouette"
 # id -> subject. Every prompt shares STYLE so the set reads as one family.
 ICONS = {
     # creature stats
-    "hp": "a red heart wrapped in a thin brass ring with a small green leaf sprouting from it",
+    # The six stat icons must differ in both color and shape so they read at a glance:
+    # red heart, orange sword, blue shield, green chevrons, purple impact, gold star.
+    "hp": "a single plump solid bright red heart, simple shape, no frame",
+    "atk": "a single bright orange sword pointing diagonally up, simple shape",
+    "def": "a single solid steel blue kite shield with a white rim, simple shape",
+    "spd": "two bright green arrow chevrons pointing right, simple shape",
+    "dps": "a magenta purple starburst impact splash with three sharp spikes, simple shape",
+    # Move-slot tags (also used for memory slots): white claw, green aura ring, gold star.
+    "basic": "three bold white diagonal claw slash marks, simple shape, no background",
+    "passive": "a soft green glowing ring aura with a leaf, on a small dark round badge",
+    "ultimate": "a big bright gold five pointed star with a yellow glow, simple shape, no background",
     "might": "a clenched fist wrapped in a brass knuckle band with ivy",
     "spirit": "a glowing teal spirit flame inside a small brass lantern cage",
     "guard": "a round wooden shield with a brass rim and moss on it",
@@ -45,6 +55,11 @@ ICONS = {
     "slow": "a blue snail shell with a frost crystal",
     "ko": "three yellow cartoon stars circling above, knocked out daze symbol",
     "tired": "a sleepy blue zzz letters over a small cloud",
+    # dust (permanent boosts, coming later)
+    "light_dust": "a small cloth pouch spilling glowing pale gold sparkling dust",
+    "dark_dust": "a small cloth pouch spilling glowing deep violet dust with dark sparkles",
+    # empty memory slot
+    "memory": "a small empty glass jar with a faint teal glow inside and a cork stopper",
     # trail resources
     "day": "a bright orange sun over a horizon line",
     "food": "a round loaf of bread with a sprig of wheat",

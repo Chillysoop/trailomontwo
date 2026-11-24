@@ -1,0 +1,310 @@
+class_name CompanionsScreen
+extends Control
+## The Companions screen: the six Trailomon in the battle lineup with their stats and moves,
+## an empty memory slot beside each move (filled later by level-ups), the Trailomon kept in
+## storage, and placeholder dust buttons. Opens over the travel screen and the battle lineup.
+##
+##   CompanionsScreen.open(parent, crossing)
+
+signal closed
+
+const SCREEN := Vector2(640, 360)
+const CARD := Vector2(204, 0)
+const PIC := 26.0
+const TILE := 24.0
+## Space left above and to the left of a portrait for its level badge.
+const BADGE_ROOM := Vector2(12, 5)
+
+var crossing: Expedition
+var _cards: VBoxContainer
+## The six lineup cards, front row first.
+var _card_nodes: Array[Control] = []
+var _stored: HBoxContainer
+
+
+static func open(parent: Node, e: Expedition) -> CompanionsScreen:
+	var s := CompanionsScreen.new()
+	s.crossing = e
+	parent.add_child(s)
+	return s
+
+
+## A square crop of a creature sprite around the part that isn't empty.
+static func portrait(species: String) -> Texture2D:
+	var tex: Texture2D = load("res://assets/creatures/%s.png" % species)
+	var img := tex.get_image()
+	if img == null:
+		return tex
+	var r := img.get_used_rect()
+	if r.size.x <= 0:
+		return tex
+	var side := maxf(r.size.x, r.size.y)
+	var at := AtlasTexture.new()
+	at.atlas = tex
+	at.region = Rect2(Vector2(r.position) + Vector2(r.size) / 2.0 - Vector2(side, side) / 2.0, Vector2(side, side))
+	return at
+
+
+func _ready() -> void:
+	position = Vector2.ZERO
+	size = SCREEN
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	var dim := ColorRect.new()
+	dim.color = Color(0.05, 0.04, 0.06, 0.78)
+	dim.size = SCREEN
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(dim)
+	var panel := PanelContainer.new()
+	panel.position = Vector2(4, 4)
+	panel.custom_minimum_size = SCREEN - Vector2(8, 8)
+	var box := PreviewHud.box(Color(0.13, 0.10, 0.15, 0.96))
+	box.set_content_margin_all(4)
+	panel.add_theme_stylebox_override("panel", box)
+	add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 3)
+	panel.add_child(col)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 4)
+	col.add_child(head)
+	var title := PreviewHud.label("Companions", 11)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	for dust in [["light_dust", "Light dust"], ["dark_dust", "Dark dust"]]:
+		var b := Ui.button(dust[1], 8)
+		b.icon = Rich.icon_tex(dust[0])
+		b.focus_mode = Control.FOCUS_NONE
+		b.disabled = true
+		b.mouse_filter = Control.MOUSE_FILTER_PASS
+		Tips.attach(b, "g:" + dust[0])
+		head.add_child(b)
+	var close := Ui.button("Close (Esc)", 8)
+	close.focus_mode = Control.FOCUS_NONE
+	close.pressed.connect(close_screen)
+	head.add_child(close)
+
+	_cards = VBoxContainer.new()
+	_cards.add_theme_constant_override("separation", 2)
+	col.add_child(_cards)
+
+	col.add_child(_heading("Stored", "kept back at camp, not travelling with you"))
+	_stored = HBoxContainer.new()
+	_stored.add_theme_constant_override("separation", 3)
+	col.add_child(_stored)
+	refresh()
+
+
+func refresh() -> void:
+	for c in _cards.get_children():
+		c.queue_free()
+	for c in _stored.get_children():
+		c.queue_free()
+	_card_nodes.clear()
+	for row in 2:
+		_cards.add_child(_heading("Front row" if row == 0 else "Second row", ""))
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation", 4)
+		_cards.add_child(line)
+		for lane in 3:
+			var card := _card(crossing.lineup.get(Vector2i(row, lane), ""))
+			line.add_child(card)
+			_card_nodes.append(card)
+	for i in maxi(9, crossing.stored.size() + 1):
+		_stored.add_child(_stored_tile(crossing.stored[i] if i < crossing.stored.size() else ""))
+
+
+func close_screen() -> void:
+	Tips.hide_from(null)
+	closed.emit()
+	queue_free()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		close_screen()
+
+
+## A small muted section heading with an optional note after it.
+func _heading(title: String, note: String) -> Control:
+	var t := "[color=#e8d6a8]%s[/color]" % title.to_upper()
+	if note != "":
+		t += "   [color=#%s]%s[/color]" % [CreatureCard.MUTED, note]
+	return Rich.label(t, 7)
+
+
+func _panel(bg: Color, min_size: Vector2) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.custom_minimum_size = min_size
+	var b := PreviewHud.box(bg)
+	b.set_content_margin_all(4)
+	# Soft borders, so the cards don't compete with the text.
+	b.border_color = Color(0.91, 0.84, 0.66, 0.35 if bg.a > 0.9 else 0.15)
+	p.add_theme_stylebox_override("panel", b)
+	return p
+
+
+func _card(id: String) -> Control:
+	var p := _panel(Color(0.18, 0.14, 0.20, 0.95), CARD)
+	if id == "":
+		p.add_child(Rich.label("[color=#%s]Empty spot[/color]" % CreatureCard.MUTED, 8))
+		return p
+	var info := Species.info(id)
+	var s := CombatData.stats(id)
+	var hp := float(crossing.creature_hp.get(id, 0.0))
+	var max_hp := crossing.max_hp(id)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 1)
+	p.add_child(col)
+
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 5)
+	col.add_child(top)
+	var pic := TextureRect.new()
+	pic.texture = portrait(id)
+	pic.custom_minimum_size = Vector2(PIC, PIC)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	if hp <= 0.0:
+		pic.modulate = Color(1, 1, 1, 0.45)
+	Tips.attach(pic, func(): return CreatureCard.markup(id, {"hp": crossing.creature_hp.get(id, 0.0),
+		"max_hp": crossing.max_hp(id), "fatigue": crossing.fatigue.get(id, 0.0)}))
+	top.add_child(_with_level(pic, crossing.level(id), Vector2(PIC, PIC)))
+	var role: String = Glossary.ROLES.get(s["role"], "")
+	var atk := float(s["atk"])
+	var spd := float(s["spd"])
+	var dps := atk * float(CombatData.move(s["basic"]).get("pct", 100)) / 100.0 / spd
+	var text := "[font_size=10][b]%s[/b][/font_size]  {i:%s} {i:%s}\n" % [info["name"], Glossary.habitat_id(info["type"]), role]
+	text += "{i:hp} [color=#%s]%d[/color][color=#%s]/%d[/color]    {i:atk} [color=#%s]%d[/color]    {i:def} [color=#%s]%d[/color]\n" % [
+		CreatureCard.HP_COL, roundi(hp), CreatureCard.MUTED, roundi(max_hp), CreatureCard.ATK_COL, roundi(atk), CreatureCard.DEF_COL, int(s["def"])]
+	text += "{i:spd} [color=#%s]%.1fs[/color]    {i:dps} [color=#%s]%.1f[/color]" % [CreatureCard.SPD_COL, spd, CreatureCard.DPS_COL, dps]
+	if hp <= 0.0:
+		text += "  {ik:ko}"
+	var stats := Rich.label(text, 8)
+	stats.add_theme_constant_override("line_separation", 0)
+	stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(stats)
+
+	var rule := ColorRect.new()
+	rule.color = Color(0.91, 0.84, 0.66, 0.18)
+	rule.custom_minimum_size = Vector2(0, 1)
+	col.add_child(rule)
+	for mid in CombatData.kit_moves(id):
+		col.add_child(_move_row(id, mid, atk, float(s["def"]), max_hp))
+	return p
+
+
+## One move: slot tag and name, a small italic one-line summary with real numbers under
+## it (hover for the full text), then its memory slot.
+func _move_row(id: String, mid: String, atk: float, def: float, max_hp: float) -> Control:
+	var mv := CombatData.move(mid)
+	var slot: String = mv["slot"]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 2)
+	var text := VBoxContainer.new()
+	text.add_theme_constant_override("separation", -2)
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.mouse_filter = Control.MOUSE_FILTER_PASS
+	var name := Rich.label(CreatureCard.move_header(mid), 8)
+	name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(name)
+	# One line at most: no wrapping, and anything too long is clipped.
+	var line := Rich.label("[i][color=#%s]%s[/color][/i]" % [Color(CreatureCard.SOFT).darkened(0.15).to_html(false),
+		CombatData.describe_short(mid, atk, def, max_hp)], 7)
+	line.add_theme_font_size_override("italics_font_size", 7)
+	line.fit_content = false
+	line.clip_contents = true
+	line.custom_minimum_size = Vector2(150, 10)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(line)
+	Tips.attach(text, func(): return "%s\n[color=#%s]%s[/color]" % [CreatureCard.move_header(mid, true), CreatureCard.SOFT, CombatData.describe(mid, atk, def, max_hp)])
+	row.add_child(text)
+	var slot_box := _memory_slot(id, slot)
+	slot_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(slot_box)
+	return row
+
+
+
+func _memory_slot(id: String, slot: String) -> Control:
+	var stored := crossing.memory_move(id, slot)
+	var col: Color = Color(CreatureCard.SLOT_COL[slot])
+	var p := PanelContainer.new()
+	p.custom_minimum_size = Vector2(16, 14)
+	var b := StyleBoxFlat.new()
+	b.bg_color = Color(0.08, 0.06, 0.09, 0.9)
+	b.border_color = col if stored != "" else col.darkened(0.45)
+	b.set_border_width_all(1)
+	p.add_theme_stylebox_override("panel", b)
+	var icon := TextureRect.new()
+	icon.texture = Rich.icon_tex(slot if stored != "" else "memory")
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.custom_minimum_size = Vector2(12, 12)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if stored == "":
+		icon.modulate = Color(1, 1, 1, 0.35)
+	p.add_child(icon)
+	var slot_name := Glossary.entry_name(slot).to_lower()
+	Tips.attach(p, func():
+		if stored != "":
+			return "{i:memory} [b]Memory slot[/b]\n%s\nSwap it in between battles." % CreatureCard.move_header(stored)
+		return "{i:memory} [b]Memory slot (empty)[/b]\nWhen %s learns a new %s, the move it replaces can be kept here and swapped back in between battles." % [
+			Species.info(id)["name"], slot_name])
+	return p
+
+
+## Wraps a portrait so a small level badge sits on its top-left corner.
+func _with_level(pic: TextureRect, lv: int, pic_size: Vector2) -> Control:
+	# The picture sits down and to the right, so the badge has its own corner.
+	var holder := Control.new()
+	holder.custom_minimum_size = pic_size + BADGE_ROOM
+	holder.mouse_filter = Control.MOUSE_FILTER_PASS
+	pic.position = BADGE_ROOM
+	pic.size = pic_size
+	holder.add_child(pic)
+	var badge := PanelContainer.new()
+	badge.position = Vector2(-2, -2)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var b := StyleBoxFlat.new()
+	b.bg_color = Color(0.09, 0.07, 0.10, 0.92)
+	b.border_color = Color("e8d6a8")
+	b.set_border_width_all(1)
+	b.set_corner_radius_all(2)
+	b.content_margin_left = 2
+	b.content_margin_right = 2
+	b.content_margin_top = 0
+	b.content_margin_bottom = 0
+	badge.add_theme_stylebox_override("panel", b)
+	var l := PreviewHud.label("Lv %d" % lv, 7)
+	l.add_theme_color_override("font_color", Color("ffe3a3"))
+	badge.add_child(l)
+	holder.add_child(badge)
+	return holder
+
+
+func _stored_tile(id: String) -> Control:
+	var p := _panel(Color(0.18, 0.14, 0.20, 0.95) if id != "" else Color(0.10, 0.08, 0.12, 0.8), Vector2(TILE + 38, TILE + 13))
+	if id == "":
+		return p
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 1)
+	p.add_child(row)
+	var pic := TextureRect.new()
+	pic.texture = portrait(id)
+	pic.custom_minimum_size = Vector2(TILE, TILE)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	row.add_child(_with_level(pic, crossing.level(id), Vector2(TILE, TILE)))
+	var hab := TextureRect.new()
+	hab.texture = Rich.icon_tex(Glossary.habitat_id(Species.info(id)["type"]))
+	hab.custom_minimum_size = Vector2(12, 12)
+	hab.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hab.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	hab.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	row.add_child(hab)
+	Tips.attach(p, func(): return CreatureCard.markup(id, {"enemy": false}))
+	return p

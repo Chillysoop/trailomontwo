@@ -90,93 +90,135 @@ const KITS := {
 const MOVES := {
 	# ----- Forest -----
 	"bramble_swipe": {"name": "Bramble Swipe", "slot": "basic", "pct": 70, "def_pct": 40,
+		"short": "Hits for {atk:70} + {def:40}",
 		"desc": "Deal {atk:70} plus {def:40} to your target."},
 	"thorny_hide": {"name": "Thorny Hide", "slot": "passive", "pct": 35,
+		"short": "Hit by a basic attack: hits back for {atk:35}",
 		"desc": "When a basic attack hits you, deal {atk:35} back to the attacker."},
 	"briar_wall": {"name": "Briar Wall", "slot": "ultimate", "def_pct": 100, "flat": 60, "secs": 4.0,
+		"short": "Shield {def:100}+60 to self and adjacent, taunt 4s",
 		"desc": "You and all {k:adjacent} allies gain {k:shield|Shield} equal to {def:100} plus 60. {k:taunt|Taunt} enemies for 4s."},
 	"trunk_slam": {"name": "Trunk Slam", "slot": "basic", "pct": 100, "amount": 30,
+		"short": "Hits for {atk:100}, +30% while shielded",
 		"desc": "Deal {atk:100} to your target, 30% more while you have {k:shield|Shield}."},
 	"bark_shell": {"name": "Bark Shell", "slot": "passive", "every": 3, "def_pct": 120,
+		"short": "Every 3rd attack: shield self for {def:120}",
 		"desc": "Every 3rd basic attack also gives you {k:shield|Shield} equal to {def:120}."},
 	"shell_quake": {"name": "Shell Quake", "slot": "ultimate", "pct": 180, "splash": 60,
+		"short": "Hits for {atk:180}, {atk:60} to adjacent foes",
 		"desc": "Deal {atk:180} to your target and {atk:60} to enemies {k:adjacent} to it."},
 	"antler_gore": {"name": "Antler Gore", "slot": "basic", "pct": 100, "splash": 40,
+		"short": "Hits for {atk:100}, {atk:40} to adjacent foes",
 		"desc": "Deal {atk:100} to your target and {atk:40} to enemies {k:adjacent} to it."},
 	"ancient_bark": {"name": "Ancient Bark", "slot": "passive", "every": 3, "def_pct": 50,
+		"short": "Every 3rd attack: shield whole pack for {def:50}",
 		"desc": "Every 3rd basic attack gives your whole pack {k:shield|Shield} equal to {def:50}."},
 	"antler_storm": {"name": "Antler Storm", "slot": "ultimate", "pct": 90, "flat": 80,
+		"short": "{atk:90} to every foe, shield pack for 80",
 		"desc": "Deal {atk:90} to every enemy, then {k:shield|Shield} your whole pack for 80."},
 	"thorn_bite": {"name": "Thorn Bite", "slot": "basic", "pct": 90, "shield_pct": 30,
+		"short": "Hits for {atk:90}, shields self for {atk:30}",
 		"desc": "Deal {atk:90} to your target and gain {k:shield|Shield} equal to {atk:30}."},
 	"thorn_pelt": {"name": "Thorn Pelt", "slot": "passive", "pct": 40,
+		"short": "While shielded: hits back for {atk:40}",
 		"desc": "While you have {k:shield|Shield}, a basic attack that hits you deals {atk:40} back to the attacker."},
 	"bramble_pounce": {"name": "Bramble Pounce", "slot": "ultimate", "pct": 170, "amount": 50,
+		"short": "Hits for {atk:170}, shields half the damage",
 		"desc": "Deal {atk:170} to your target and gain {k:shield|Shield} equal to half the damage dealt."},
 	# ----- River -----
 	"mending_spray": {"name": "Mending Spray", "slot": "basic", "pct": 70, "heal_pct": 60,
+		"short": "Hits for {atk:70}, heals most hurt ally {atk:60}",
 		"desc": "Deal {atk:70} to your target and heal the most hurt ally for {atk:60}."},
 	"clear_water": {"name": "Clear Water", "slot": "passive",
+		"short": "Heals also wash off poison and weaken",
 		"desc": "Your heals also wash {k:poison} off the ally."},
 	"tidewash": {"name": "Tidewash", "slot": "ultimate", "maxhp_pct": 15,
+		"short": "Heals every ally 15% of max HP",
 		"desc": "Heal every ally for 15% of their Max HP."},
 	"ink_jet": {"name": "Ink Jet", "slot": "basic", "pct": 90, "wash": 60,
+		"short": "Strips {atk:60} shield, then hits for {atk:90}",
 		"desc": "{k:wash|Wash away} up to {atk:60} of the target's {k:shield|Shield}, then deal {atk:90}."},
 	"undertow": {"name": "Undertow", "slot": "passive", "pct": 25,
+		"short": "Heals self for 25% of damage dealt",
 		"desc": "Heal yourself for 25% of the damage you deal."},
 	"dive": {"name": "Dive", "slot": "ultimate", "pct": 220,
+		"short": "{atk:220} to the weakest foe anywhere",
 		"desc": "Dive past the {k:front_row} and deal {atk:220} to the weakest enemy anywhere."},
 	# ----- Swamp -----
 	"bog_spit": {"name": "Bog Spit", "slot": "basic", "pct": 70, "dot": 15, "secs": 4.0,
+		"short": "Hits for {atk:70}, poison {atk:15}/s for 4s",
 		"desc": "Deal {atk:70} to your target and {k:poison} it for {atk:15} a second for 4s."},
 	"rot_light": {"name": "Rot Light", "slot": "passive", "amount": 20,
+		"short": "Poisoned foes lose 20% Defense",
 		"desc": "Enemies you {k:poison} are also {k:weaken|weakened}: 20% less Defense."},
 	"miasma": {"name": "Miasma", "slot": "ultimate", "dot": 25, "secs": 5.0,
+		"short": "Poisons every foe for {atk:25}/s for 5s",
 		"desc": "{k:poison|Poison} every enemy for {atk:25} a second for 5s."},
 	"mud_horn": {"name": "Mud Horn", "slot": "basic", "pct": 100, "amount": 15, "secs": 3.0,
+		"short": "Hits for {atk:100}, -15% Defense for 3s",
 		"desc": "Deal {atk:100} to your target and {k:weaken} it: 15% less Defense for 3s."},
 	"mudwallow": {"name": "Mudwallow", "slot": "passive", "amount": 25,
+		"short": "+25% damage vs poisoned or weakened",
 		"desc": "Deal 25% more damage to {k:poison|poisoned} or {k:weaken|weakened} enemies."},
 	"bog_charge": {"name": "Bog Charge", "slot": "ultimate", "pct": 180, "dot": 30, "secs": 4.0,
+		"short": "Hits for {atk:180}, poison {atk:30}/s for 4s",
 		"desc": "Deal {atk:180} to your target and {k:poison} it for {atk:30} a second for 4s."},
 	# ----- Mountain -----
 	"scythe_cut": {"name": "Scythe Cut", "slot": "basic", "pct": 100, "amount": 50,
+		"short": "Hits for {atk:100}, +50% below half health",
 		"desc": "Deal {atk:100} to your target. {k:execute|Finisher}: 50% more against enemies below half health."},
 	"rockhorn": {"name": "Rockhorn", "slot": "passive", "amount": 50,
+		"short": "Attacks ignore half of Defense",
 		"desc": "Your attacks ignore half of the target's Defense."},
 	"scythe_sweep": {"name": "Scythe Sweep", "slot": "ultimate", "pct": 140,
+		"short": "{atk:140} to the target's whole row",
 		"desc": "Deal {atk:140} to every enemy in your target's row."},
 	"headbutt": {"name": "Headbutt", "slot": "basic", "pct": 90, "amount": 30,
+		"short": "Hits for {atk:90}, knocks attack bar back 30%",
 		"desc": "Deal {atk:90} to your target and {k:stagger} it: its attack bar drops by 30%."},
 	"stubborn": {"name": "Stubborn", "slot": "passive", "amount": 20,
+		"short": "Below half health: +20 Defense",
 		"desc": "Below half health, gain 20 Defense."},
 	"breakstone": {"name": "Breakstone", "slot": "ultimate", "pct": 190,
+		"short": "{atk:190} that ignores Defense",
 		"desc": "Deal {atk:190} to your target. It {k:pierce}."},
 	# ----- Snow -----
 	"frost_kick": {"name": "Frost Kick", "slot": "basic", "pct": 80, "amount": 20, "secs": 2.0,
+		"short": "Hits for {atk:80}, slows 20% for 2s",
 		"desc": "Deal {atk:80} to your target and {k:slow} it by 20% for 2s."},
 	"snow_runner": {"name": "Snow Runner", "slot": "passive", "amount": 25,
+		"short": "+25% attack speed while a foe is slowed",
 		"desc": "Your attack bar fills 25% faster while any enemy is {k:slow|slowed}."},
 	"rally_bell": {"name": "Rally Bell", "slot": "ultimate", "amount": 30, "secs": 5.0,
+		"short": "All allies attack 30% faster for 5s",
 		"desc": "Every ally gains {k:haste}: attacks 30% faster for 5s."},
 	"frost_sting": {"name": "Frost Sting", "slot": "basic", "pct": 50, "amount": 20, "secs": 2.0,
+		"short": "2 hits of {atk:50}, the first slows 20%",
 		"desc": "Sting twice for {atk:50} each. The first sting {k:slow|slows} the target by 20% for 2s."},
 	"brittle": {"name": "Brittle", "slot": "passive", "amount": 25,
+		"short": "+25% damage vs slowed foes",
 		"desc": "Deal 25% more damage to {k:slow|slowed} enemies."},
 	"frost_burst": {"name": "Frost Burst", "slot": "ultimate", "pct": 120, "amount": 40, "secs": 4.0,
+		"short": "{atk:120} and 40% slow to target + adjacent",
 		"desc": "Deal {atk:120} to your target and enemies {k:adjacent} to it, and {k:slow} them by 40% for 4s."},
 	# ----- Jungle -----
 	"vine_whip": {"name": "Vine Whip", "slot": "basic", "pct": 85, "reach": true,
+		"short": "Hits the second row for {atk:85}",
 		"desc": "Deal {atk:85} to an enemy in the {k:back_row} if there is one, reaching over the front (unless a {k:taunt|taunt} pulls it)."},
 	"canopy_stalker": {"name": "Canopy Stalker", "slot": "passive", "amount": 15,
+		"short": "+15% damage vs the second row",
 		"desc": "Deal 15% more damage to enemies in the {k:back_row}."},
 	"vine_lash": {"name": "Vine Lash", "slot": "ultimate", "pct": 145,
+		"short": "{atk:145} to every foe in the second row",
 		"desc": "Deal {atk:145} to every enemy in the {k:back_row}, reaching over the front."},
 	"wing_bash": {"name": "Wing Bash", "slot": "basic", "pct": 90,
+		"short": "Hits for {atk:90}, dodges the next basic attack",
 		"desc": "Deal {atk:90} to your target, then get ready to {k:dodge} the next basic attack aimed at you."},
 	"glide": {"name": "Glide", "slot": "passive", "pct": 50,
+		"short": "Also hits behind the target for {atk:50}",
 		"desc": "Your basic attacks also hit the enemy behind your target for {atk:50}."},
 	"wing_gust": {"name": "Wing Gust", "slot": "ultimate", "pct": 100,
+		"short": "{atk:100} to the second row, then dodges",
 		"desc": "Deal {atk:100} to every enemy in the {k:back_row}, or the front row if the back is empty, then get ready to {k:dodge} the next basic attack."},
 }
 
@@ -261,6 +303,24 @@ static func describe(move_id: String, atk: float, def: float, hp_max: float) -> 
 				out += "%d%% {k:def|Defense} (%d)" % [pct, roundi(def * pct / 100.0)]
 			"maxhp":
 				out += "%d%% {k:hp|Max HP} (%d)" % [pct, roundi(hp_max * pct / 100.0)]
+	out += d.substr(at)
+	return out
+
+
+## A move's one-line summary with plain numbers worked out from these stats
+## ({atk:70} becomes "18"), for compact lists like the Companions screen.
+static func describe_short(move_id: String, atk: float, def: float, hp_max: float) -> String:
+	var d: String = MOVES[move_id].get("short", "")
+	var out := ""
+	var at := 0
+	for m in _num.search_all(d):
+		out += d.substr(at, m.get_start() - at)
+		at = m.get_end()
+		var base := atk
+		match m.get_string(1):
+			"def": base = def
+			"maxhp": base = hp_max
+		out += str(roundi(base * int(m.get_string(2)) / 100.0))
 	out += d.substr(at)
 	return out
 
