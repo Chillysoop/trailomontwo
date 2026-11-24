@@ -34,13 +34,23 @@ const ULT_PER_HIT := 4.0
 ## Listed hp x this, so fights last long enough to read (tuning knob).
 const HP_MULT := 2.0
 
-## Habitat themes, used for the kits below:
-##   Forest   endurance: thorns, bark and shields
-##   River    flow: healing, cleansing, life drain
-##   Swamp    rot: poison and weakened defense
-##   Mountain weight: heavy blows, pierce, armor
-##   Snow     cold and speed: slow, haste
-##   Jungle   reach: hitting the second row
+## Habitat identities (the full guide for designing new creatures is docs/habitats.md).
+## Each habitat owns a few keywords; a creature's kit should use at least one of its own
+## habitat's and never the signature keyword of another habitat.
+const HABITATS := {
+	"Forest": {"theme": "Endurance", "owns": ["shield", "taunt", "thorns"],
+		"line": "Outlasts: hits back with thorns, grows bark shields and draws attacks."},
+	"River": {"theme": "Flow", "owns": ["heal", "cleanse", "drain", "wash"],
+		"line": "Keeps things moving: heals, cleanses, drains life and washes away shields."},
+	"Swamp": {"theme": "Rot", "owns": ["poison", "weaken"],
+		"line": "Wears foes down: poison over time and rotted, weaker Defense."},
+	"Mountain": {"theme": "Weight", "owns": ["pierce", "stagger", "execute"],
+		"line": "Hits slow and hard: pierces Defense, staggers attacks and finishes the hurt."},
+	"Snow": {"theme": "Cold and speed", "owns": ["slow", "haste", "brittle"],
+		"line": "Fast and chilling: slows foes, speeds allies, quick double strikes."},
+	"Jungle": {"theme": "Reach", "owns": ["reach", "dodge"],
+		"line": "Strikes from anywhere: reaches the second row, hits behind and dodges."},
+}
 const KITS := {
 	"brambleback": {"role": "Guard", "hp": 520, "atk": 26, "def": 45, "spd": 2.2,
 		"basic": "bramble_swipe", "passive": "thorny_hide", "ultimate": "briar_wall"},
@@ -58,8 +68,8 @@ const KITS := {
 		"basic": "mud_horn", "passive": "mudwallow", "ultimate": "bog_charge"},
 	"inkhoot": {"role": "Striker", "hp": 260, "atk": 32, "def": 10, "spd": 1.7,
 		"basic": "ink_jet", "passive": "undertow", "ultimate": "dive"},
-	"thornfang": {"role": "Striker", "hp": 290, "atk": 28, "def": 14, "spd": 1.6,
-		"basic": "bite", "passive": "pack_hunter", "ultimate": "rend"},
+	"thornfang": {"role": "Striker", "hp": 290, "atk": 28, "def": 16, "spd": 1.7,
+		"basic": "thorn_bite", "passive": "thorn_pelt", "ultimate": "bramble_pounce"},
 	"cairnram": {"role": "Guard", "hp": 420, "atk": 27, "def": 40, "spd": 2.3,
 		"basic": "headbutt", "passive": "stubborn", "ultimate": "breakstone"},
 	"lianetail": {"role": "Striker", "hp": 240, "atk": 28, "def": 10, "spd": 1.6,
@@ -79,30 +89,30 @@ const KITS := {
 ## Behaviour lives in Battle (matched by id); the numbers here are what it reads.
 const MOVES := {
 	# ----- Forest -----
-	"bramble_swipe": {"name": "Bramble Swipe", "slot": "basic", "pct": 100,
-		"desc": "Deal {atk:100} to your target."},
+	"bramble_swipe": {"name": "Bramble Swipe", "slot": "basic", "pct": 70, "def_pct": 40,
+		"desc": "Deal {atk:70} plus {def:40} to your target."},
 	"thorny_hide": {"name": "Thorny Hide", "slot": "passive", "pct": 35,
 		"desc": "When a basic attack hits you, deal {atk:35} back to the attacker."},
 	"briar_wall": {"name": "Briar Wall", "slot": "ultimate", "def_pct": 100, "flat": 60, "secs": 4.0,
 		"desc": "You and all {k:adjacent} allies gain {k:shield|Shield} equal to {def:100} plus 60. {k:taunt|Taunt} enemies for 4s."},
-	"trunk_slam": {"name": "Trunk Slam", "slot": "basic", "pct": 100,
-		"desc": "Deal {atk:100} to your target."},
+	"trunk_slam": {"name": "Trunk Slam", "slot": "basic", "pct": 100, "amount": 30,
+		"desc": "Deal {atk:100} to your target, 30% more while you have {k:shield|Shield}."},
 	"bark_shell": {"name": "Bark Shell", "slot": "passive", "every": 3, "def_pct": 120,
 		"desc": "Every 3rd basic attack also gives you {k:shield|Shield} equal to {def:120}."},
 	"shell_quake": {"name": "Shell Quake", "slot": "ultimate", "pct": 180, "splash": 60,
 		"desc": "Deal {atk:180} to your target and {atk:60} to enemies {k:adjacent} to it."},
 	"antler_gore": {"name": "Antler Gore", "slot": "basic", "pct": 100, "splash": 40,
 		"desc": "Deal {atk:100} to your target and {atk:40} to enemies {k:adjacent} to it."},
-	"ancient_bark": {"name": "Ancient Bark", "slot": "passive", "pct": 25,
-		"desc": "When a basic attack hits you, deal {atk:25} back to the attacker."},
+	"ancient_bark": {"name": "Ancient Bark", "slot": "passive", "every": 3, "def_pct": 50,
+		"desc": "Every 3rd basic attack gives your whole pack {k:shield|Shield} equal to {def:50}."},
 	"antler_storm": {"name": "Antler Storm", "slot": "ultimate", "pct": 90, "flat": 80,
 		"desc": "Deal {atk:90} to every enemy, then {k:shield|Shield} your whole pack for 80."},
-	"bite": {"name": "Bite", "slot": "basic", "pct": 100,
-		"desc": "Deal {atk:100} to your target."},
-	"pack_hunter": {"name": "Pack Hunter", "slot": "passive", "pct": 12,
-		"desc": "Deal 12% more damage for each other Thornfang still standing."},
-	"rend": {"name": "Rend", "slot": "ultimate", "pct": 150, "secs": 6.0, "amount": 50,
-		"desc": "Deal {atk:150} to your target and apply {k:ruin} (healing it receives is halved) for 6s."},
+	"thorn_bite": {"name": "Thorn Bite", "slot": "basic", "pct": 90, "shield_pct": 30,
+		"desc": "Deal {atk:90} to your target and gain {k:shield|Shield} equal to {atk:30}."},
+	"thorn_pelt": {"name": "Thorn Pelt", "slot": "passive", "pct": 40,
+		"desc": "While you have {k:shield|Shield}, a basic attack that hits you deals {atk:40} back to the attacker."},
+	"bramble_pounce": {"name": "Bramble Pounce", "slot": "ultimate", "pct": 170, "amount": 50,
+		"desc": "Deal {atk:170} to your target and gain {k:shield|Shield} equal to half the damage dealt."},
 	# ----- River -----
 	"mending_spray": {"name": "Mending Spray", "slot": "basic", "pct": 70, "heal_pct": 60,
 		"desc": "Deal {atk:70} to your target and heal the most hurt ally for {atk:60}."},
@@ -110,8 +120,8 @@ const MOVES := {
 		"desc": "Your heals also wash {k:poison} off the ally."},
 	"tidewash": {"name": "Tidewash", "slot": "ultimate", "maxhp_pct": 15,
 		"desc": "Heal every ally for 15% of their Max HP."},
-	"ink_jet": {"name": "Ink Jet", "slot": "basic", "pct": 100,
-		"desc": "Deal {atk:100} to your target."},
+	"ink_jet": {"name": "Ink Jet", "slot": "basic", "pct": 90, "wash": 60,
+		"desc": "{k:wash|Wash away} up to {atk:60} of the target's {k:shield|Shield}, then deal {atk:90}."},
 	"undertow": {"name": "Undertow", "slot": "passive", "pct": 25,
 		"desc": "Heal yourself for 25% of the damage you deal."},
 	"dive": {"name": "Dive", "slot": "ultimate", "pct": 220,
@@ -123,21 +133,21 @@ const MOVES := {
 		"desc": "Enemies you {k:poison} are also {k:weaken|weakened}: 20% less Defense."},
 	"miasma": {"name": "Miasma", "slot": "ultimate", "dot": 25, "secs": 5.0,
 		"desc": "{k:poison|Poison} every enemy for {atk:25} a second for 5s."},
-	"mud_horn": {"name": "Mud Horn", "slot": "basic", "pct": 100,
-		"desc": "Deal {atk:100} to your target."},
-	"mudwallow": {"name": "Mudwallow", "slot": "passive", "amount": 30,
-		"desc": "Deal 30% more damage to {k:poison|poisoned} enemies."},
+	"mud_horn": {"name": "Mud Horn", "slot": "basic", "pct": 100, "amount": 15, "secs": 3.0,
+		"desc": "Deal {atk:100} to your target and {k:weaken} it: 15% less Defense for 3s."},
+	"mudwallow": {"name": "Mudwallow", "slot": "passive", "amount": 25,
+		"desc": "Deal 25% more damage to {k:poison|poisoned} or {k:weaken|weakened} enemies."},
 	"bog_charge": {"name": "Bog Charge", "slot": "ultimate", "pct": 180, "dot": 30, "secs": 4.0,
 		"desc": "Deal {atk:180} to your target and {k:poison} it for {atk:30} a second for 4s."},
 	# ----- Mountain -----
-	"scythe_cut": {"name": "Scythe Cut", "slot": "basic", "pct": 100, "behind": 40,
-		"desc": "Deal {atk:100} to your target and {atk:40} to the enemy behind it."},
+	"scythe_cut": {"name": "Scythe Cut", "slot": "basic", "pct": 100, "amount": 50,
+		"desc": "Deal {atk:100} to your target. {k:execute|Finisher}: 50% more against enemies below half health."},
 	"rockhorn": {"name": "Rockhorn", "slot": "passive", "amount": 50,
 		"desc": "Your attacks ignore half of the target's Defense."},
 	"scythe_sweep": {"name": "Scythe Sweep", "slot": "ultimate", "pct": 140,
 		"desc": "Deal {atk:140} to every enemy in your target's row."},
-	"headbutt": {"name": "Headbutt", "slot": "basic", "pct": 100,
-		"desc": "Deal {atk:100} to your target."},
+	"headbutt": {"name": "Headbutt", "slot": "basic", "pct": 90, "amount": 30,
+		"desc": "Deal {atk:90} to your target and {k:stagger} it: its attack bar drops by 30%."},
 	"stubborn": {"name": "Stubborn", "slot": "passive", "amount": 20,
 		"desc": "Below half health, gain 20 Defense."},
 	"breakstone": {"name": "Breakstone", "slot": "ultimate", "pct": 190,
@@ -149,8 +159,8 @@ const MOVES := {
 		"desc": "Your attack bar fills 25% faster while any enemy is {k:slow|slowed}."},
 	"rally_bell": {"name": "Rally Bell", "slot": "ultimate", "amount": 30, "secs": 5.0,
 		"desc": "Every ally gains {k:haste}: attacks 30% faster for 5s."},
-	"frost_sting": {"name": "Frost Sting", "slot": "basic", "pct": 90, "amount": 20, "secs": 2.0,
-		"desc": "Deal {atk:90} to your target and {k:slow} it by 20% for 2s."},
+	"frost_sting": {"name": "Frost Sting", "slot": "basic", "pct": 50, "amount": 20, "secs": 2.0,
+		"desc": "Sting twice for {atk:50} each. The first sting {k:slow|slows} the target by 20% for 2s."},
 	"brittle": {"name": "Brittle", "slot": "passive", "amount": 25,
 		"desc": "Deal 25% more damage to {k:slow|slowed} enemies."},
 	"frost_burst": {"name": "Frost Burst", "slot": "ultimate", "pct": 120, "amount": 40, "secs": 4.0,
@@ -160,14 +170,14 @@ const MOVES := {
 		"desc": "Deal {atk:85} to an enemy in the {k:back_row} if there is one, reaching over the front (unless a {k:taunt|taunt} pulls it)."},
 	"canopy_stalker": {"name": "Canopy Stalker", "slot": "passive", "amount": 15,
 		"desc": "Deal 15% more damage to enemies in the {k:back_row}."},
-	"vine_lash": {"name": "Vine Lash", "slot": "ultimate", "pct": 130, "amount": 30, "secs": 3.0,
-		"desc": "Deal {atk:130} to every enemy in the {k:back_row} and {k:slow} them by 30% for 3s."},
-	"wing_bash": {"name": "Wing Bash", "slot": "basic", "pct": 100,
-		"desc": "Deal {atk:100} to your target."},
+	"vine_lash": {"name": "Vine Lash", "slot": "ultimate", "pct": 145,
+		"desc": "Deal {atk:145} to every enemy in the {k:back_row}, reaching over the front."},
+	"wing_bash": {"name": "Wing Bash", "slot": "basic", "pct": 90,
+		"desc": "Deal {atk:90} to your target, then get ready to {k:dodge} the next basic attack aimed at you."},
 	"glide": {"name": "Glide", "slot": "passive", "pct": 50,
 		"desc": "Your basic attacks also hit the enemy behind your target for {atk:50}."},
 	"wing_gust": {"name": "Wing Gust", "slot": "ultimate", "pct": 100,
-		"desc": "Deal {atk:100} to every enemy in the {k:back_row}, or the front row if the back is empty, and {k:shield|Shield} yourself for {def:100}."},
+		"desc": "Deal {atk:100} to every enemy in the {k:back_row}, or the front row if the back is empty, then get ready to {k:dodge} the next basic attack."},
 }
 
 ## Habitat synergies (like a team bonus): with `need` or more creatures of a type on your

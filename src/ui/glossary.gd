@@ -25,6 +25,14 @@ const ENTRIES := {
 		"text": "How long the fight has lasted. After 90 seconds both sides tire."},
 	"adjacent": {"name": "adjacent",
 		"text": "Directly above, below or beside on the same side's grid."},
+	"stagger": {"name": "Stagger", "icon": "weight",
+		"text": "A heavy blow knocks the target's attack bar back, delaying its next basic attack. {i:mountain}Mountain."},
+	"execute": {"name": "Finisher", "icon": "mountain",
+		"text": "Hits harder against badly hurt enemies. {i:mountain}Mountain."},
+	"wash": {"name": "Wash away", "icon": "river",
+		"text": "Strips {k:shield} off the target before the hit lands. {i:river}River."},
+	"dodge": {"name": "Dodge", "icon": "jungle",
+		"text": "The next basic attack aimed at this creature misses completely. {i:jungle}Jungle."},
 	"ruin": {"name": "Ruin",
 		"text": "Healing received is halved while it lasts."},
 	# ----- habitats (filled in from the type chart) -----
@@ -156,7 +164,8 @@ static func _habitat_text(type: String) -> String:
 			weak_to = t
 	var syn: Dictionary = CombatData.SYNERGIES[type]
 	var lines: Array[String] = []
-	lines.append("A habitat. Its attacks hit {i:%s}%s hard and {i:%s}%s softly." % [
+	lines.append("%s: %s" % [CombatData.HABITATS[type]["theme"], CombatData.HABITATS[type]["line"]])
+	lines.append("Its attacks hit {i:%s}%s hard and {i:%s}%s softly." % [
 		habitat_id(chart[0]), chart[0], habitat_id(chart[1]), chart[1]])
 	if weak_to != "":
 		lines.append("Takes extra damage from {i:%s}%s." % [habitat_id(weak_to), weak_to])

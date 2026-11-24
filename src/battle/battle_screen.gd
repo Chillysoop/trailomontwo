@@ -39,6 +39,7 @@ var _fx: Node2D
 var _views := {}
 var _ui: CanvasLayer
 var _hover: HoverZones
+var _target_line: TargetLine
 var _info: RichTextLabel
 var _info_panel: PanelContainer
 var _side_panel: PanelContainer
@@ -90,6 +91,10 @@ func _ready() -> void:
 	_fx = Node2D.new()
 	_fx.z_index = 10
 	add_child(_fx)
+	_target_line = TargetLine.new()
+	_target_line.z_index = 11
+	_target_line.visible = false
+	add_child(_target_line)
 	_hover = HoverZones.new()
 	add_child(_hover)
 	_build_ui()
@@ -349,6 +354,7 @@ func _process(delta: float) -> void:
 		if f.alive():
 			_update_bar(f)
 	_stats.queue_redraw()
+	_update_target_line()
 	var clock := "{i:cooldown}%ds%s" % [int(battle.time), "  {k:tired|tiring!}" if battle.time >= Battle.FATIGUE_START else ""]
 	if battle.retreating:
 		clock += "  retreating %.1fs" % maxf(0.0, battle.retreat_left)
@@ -540,7 +546,25 @@ func _refresh_combat_bar() -> void:
 	_speed_btn.text = "Speed %dx" % int(SPEEDS[speed_index])
 
 
+## While the mouse is over a creature, a red line shows who its next basic attack hits.
+func _update_target_line() -> void:
+	var node := _hover.hovered_node()
+	var f: Fighter = null
+	if node != null and battle.outcome == Battle.Outcome.ONGOING:
+		for uid in _views:
+			if _views[uid]["holder"] == node:
+				f = battle.fighter(uid)
+				break
+	var t := battle.basic_target(f) if f != null else null
+	_target_line.visible = t != null
+	if t != null:
+		_target_line.from = _views[f.uid]["home"] + TargetLine.CHEST
+		_target_line.to = _views[t.uid]["home"] + TargetLine.CHEST
+		_target_line.queue_redraw()
+
+
 func _end_combat() -> void:
+	_target_line.visible = false
 	_drain_events()
 	phase = Phase.AFTERMATH
 	_combat_bar.visible = false
@@ -849,6 +873,26 @@ class StatsWindow:
 				draw_string(font, Vector2(lx + 8, y + 9), item[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, PreviewHud.INK)
 				lx += 54.0
 		custom_minimum_size = Vector2(192, maxf(ROW_H * 7, y + (12 if mode == 0 else 0)))
+
+
+## A red line with an arrow head from a creature to the one it is attacking.
+class TargetLine:
+	extends Node2D
+	const CHEST := Vector2(0, -18)
+	const RED := Color("e0453a")
+	var from := Vector2.ZERO
+	var to := Vector2.ZERO
+
+	func _draw() -> void:
+		var dir := (to - from).normalized()
+		if dir == Vector2.ZERO:
+			return
+		var tip := to - dir * 6.0
+		draw_line(from, tip, Color(0, 0, 0, 0.5), 4.0)
+		draw_line(from, tip, RED, 2.0)
+		var side := dir.orthogonal() * 3.0
+		draw_colored_polygon(PackedVector2Array([tip + dir * 4.0, tip - side, tip + side]), RED)
+		draw_circle(to, 2.0, RED)
 
 
 class Shadow:
