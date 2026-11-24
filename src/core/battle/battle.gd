@@ -44,7 +44,8 @@ var _wagon_timer := WAGON_INTERVAL * 0.6
 var _next_uid := 0
 
 
-## player: {"slots": {Vector2i(row, lane): species}, "hp": {species: hp}, "fatigue": {species: 0-100}}
+## player: {"slots": {Vector2i(row, lane): species}, "hp": {species: hp}, "fatigue": {species: 0-100},
+##          "kits": {species: {"basic", "passive", "ultimate"}}, "boosts": {species: {"hp", "atk", "def", "spd"}}}
 ## enemy: {"front": [3 ids], "back": [3 ids], "boss": id or "", "scale": float}
 ## opts: {"seed": int, "ambush": bool}
 static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
@@ -63,6 +64,17 @@ static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 		if id == "" or float(hp.get(id, 1.0)) <= 0.0:
 			continue
 		var f := b._make(id, Formation.Side.PLAYER, cell.x, cell.y, 1.0)
+		# Learned moves and level-up boosts.
+		var kit: Dictionary = player.get("kits", {}).get(id, {})
+		f.basic = kit.get("basic", f.basic)
+		f.passive = kit.get("passive", f.passive)
+		f.ultimate = kit.get("ultimate", f.ultimate)
+		var boost: Dictionary = player.get("boosts", {}).get(id, {})
+		f.max_hp += float(boost.get("hp", 0.0))
+		f.hp = f.max_hp
+		f.atk += float(boost.get("atk", 0.0))
+		f.def += float(boost.get("def", 0.0))
+		f.spd = maxf(0.6, f.spd - float(boost.get("spd", 0.0)))
 		if hp.has(id):
 			f.hp = clampf(float(hp[id]), 0.0, f.max_hp)
 		var penalty := FATIGUE_PENALTY * clampf(float(fatigue.get(id, 0.0)), 0.0, 100.0) / 100.0
@@ -78,6 +90,10 @@ static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 		b._make(enemy["boss"], Formation.Side.ENEMY, Fighter.BOSS_ROW, 1, scale)
 	b._apply_synergies(Formation.Side.PLAYER)
 	b._apply_synergies(Formation.Side.ENEMY)
+	for f in b.fighters:
+		var pm := CombatData.move(f.passive)
+		if pm.get("kind", "") == "start_shield":
+			f.shield = minf(f.max_hp, f.def * float(pm["def_pct"]) / 100.0)
 	var ambush := bool(opts.get("ambush", false))
 	for f in b.fighters:
 		var caught := ambush and f.side == Formation.Side.PLAYER
@@ -366,6 +382,39 @@ func _basic_attack(f: Fighter) -> void:
 		t.dodge = false
 		events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Dodged"})
 		return
+	if MovePool.has(f.basic):
+		_learned_basic(f, t, m)
+	else:
+		_legacy_basic(f, t, m)
+	# Passives that ride on basic attacks.
+	var pm := CombatData.move(f.passive)
+	if pm.get("kind", "") == "every" and f.attacks % int(pm["n"]) == 0:
+		_every_nth(f, t, pm)
+	match f.passive:
+		"bark_shell":
+			pm = CombatData.move("bark_shell")
+			if f.attacks % int(pm["every"]) == 0:
+				_give_shield(f, f, f.def * float(pm["def_pct"]) / 100.0)
+		"ancient_bark":
+			pm = CombatData.move("ancient_bark")
+			if f.attacks % int(pm["every"]) == 0:
+				for a in _team(f.side):
+					_give_shield(f, a, f.def * float(pm["def_pct"]) / 100.0)
+		"glide":
+			var b := behind(t)
+			if b != null:
+				_deal(f, b, _pct(f, "glide"), "passive", "Glide")
+	# Thorns on the creature that was hit.
+	if t.alive():
+		var tm := CombatData.move(t.passive)
+		if t.passive == "thorny_hide" or (t.passive == "thorn_pelt" and t.shield > 0.0):
+			_deal(t, f, _pct(t, t.passive), "passive", tm["name"])
+		elif tm.get("kind", "") == "thorns" and (not tm.get("while_shielded", false) or t.shield > 0.0):
+			_deal(t, f, t.atk * float(tm["pct"]) / 100.0, "passive", tm["name"])
+
+
+## The original kits, matched by move id.
+func _legacy_basic(f: Fighter, t: Fighter, m: Dictionary) -> void:
 	var amount := _pct(f, f.basic)
 	match f.basic:
 		"bramble_swipe":
@@ -410,24 +459,147 @@ func _basic_attack(f: Fighter) -> void:
 		"antler_gore":
 			for a in adjacent(t):
 				_deal(f, a, _pct(f, f.basic, "splash"), "basic", m["name"])
-	# Passives that ride on basic attacks.
-	match f.passive:
-		"bark_shell":
-			var pm := CombatData.move("bark_shell")
-			if f.attacks % int(pm["every"]) == 0:
-				_give_shield(f, f, f.def * float(pm["def_pct"]) / 100.0)
-		"ancient_bark":
-			var pm := CombatData.move("ancient_bark")
-			if f.attacks % int(pm["every"]) == 0:
-				for a in _team(f.side):
-					_give_shield(f, a, f.def * float(pm["def_pct"]) / 100.0)
-		"glide":
-			var b := behind(t)
-			if b != null:
-				_deal(f, b, _pct(f, "glide"), "passive", "Glide")
-	# Thorns on the creature that was hit.
-	if t.alive() and (t.passive == "thorny_hide" or (t.passive == "thorn_pelt" and t.shield > 0.0)):
-		_deal(t, f, _pct(t, t.passive), "passive", CombatData.move(t.passive)["name"])
+
+
+# ---------- learned (data-driven) moves, see MovePool ----------
+
+func _learned_basic(f: Fighter, t: Fighter, m: Dictionary) -> void:
+	_wash(f, t, m)
+	var amount := f.atk * float(m.get("pct", 100)) / 100.0 + f.def * float(m.get("def_pct", 0)) / 100.0
+	amount *= _bonus(m.get("bonus", {}), f, t)
+	for i in int(m.get("hits", 1)):
+		_deal(f, t, amount, "basic", m["name"])
+		if not t.alive():
+			break
+		if i == 0:
+			_on_hit(f, t, m, "basic")
+	if m.has("splash"):
+		for a in adjacent(t):
+			_deal(f, a, f.atk * float(m["splash"]) / 100.0, "basic", m["name"])
+	_self_and_allies(f, m)
+
+
+func _learned_ultimate(f: Fighter, t: Fighter, m: Dictionary) -> void:
+	var opp := _opposite(f.side)
+	var targets: Array[Fighter] = []
+	match String(m.get("target", "target")):
+		"target": targets = [t]
+		"adjacent":
+			targets = [t]
+			targets.append_array(adjacent(t))
+		"row": targets = _row(opp, t.row)
+		"all": targets = _team(opp)
+		"weakest": targets = [_weakest_enemy(f)]
+	for e in targets:
+		if e == null or not e.alive():
+			continue
+		_wash(f, e, m)
+		if m.has("pct"):
+			_deal(f, e, f.atk * float(m["pct"]) / 100.0 * _bonus(m.get("bonus", {}), f, e), "ult", m["name"], bool(m.get("pierce", false)))
+		if e.alive():
+			_on_hit(f, e, m, "ult")
+	_self_and_allies(f, m, "ult")
+	if m.has("taunt"):
+		f.taunt = float(m["taunt"])
+		events.append({"t": "status", "src": f.uid, "dst": f.uid, "label": "Taunting"})
+
+
+## Whether a learned ultimate has anything to do yet (a pure heal waits for someone hurt).
+func _learned_ult_ready(f: Fighter, t: Fighter, m: Dictionary) -> bool:
+	if String(m.get("target", "target")) != "none":
+		return t != null
+	var team: Dictionary = m.get("team", {})
+	if team.has("heal_maxhp") and not team.has("shield_def") and not team.has("haste") and not m.has("taunt") and not m.has("self"):
+		var w := _weakest_ally(f)
+		return w != null and w.hp_fraction() < HEAL_ULT_BELOW
+	return true
+
+
+func _cond(vs: String, f: Fighter, t: Fighter) -> bool:
+	match vs:
+		"slowed": return t.has_mod("slow")
+		"poisoned": return t.poison_secs > 0.0
+		"weakened": return t.has_mod("weaken")
+		"hurt": return t.hp_fraction() < 0.5
+		"healthy": return t.hp_fraction() > 0.75
+		"shielded": return f.shield > 0.0
+	return false
+
+
+func _bonus(b: Dictionary, f: Fighter, t: Fighter) -> float:
+	if b.is_empty() or not _cond(String(b["vs"]), f, t):
+		return 1.0
+	return 1.0 + float(b["amount"]) / 100.0
+
+
+func _wash(f: Fighter, t: Fighter, m: Dictionary) -> void:
+	if not m.has("wash") or t.shield <= 0.0:
+		return
+	t.shield -= minf(t.shield, f.atk * float(m["wash"]) / 100.0)
+	events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Washed"})
+
+
+## Statuses a learned move puts on an enemy it hit.
+func _on_hit(f: Fighter, t: Fighter, m: Dictionary, tag: String) -> void:
+	if m.has("poison"):
+		_poison(f, t, f.atk * float(m["poison"][0]) / 100.0, float(m["poison"][1]), tag)
+	if m.has("slow"):
+		_slow(f, t, float(m["slow"][0]) / 100.0, float(m["slow"][1]))
+	if m.has("weaken"):
+		t.add_mod("weaken", float(m["weaken"][0]) / 100.0, float(m["weaken"][1]))
+		events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Weakened"})
+	if m.has("stagger"):
+		t.attack_bar = maxf(0.0, t.attack_bar - float(m["stagger"]) / 100.0)
+		events.append({"t": "status", "src": f.uid, "dst": t.uid, "label": "Staggered"})
+
+
+func _self_and_allies(f: Fighter, m: Dictionary, tag := "basic") -> void:
+	var s: Dictionary = m.get("self", {})
+	if s.has("shield_atk"):
+		_give_shield(f, f, f.atk * float(s["shield_atk"]) / 100.0)
+	if s.has("shield_def"):
+		_give_shield(f, f, f.def * float(s["shield_def"]) / 100.0)
+	if s.has("heal_atk"):
+		_heal(f, f, f.atk * float(s["heal_atk"]) / 100.0, tag)
+	if s.get("dodge", false):
+		f.dodge = true
+	var a: Dictionary = m.get("ally", {})
+	if a.has("heal_atk"):
+		_heal(f, _weakest_ally(f), f.atk * float(a["heal_atk"]) / 100.0, tag)
+	var team: Dictionary = m.get("team", {})
+	for ally in _team(f.side) if not team.is_empty() else []:
+		if team.has("heal_maxhp"):
+			_heal(f, ally, ally.max_hp * float(team["heal_maxhp"]) / 100.0, tag)
+		if team.get("cleanse", false):
+			_cleanse(ally)
+		if team.has("shield_def"):
+			_give_shield(f, ally, f.def * float(team["shield_def"]) / 100.0 + float(team.get("shield_flat", 0)))
+		if team.has("haste"):
+			ally.add_mod("haste", float(team["haste"][0]) / 100.0, float(team["haste"][1]))
+			events.append({"t": "status", "src": f.uid, "dst": ally.uid, "label": "Faster"})
+
+
+func _cleanse(t: Fighter) -> void:
+	t.poison_secs = 0.0
+	for i in range(t.mods.size() - 1, -1, -1):
+		if t.mods[i]["kind"] in ["weaken", "slow"]:
+			t.mods.remove_at(i)
+
+
+## "Every Nth basic attack" passives from MovePool.
+func _every_nth(f: Fighter, t: Fighter, pm: Dictionary) -> void:
+	if pm.has("shield_def"):
+		_give_shield(f, f, f.def * float(pm["shield_def"]) / 100.0)
+	elif pm.has("ally_heal_atk"):
+		_heal(f, _weakest_ally(f), f.atk * float(pm["ally_heal_atk"]) / 100.0)
+	elif pm.has("extra_pct"):
+		_deal(f, t, f.atk * float(pm["extra_pct"]) / 100.0, "passive", pm["name"])
+	elif pm.has("poison_all"):
+		for e in _team(_opposite(f.side)):
+			_poison(f, e, f.atk * float(pm["poison_all"][0]) / 100.0, float(pm["poison_all"][1]), "passive")
+	elif pm.has("team_haste"):
+		for a in _team(f.side):
+			a.add_mod("haste", float(pm["team_haste"][0]) / 100.0, float(pm["team_haste"][1]))
 
 
 ## Returns false (and keeps the bar full) when the ultimate has nothing useful to do yet.
@@ -435,6 +607,12 @@ func _try_ultimate(f: Fighter) -> bool:
 	var m := CombatData.move(f.ultimate)
 	var opp := _opposite(f.side)
 	var t := ordinary_target(f.side, f.lane)
+	if MovePool.has(f.ultimate):
+		if not _learned_ult_ready(f, t, m):
+			return false
+		events.append({"t": "ult", "src": f.uid, "dst": t.uid if t != null else f.uid, "label": m["name"]})
+		_learned_ultimate(f, t, m)
+		return true
 	match f.ultimate:
 		"tidewash":
 			var w := _weakest_ally(f)
@@ -586,6 +764,9 @@ func damage_for(src: Fighter, t: Fighter, amount: float, pierce := false) -> flo
 			"canopy_stalker":
 				if t.row == Formation.Row.BACK:
 					dmg *= 1.0 + float(CombatData.move("canopy_stalker")["amount"]) / 100.0
+		var sp := CombatData.move(src.passive)
+		if sp.get("kind", "") == "bonus_vs" and _cond(String(sp["vs"]), src, t):
+			dmg *= 1.0 + float(sp["amount"]) / 100.0
 		if src.canopy > 0.0 and t.row == Formation.Row.BACK:
 			dmg *= 1.0 + src.canopy
 	return dmg * fatigue_damage()
@@ -609,6 +790,10 @@ func _deal(src: Fighter, t: Fighter, amount: float, tag: String, label: String, 
 			_: src.dmg_basic += absorbed + lost
 		if src.passive == "undertow" and src.alive() and tag != "passive":
 			_heal(src, src, (absorbed + lost) * float(CombatData.move("undertow")["pct"]) / 100.0)
+		elif src.alive() and tag != "passive":
+			var dp := CombatData.move(src.passive)
+			if dp.get("kind", "") == "drain":
+				_heal(src, src, (absorbed + lost) * float(dp["pct"]) / 100.0)
 	else:
 		wagon_damage += absorbed + lost
 	if tag != "passive" and not raw:

@@ -272,7 +272,20 @@ static func stats(id: String) -> Dictionary:
 
 
 static func move(id: String) -> Dictionary:
-	return MOVES[id]
+	return MOVES[id] if MOVES.has(id) else MovePool.MOVES.get(id, {})
+
+
+static func has_move(id: String) -> bool:
+	return MOVES.has(id) or MovePool.has(id)
+
+
+## A move's full text (learnable moves write theirs from their data).
+static func move_desc(id: String) -> String:
+	return MOVES[id]["desc"] if MOVES.has(id) else MovePool.desc(id)
+
+
+static func move_short(id: String) -> String:
+	return MOVES[id].get("short", "") if MOVES.has(id) else MovePool.short(id)
 
 
 ## [basic, passive, ultimate] move ids for a species.
@@ -289,7 +302,7 @@ static var _num := RegEx.create_from_string("\\{(atk|def|maxhp):([0-9]+)\\}")
 
 ## A move's description in Rich markup, with numbers worked out from these stats.
 static func describe(move_id: String, atk: float, def: float, hp_max: float) -> String:
-	var d: String = MOVES[move_id]["desc"]
+	var d := move_desc(move_id)
 	var out := ""
 	var at := 0
 	for m in _num.search_all(d):
@@ -310,7 +323,7 @@ static func describe(move_id: String, atk: float, def: float, hp_max: float) -> 
 ## A move's one-line summary with plain numbers worked out from these stats
 ## ({atk:70} becomes "18"), for compact lists like the Companions screen.
 static func describe_short(move_id: String, atk: float, def: float, hp_max: float) -> String:
-	var d: String = MOVES[move_id].get("short", "")
+	var d := move_short(move_id)
 	var out := ""
 	var at := 0
 	for m in _num.search_all(d):
@@ -328,7 +341,7 @@ static func describe_short(move_id: String, atk: float, def: float, hp_max: floa
 ## Glossary keyword ids a move's description mentions (for the keyword boxes).
 static func keywords(move_id: String) -> Array[String]:
 	var out: Array[String] = []
-	var d: String = MOVES[move_id]["desc"]
+	var d := move_desc(move_id)
 	for m in RegEx.create_from_string("\\{k:([a-z_]+)").search_all(d):
 		var k := m.get_string(1)
 		if not out.has(k):

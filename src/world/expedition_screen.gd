@@ -45,6 +45,7 @@ var _day_timer := 0.0
 
 
 var _companions: CompanionsScreen
+var _comp_btn: Button
 
 
 func _ready() -> void:
@@ -460,6 +461,9 @@ func _refresh_hud() -> void:
 		crossing.day, roundi(crossing.provisions), crossing.days_of(crossing.provisions, crossing.daily_provisions()),
 		roundi(crossing.water), crossing.days_of(crossing.water, crossing.daily_water()), roundi(crossing.cargo_weight()), roundi(crossing.hauling_available()), crossing.wagon.integrity])
 	Rich.set_text(_hud_health, ("{i:health}[color=#ff8a7a]%d[/color]" if crossing.health < 50 else "{i:health}%d") % crossing.health)
+	if _comp_btn != null:
+		var n := crossing.pending_count()
+		_comp_btn.text = "Companions (%d level up%s!)" % [n, "" if n == 1 else "s"] if n > 0 else "Companions"
 
 
 func _show_end(won: bool) -> void:
@@ -498,6 +502,7 @@ func _build_ui() -> void:
 	comp.pressed.connect(_open_companions)
 	Tips.attach(comp, func(): return "Your team: stats, moves and memory slots, plus the Trailomon in storage. Travel pauses while it's open.")
 	row.add_child(comp)
+	_comp_btn = comp
 	_ui.add_child(bar)
 
 	_panel = PanelContainer.new()
@@ -627,7 +632,9 @@ func _open_companions() -> void:
 	if _companions != null and is_instance_valid(_companions):
 		return
 	_companions = CompanionsScreen.open(_ui, crossing)
-	_companions.closed.connect(func(): _companions = null)
+	_companions.closed.connect(func():
+		_companions = null
+		_refresh_hud())
 
 
 func _button(text: String, size: int) -> Button:

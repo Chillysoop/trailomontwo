@@ -204,8 +204,7 @@ func _add_unit(id: String, feet: Vector2, enemy: bool, tip: Variant = null) -> D
 
 ## Tooltip for one of your creatures before the fight.
 func _mine_card(id: String) -> String:
-	return CreatureCard.markup(id, {"hp": crossing.creature_hp.get(id, 0.0), "max_hp": crossing.max_hp(id),
-		"fatigue": crossing.fatigue.get(id, 0.0)})
+	return CreatureCard.markup(id, CreatureCard.team_opts(crossing, id))
 
 
 func _foe_card(id: String, scale: float, boss: bool) -> String:
@@ -222,7 +221,10 @@ func _fighter_card(uid: int) -> String:
 	var f := battle.fighter(uid)
 	if f == null:
 		return ""
-	return CreatureCard.markup(f.species, {"hp": f.hp, "max_hp": f.max_hp, "fighter": f, "enemy": f.side == Formation.Side.ENEMY})
+	var opts := {"hp": f.hp, "max_hp": f.max_hp, "fighter": f, "enemy": f.side == Formation.Side.ENEMY}
+	if f.side == Formation.Side.PLAYER and crossing != null:
+		opts["level"] = crossing.level(f.species)
+	return CreatureCard.markup(f.species, opts)
 
 
 ## Habitat bonus lines with icons. include_close adds habitats one creature short.
@@ -611,6 +613,16 @@ func _end_combat() -> void:
 		var cont := Ui.button("Continue", 10)
 		cont.pressed.connect(func(): finished.emit(_result_lines))
 		_after_buttons.add_child(cont)
+		if crossing.pending_count() > 0:
+			var lv := Ui.button("Level ups (%d)" % crossing.pending_count(), 10)
+			lv.pressed.connect(func():
+				var s := LevelUpScreen.open(_ui, crossing)
+				s.closed.connect(func():
+					lv.text = "Level ups (%d)" % crossing.pending_count()
+					lv.visible = crossing.pending_count() > 0
+					cont.grab_focus.call_deferred()))
+			Tips.attach(lv, func(): return "Pick upgrades now, or later from the Companions screen.")
+			_after_buttons.add_child(lv)
 		cont.grab_focus.call_deferred()
 	_after.visible = true
 

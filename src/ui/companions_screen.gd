@@ -20,6 +20,10 @@ var _cards: VBoxContainer
 ## The six lineup cards, front row first.
 var _card_nodes: Array[Control] = []
 var _stored: HBoxContainer
+var _level_btn: Button
+## Called after a memory swap instead of refresh(), when the cards are shown somewhere else
+## (the level-up screen borrows _card() as its character sheet).
+var on_swap: Callable
 
 
 static func open(parent: Node, e: Expedition) -> CompanionsScreen:
@@ -79,6 +83,12 @@ func _ready() -> void:
 		b.mouse_filter = Control.MOUSE_FILTER_PASS
 		Tips.attach(b, "g:" + dust[0])
 		head.add_child(b)
+	_level_btn = Ui.button("", 8)
+	_level_btn.icon = Rich.icon_tex("ultimate")
+	_level_btn.focus_mode = Control.FOCUS_NONE
+	_level_btn.pressed.connect(open_level_ups)
+	Tips.attach(_level_btn, func(): return "Your Trailomon levelled up. Pick their upgrades and new moves.")
+	head.add_child(_level_btn)
 	var close := Ui.button("Close (Esc)", 8)
 	close.focus_mode = Control.FOCUS_NONE
 	close.pressed.connect(close_screen)
@@ -112,6 +122,15 @@ func refresh() -> void:
 			_card_nodes.append(card)
 	for i in maxi(9, crossing.stored.size() + 1):
 		_stored.add_child(_stored_tile(crossing.stored[i] if i < crossing.stored.size() else ""))
+	_level_btn.visible = crossing.pending_count() > 0
+	_level_btn.text = "Level ups (%d)" % crossing.pending_count()
+
+
+func open_level_ups() -> void:
+	if crossing.pending_count() == 0:
+		return
+	var l := LevelUpScreen.open(self, crossing)
+	l.closed.connect(refresh)
 
 
 func close_screen() -> void:
@@ -145,13 +164,16 @@ func _panel(bg: Color, min_size: Vector2) -> PanelContainer:
 	return p
 
 
-func _card(id: String) -> Control:
+## One Trailomon's card. `highlight` outlines one move slot (the level-up screen marks the
+## slot a new move would replace).
+func _card(id: String, highlight := "") -> Control:
 	var p := _panel(Color(0.18, 0.14, 0.20, 0.95), CARD)
 	if id == "":
 		p.add_child(Rich.label("[color=#%s]Empty spot[/color]" % CreatureCard.MUTED, 8))
 		return p
 	var info := Species.info(id)
 	var s := CombatData.stats(id)
+	var kit := crossing.kit_moves(id)
 	var hp := float(crossing.creature_hp.get(id, 0.0))
 	var max_hp := crossing.max_hp(id)
 	var col := VBoxContainer.new()
@@ -169,17 +191,19 @@ func _card(id: String) -> Control:
 	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	if hp <= 0.0:
 		pic.modulate = Color(1, 1, 1, 0.45)
-	Tips.attach(pic, func(): return CreatureCard.markup(id, {"hp": crossing.creature_hp.get(id, 0.0),
-		"max_hp": crossing.max_hp(id), "fatigue": crossing.fatigue.get(id, 0.0)}))
+	Tips.attach(pic, func(): return CreatureCard.markup(id, CreatureCard.team_opts(crossing, id)))
 	top.add_child(_with_level(pic, crossing.level(id), Vector2(PIC, PIC)))
 	var role: String = Glossary.ROLES.get(s["role"], "")
-	var atk := float(s["atk"])
-	var spd := float(s["spd"])
-	var dps := atk * float(CombatData.move(s["basic"]).get("pct", 100)) / 100.0 / spd
-	var text := "[font_size=10][b]%s[/b][/font_size]  {i:%s} {i:%s}\n" % [info["name"], Glossary.habitat_id(info["type"]), role]
+	var atk := crossing.stat(id, "atk")
+	var def := crossing.stat(id, "def")
+	var spd := crossing.stat(id, "spd")
+	var dps := atk * float(CombatData.move(kit[0]).get("pct", 100)) / 100.0 / spd
+	var xp_text := "max" if crossing.level(id) >= Leveling.MAX_LEVEL else "%d/%d xp" % [int(crossing.xp.get(id, 0)), Leveling.xp_to_next(crossing.level(id))]
+	var text := "[font_size=10][b]%s[/b][/font_size]  {i:%s} {i:%s}  [font_size=7][color=#%s]%s[/color][/font_size]\n" % [
+		info["name"], Glossary.habitat_id(info["type"]), role, CreatureCard.MUTED, xp_text]
 	text += "{i:hp} [color=#%s]%d[/color][color=#%s]/%d[/color]    {i:atk} [color=#%s]%d[/color]    {i:def} [color=#%s]%d[/color]\n" % [
-		CreatureCard.HP_COL, roundi(hp), CreatureCard.MUTED, roundi(max_hp), CreatureCard.ATK_COL, roundi(atk), CreatureCard.DEF_COL, int(s["def"])]
-	text += "{i:spd} [color=#%s]%.1fs[/color]    {i:dps} [color=#%s]%.1f[/color]" % [CreatureCard.SPD_COL, spd, CreatureCard.DPS_COL, dps]
+		CreatureCard.HP_COL, roundi(hp), CreatureCard.MUTED, roundi(max_hp), CreatureCard.ATK_COL, roundi(atk), CreatureCard.DEF_COL, roundi(def)]
+	text += "{i:spd} [color=#%s]%.2fs[/color]    {i:dps} [color=#%s]%.1f[/color]" % [CreatureCard.SPD_COL, spd, CreatureCard.DPS_COL, dps]
 	if hp <= 0.0:
 		text += "  {ik:ko}"
 	var stats := Rich.label(text, 8)
@@ -191,8 +215,21 @@ func _card(id: String) -> Control:
 	rule.color = Color(0.91, 0.84, 0.66, 0.18)
 	rule.custom_minimum_size = Vector2(0, 1)
 	col.add_child(rule)
-	for mid in CombatData.kit_moves(id):
-		col.add_child(_move_row(id, mid, atk, float(s["def"]), max_hp))
+	for mid in kit:
+		var mrow := _move_row(id, mid, atk, def, max_hp)
+		if CombatData.move(mid)["slot"] == highlight:
+			var hl := PanelContainer.new()
+			var hb := StyleBoxFlat.new()
+			hb.bg_color = Color(1.0, 0.55, 0.25, 0.10)
+			hb.border_color = Color(1.0, 0.6, 0.3, 0.9)
+			hb.set_border_width_all(1)
+			hb.set_corner_radius_all(2)
+			hb.set_content_margin_all(1)
+			hl.add_theme_stylebox_override("panel", hb)
+			hl.add_child(mrow)
+			col.add_child(hl)
+		else:
+			col.add_child(mrow)
 	return p
 
 
@@ -248,11 +285,23 @@ func _memory_slot(id: String, slot: String) -> Control:
 		icon.modulate = Color(1, 1, 1, 0.35)
 	p.add_child(icon)
 	var slot_name := Glossary.entry_name(slot).to_lower()
+	var name: String = Species.info(id)["name"]
 	Tips.attach(p, func():
-		if stored != "":
-			return "{i:memory} [b]Memory slot[/b]\n%s\nSwap it in between battles." % CreatureCard.move_header(stored)
-		return "{i:memory} [b]Memory slot (empty)[/b]\nWhen %s learns a new %s, the move it replaces can be kept here and swapped back in between battles." % [
-			Species.info(id)["name"], slot_name])
+		var now := crossing.memory_move(id, slot)
+		if now != "":
+			return "{i:memory} [b]Memory slot[/b]\n%s\n[color=#%s]%s[/color]\n[color=#ffe3a3]Click to swap it in.[/color] %s goes into memory." % [
+				CreatureCard.move_header(now, true), CreatureCard.SOFT,
+				CombatData.describe(now, crossing.stat(id, "atk"), crossing.stat(id, "def"), crossing.max_hp(id)),
+				CombatData.move(crossing.kit_move(id, slot))["name"]]
+		return "{i:memory} [b]Memory slot (empty)[/b]\nWhen %s learns a new %s, the move it replaces is kept here so you can swap it back between battles." % [name, slot_name])
+	if stored != "":
+		p.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		p.gui_input.connect(func(e: InputEvent):
+			if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+				crossing.swap_memory(id, slot)
+				Tips.hide_from(null)
+				(on_swap if on_swap.is_valid() else refresh).call_deferred())
 	return p
 
 

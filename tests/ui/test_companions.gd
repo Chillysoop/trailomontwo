@@ -63,3 +63,29 @@ func test_every_move_has_a_one_line_summary_with_numbers() -> void:
 		check(not t.contains("{"), "%s summary resolved: %s" % [mid, t])
 		check(t.length() <= 52, "%s summary fits one line: %s" % [mid, t])
 	check_eq(CombatData.describe_short("frost_kick", 25.0, 12.0, 560.0), "Hits for 20, slows 20% for 2s")
+
+
+func test_level_up_screen_shows_sheet_and_current_move() -> void:
+	var e := Expedition.new_default(3)
+	e.gain_xp("coilhusk", 80)
+	while e.pending_levels[0]["options"][0]["kind"] != "move":
+		e.choose_level_up(0)
+	var s := LevelUpScreen.new()
+	s.crossing = e
+	s._ready()
+	check(s._current_tile != null, "a move level-up shows the current move in its own tile")
+	var text := ""
+	for l in s.find_children("*", "RichTextLabel", true, false):
+		text += (l as RichTextLabel).text + "\n"
+	var current: String = CombatData.move(e.kit_move("coilhusk", "passive"))["name"]
+	check(text.contains("EQUIPPED NOW"), "current tile is marked as equipped")
+	check(text.contains("Replaces " + current), "each option says what it replaces")
+	check(text.contains("Trunk Slam"), "the character sheet lists the other moves")
+	s._pick(0)
+	var picked := ""
+	for l in s.find_children("*", "RichTextLabel", true, false):
+		picked += (l as RichTextLabel).text + "\n"
+	check(picked.contains("REPLACED BY"), "picking marks the current move as replaced")
+	s._sheets.free()
+	s._sheets = null
+	s.free()

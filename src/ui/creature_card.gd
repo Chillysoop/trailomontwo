@@ -26,6 +26,16 @@ const GAP := "[font_size=3]\u00a0[/font_size]"
 ##   fatigue: hauling tiredness in percent
 ##   fighter: a live Fighter (shows its shield and statuses)
 ##   enemy: true for a foe
+##   kit: [basic, passive, ultimate] move ids in use (learned moves), else the species' own
+##   atk, def, spd: current stats after level-ups
+## Card options for one of your own Trailomon: health, tiredness, level, learned moves
+## and boosted stats.
+static func team_opts(e: Expedition, id: String) -> Dictionary:
+	return {"hp": e.creature_hp.get(id, 0.0), "max_hp": e.max_hp(id), "fatigue": e.fatigue.get(id, 0.0),
+		"kit": e.kit_moves(id), "atk": e.stat(id, "atk"), "def": e.stat(id, "def"), "spd": e.stat(id, "spd"),
+		"level": e.level(id)}
+
+
 static func markup(id: String, opts := {}) -> String:
 	var info := Species.info(id)
 	var s := CombatData.stats(id)
@@ -35,6 +45,8 @@ static func markup(id: String, opts := {}) -> String:
 	var scale := float(opts.get("scale", 1.0))
 	var lines: Array[String] = []
 	var head := "[b]%s[/b]  {i:%s} {i:%s}" % [info["name"], hab, role] if role != "" else "[b]%s[/b]  {i:%s}" % [info["name"], hab]
+	if opts.has("level"):
+		head += "  [color=#ffe3a3]Lv %d[/color]" % int(opts["level"])
 	if opts.get("enemy", false):
 		head += "  [color=#ff8a7a]foe[/color]"
 	lines.append(head)
@@ -44,14 +56,17 @@ static func markup(id: String, opts := {}) -> String:
 	var hp_text := "%d" % roundi(max_hp)
 	if opts.has("hp"):
 		hp_text = "%d/%d" % [roundi(float(opts["hp"])), roundi(max_hp)]
-	var atk := float(s["atk"]) * scale
-	var def := float(s["def"])
-	var spd := float(s["spd"])
+	var atk := float(opts.get("atk", float(s["atk"]) * scale))
+	var def := float(opts.get("def", s["def"]))
+	var spd := float(opts.get("spd", s["spd"]))
+	var moves: Array = opts.get("kit", CombatData.kit_moves(id))
 	if f != null:
 		atk = f.atk
 		def = f.def_now()
 		spd = f.spd
-	var dps := atk * float(CombatData.move(s["basic"]).get("pct", 100)) / 100.0 / spd
+		if f.basic != "":
+			moves = [f.basic, f.passive, f.ultimate]
+	var dps := atk * float(CombatData.move(moves[0]).get("pct", 100)) / 100.0 / spd
 	lines.append("{i:hp} [color=#%s]%s[/color]    {i:atk} [color=#%s]%d[/color]    {i:def} [color=#%s]%d[/color]" % [
 		HP_COL, hp_text, ATK_COL, roundi(atk), DEF_COL, roundi(def)])
 	var ult_line := ""
@@ -59,7 +74,7 @@ static func markup(id: String, opts := {}) -> String:
 		ult_line = "  {i:ultimate}[color=#%s]%d%%[/color]" % [SLOT_COL["ultimate"], roundi(f.ult / CombatData.ULT_MAX * 100.0)]
 	lines.append("{i:spd} [color=#%s]%.1fs[/color]    {i:dps} [color=#%s]%.1f[/color]%s" % [SPD_COL, spd, DPS_COL, dps, ult_line])
 	var keys: Array[String] = []
-	for mid in CombatData.kit_moves(id):
+	for mid in moves:
 		lines.append(GAP)
 		lines.append(move_header(mid, true))
 		lines.append("[color=#%s]%s[/color]" % [SOFT, CombatData.describe(mid, atk, def, max_hp)])
