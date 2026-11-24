@@ -102,5 +102,10 @@ func test_main_route_still_completes_with_events() -> void:
 	for s in 20:
 		var e := Expedition.new_default(s)
 		for to in ["mossford", "rail_bridge", "thornmarsh", "westwatch"]:
+			# Like a player would: rest at a stop until the team can travel again.
+			var tries := 0
+			while e.state == Expedition.State.AT_JUNCTION and not e.forecast(_seg(e.at, to))["can_go"] and tries < 4:
+				e.rest()
+				tries += 1
 			e.travel(_seg(e.at, to))
 		check_eq(e.state, Expedition.State.ARRIVED, "seed %d: %s" % [s, e.fail_reason])

@@ -431,7 +431,7 @@ func _apply_effects(fx: Dictionary) -> void:
 # ---------- creatures and battle lineup ----------
 
 func max_hp(id: String) -> float:
-	return float(CombatData.stats(id)["hp"]) * CombatData.HP_SCALE
+	return CombatData.max_hp(id)
 
 
 func conscious(id: String) -> bool:

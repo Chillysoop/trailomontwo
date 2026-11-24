@@ -19,6 +19,7 @@ const MID := Color("f0d27a")
 const BAD := Color("ff8a7a")
 const SHIELD := Color("bfe6ff")
 const POISON := Color("a6e36b")
+const ULT := Color("ffe06b")
 
 var crossing: Expedition
 var ambush := false
@@ -49,6 +50,9 @@ var _fight: Button
 var _bench_btn: Button
 var _foe_btn: Button
 var _combat_bar: PanelContainer
+var _stats_panel: PanelContainer
+var _stats: StatsWindow
+var _stats_mode_btn: Button
 var _clock: RichTextLabel
 var _pause_btn: Button
 var _speed_btn: Button
@@ -68,7 +72,7 @@ func setup(with_crossing: Expedition, was_ambushed := false, is_practice := fals
 	ambush = was_ambushed
 	practice = is_practice
 	if practice:
-		crossing.pending_encounter = {"pack": CombatData.PACKS[0], "scale": 1.0, "guardian": false}
+		crossing.pending_encounter = {"pack": CombatData.PACKS[0], "scale": CombatData.RISK_SCALE[1], "guardian": false}
 
 
 func _ready() -> void:
@@ -111,6 +115,7 @@ func _enter_lineup() -> void:
 	_side_panel.visible = true
 	_info_panel.visible = true
 	_combat_bar.visible = false
+	_stats_panel.visible = false
 	_after.visible = false
 	_log.text = "Ambushed! Your team will be slow to react." if ambush else "Click a creature, then a cell to move it. Hover anything for details."
 	_refresh_lineup()
@@ -144,7 +149,7 @@ func _refresh_lineup() -> void:
 	if String(pack.get("boss", "")) != "":
 		_add_unit(pack["boss"], Formation.BOSS_FEET, true, _foe_card.bind(pack["boss"], scale, true))
 	_enc_title.text = pack["title"] + ("  (ambush!)" if ambush else "")
-	var strength := "weak" if scale < 1.0 else ("tough" if scale > 1.2 else ("strong" if scale > 1.05 else "ordinary"))
+	var strength := "weak" if scale < 1.1 else ("tough" if scale >= 1.4 else ("strong" if scale >= 1.25 else "ordinary"))
 	var risk_icons: int = {"weak": 0, "ordinary": 1, "strong": 2, "tough": 3}[strength]
 	Rich.set_text(_enc_text, "%sFoes look %s.%s%s" % ["{i:risk}".repeat(maxi(1, risk_icons)), strength,
 		" {k:role_boss|Boss} is safe until its pack falls." if String(pack.get("boss", "")) != "" else "",
@@ -298,7 +303,7 @@ func _next_foe() -> void:
 	all.append(CombatData.GUARDIAN)
 	_practice_pack = (_practice_pack + 1) % all.size()
 	var pack: Dictionary = all[_practice_pack]
-	crossing.pending_encounter = {"pack": pack, "scale": CombatData.GUARDIAN_SCALE if pack.has("boss") else 1.0, "guardian": pack.has("boss")}
+	crossing.pending_encounter = {"pack": pack, "scale": CombatData.GUARDIAN_SCALE if pack.has("boss") else CombatData.RISK_SCALE[1], "guardian": pack.has("boss")}
 	_inspect = {}
 	_refresh_lineup()
 
@@ -315,6 +320,8 @@ func _start_combat() -> void:
 	_side_panel.visible = false
 	_info_panel.visible = false
 	_combat_bar.visible = true
+	_stats_panel.visible = true
+	_stats.battle = battle
 	paused = false
 	_retreat_btn.disabled = _is_guardian()
 	_retreat_btn.set_meta("tip", "There's no way around this one." if _is_guardian() else "Pull back after 3 seconds. Costs {i:food} food and {i:wagon} wagon wear.")
@@ -341,6 +348,7 @@ func _process(delta: float) -> void:
 	for f in battle.fighters:
 		if f.alive():
 			_update_bar(f)
+	_stats.queue_redraw()
 	var clock := "{i:cooldown}%ds%s" % [int(battle.time), "  {k:tired|tiring!}" if battle.time >= Battle.FATIGUE_START else ""]
 	if battle.retreating:
 		clock += "  retreating %.1fs" % maxf(0.0, battle.retreat_left)
@@ -357,12 +365,13 @@ func _drain_events() -> void:
 		match t:
 			"attack":
 				_lunge(e["src"], e["dst"])
-			"cast":
+			"ult":
 				var f := battle.fighter(e["src"])
-				_float(_view_pos(e["src"]) + Vector2(0, -72), e["label"], MID if e["kind"] in ["damage", "poison", "slow", "weaken"] else GOOD)
-				if e["kind"] in ["damage", "slow", "poison", "weaken"]:
+				_float(_view_pos(e["src"]) + Vector2(0, -72), e["label"] + "!", ULT)
+				_flash(e["src"], Color(1.6, 1.4, 0.7))
+				if e["dst"] != e["src"]:
 					_lunge(e["src"], e["dst"])
-				_note("%s used %s" % [f.display_name(), e["label"]])
+				_note("%s unleashed %s" % [f.display_name(), e["label"]])
 			"hit":
 				var dst := battle.fighter(e["dst"])
 				var col := Color.WHITE
@@ -411,16 +420,16 @@ func _lunge(src: int, dst: int) -> void:
 	t.tween_property(holder, "position", home, 0.14 / SPEEDS[speed_index])
 
 
-func _flash(uid: int) -> void:
+func _flash(uid: int, tint := Color(1.8, 0.7, 0.7)) -> void:
 	if not _views.has(uid):
 		return
 	var s: Sprite2D = _views[uid]["sprite"]
 	var f := battle.fighter(uid)
 	if f != null and not f.alive():
 		return
-	s.modulate = Color(1.8, 0.7, 0.7)
+	s.modulate = tint
 	var t := s.create_tween()
-	t.tween_property(s, "modulate", Color.WHITE, 0.15)
+	t.tween_property(s, "modulate", Color.WHITE, 0.15 if tint.b < 0.8 else 0.35)
 
 
 func _knock_out(uid: int) -> void:
@@ -451,7 +460,10 @@ func _update_bar(f: Fighter) -> void:
 		st.append("taunt")
 	for m in f.mods:
 		st.append(String(m["kind"]))
-	bar.statuses = st
+	bar.set_statuses(st)
+	bar.show_bars = f.alive()
+	bar.attack_frac = f.attack_bar
+	bar.ult_frac = f.ult / CombatData.ULT_MAX
 	bar.queue_redraw()
 
 
@@ -513,6 +525,16 @@ func _retreat() -> void:
 		_retreat_btn.disabled = true
 
 
+func _cycle_stats_mode() -> void:
+	_stats.mode = (_stats.mode + 1) % StatsWindow.MODES.size()
+	_refresh_stats_mode()
+
+
+func _refresh_stats_mode() -> void:
+	_stats_mode_btn.text = "%s   (click to switch)" % StatsWindow.MODES[_stats.mode]
+	_stats.queue_redraw()
+
+
 func _refresh_combat_bar() -> void:
 	_pause_btn.text = "Resume (Space)" if paused else "Pause (Space)"
 	_speed_btn.text = "Speed %dx" % int(SPEEDS[speed_index])
@@ -522,6 +544,7 @@ func _end_combat() -> void:
 	_drain_events()
 	phase = Phase.AFTERMATH
 	_combat_bar.visible = false
+	_stats.queue_redraw()
 	var o := battle.outcome
 	_after_title.text = {Battle.Outcome.VICTORY: "Victory!", Battle.Outcome.DEFEAT: "Defeat",
 		Battle.Outcome.WITHDRAW: "Both sides pull back", Battle.Outcome.RETREAT: "You got away"}[o]
@@ -627,7 +650,7 @@ func _build_ui() -> void:
 	_ui.add_child(info_panel)
 
 	_combat_bar = PanelContainer.new()
-	_combat_bar.position = Vector2(332, 6)
+	_combat_bar.position = Vector2(6, 6)
 	_combat_bar.custom_minimum_size = Vector2(302, 0)
 	_combat_bar.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.85)))
 	var row := HBoxContainer.new()
@@ -651,6 +674,25 @@ func _build_ui() -> void:
 	row.add_child(_retreat_btn)
 	_ui.add_child(_combat_bar)
 
+	_stats_panel = PanelContainer.new()
+	_stats_panel.position = Vector2(430, 6)
+	_stats_panel.custom_minimum_size = Vector2(204, 0)
+	_stats_panel.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.88)))
+	var scol := VBoxContainer.new()
+	scol.add_theme_constant_override("separation", 2)
+	_stats_panel.add_child(scol)
+	_stats_mode_btn = Ui.button("", 8)
+	_stats_mode_btn.focus_mode = Control.FOCUS_NONE
+	_stats_mode_btn.pressed.connect(_cycle_stats_mode)
+	Tips.attach(_stats_mode_btn, func(): return "Click to switch between damage dealt, {k:shield|shielding} given, healing done and damage taken.")
+	scol.add_child(_stats_mode_btn)
+	_stats = StatsWindow.new()
+	_stats.custom_minimum_size = Vector2(192, 0)
+	scol.add_child(_stats)
+	_stats_panel.visible = false
+	_ui.add_child(_stats_panel)
+	_refresh_stats_mode()
+
 	_log = PreviewHud.label("", 9)
 	_log.position = Vector2(10, 346)
 	_log.add_theme_color_override("font_outline_color", Color("2b2030"))
@@ -658,7 +700,7 @@ func _build_ui() -> void:
 	_ui.add_child(_log)
 
 	_after = PanelContainer.new()
-	_after.position = Vector2(150, 96)
+	_after.position = Vector2(110, 132)
 	_after.custom_minimum_size = Vector2(340, 0)
 	_after.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.94)))
 	var acol := VBoxContainer.new()
@@ -700,12 +742,31 @@ class HpBar:
 	var taunting := false
 	var protected := false
 	var enemy := false
-	## Status icon ids shown under the bar.
+	## Status icon ids shown under the bar. Set through set_statuses() so the icons are
+	## loaded outside _draw (a texture first loaded inside _draw renders as a white box).
 	var statuses: Array[String] = []
+	var _icons: Array[Texture2D] = []
+
+	func set_statuses(ids: Array[String]) -> void:
+		statuses = ids
+		_icons.clear()
+		for id in ids:
+			var tex := Rich.icon_tex(id)
+			if tex != null:
+				_icons.append(tex)
+	## Combat only: attack bar (0..1) and ultimate bar (0..1).
+	var show_bars := false
+	var attack_frac := 0.0
+	var ult_frac := 0.0
 
 	func _draw() -> void:
 		var w := 32.0
-		draw_rect(Rect2(-1, -1, w + 2, 5), Color(0.1, 0.07, 0.1, 0.85))
+		var h := 8.0 if show_bars else 5.0
+		draw_rect(Rect2(-1, -1, w + 2, h), Color(0.1, 0.07, 0.1, 0.85))
+		if show_bars:
+			var full := ult_frac >= 1.0
+			draw_rect(Rect2(0, 4, roundf(w * clampf(ult_frac, 0.0, 1.0)), 2), Color("ffe06b") if full else Color("d9a43a"))
+			draw_rect(Rect2(0, 6, roundf(w * clampf(attack_frac, 0.0, 1.0)), 1), Color("e8e4f0"))
 		var col := Color("d9645a") if enemy else Color("74c86a")
 		if poisoned:
 			col = Color("a6e36b")
@@ -717,11 +778,77 @@ class HpBar:
 		if protected:
 			draw_rect(Rect2(-1, -1, w + 2, 5), Color("bfe6ff"), false, 1.0)
 		var x := 0.0
-		for id in statuses:
-			var tex := Rich.icon_tex(id)
-			if tex != null:
-				draw_texture_rect(tex, Rect2(x, 5, 8, 8), false)
-				x += 8
+		for tex in _icons:
+			draw_texture_rect(tex, Rect2(x, h, 8, 8), false)
+			x += 8
+
+
+## Top-right fight totals for your team: one bar per creature, scaled to the leader.
+## Damage mode splits each bar into basic attacks, ultimates and passives.
+class StatsWindow:
+	extends Control
+	const MODES := ["Damage dealt", "Shielding given", "Healing done", "Damage taken"]
+	const BASIC_COL := Color("e8e4f0")
+	const ULT_COL := Color("ffd04a")
+	const PASSIVE_COL := Color("8fd06a")
+	const ROW_H := 11.0
+	const NAME_W := 56.0
+	var battle: Battle
+	var mode := 0
+
+	func _rows() -> Array:
+		var rows: Array = []
+		if battle == null:
+			return rows
+		for f in battle.side_fighters(Formation.Side.PLAYER):
+			var segs: Array = []
+			match mode:
+				0: segs = [[f.dmg_basic, BASIC_COL], [f.dmg_ult, ULT_COL], [f.dmg_passive, PASSIVE_COL]]
+				1: segs = [[f.shield_done, Color("bfe6ff")]]
+				2: segs = [[f.heal_done, Color("74c86a")]]
+				3: segs = [[f.taken, Color("d9645a")]]
+			rows.append({"name": f.display_name(), "segs": segs, "down": not f.alive()})
+		if mode == 0:
+			rows.append({"name": "Wagon", "segs": [[battle.wagon_damage, BASIC_COL]], "down": false})
+		rows.sort_custom(func(a, b): return _total(a) > _total(b))
+		return rows
+
+	static func _total(r: Dictionary) -> float:
+		var t := 0.0
+		for sg in r["segs"]:
+			t += float(sg[0])
+		return t
+
+	func _get_minimum_size() -> Vector2:
+		return Vector2(192, ROW_H * 7 + (12 if mode == 0 else 0))
+
+	func _draw() -> void:
+		var font := ThemeDB.fallback_font
+		var rows := _rows()
+		var top := 0.0
+		for r in rows:
+			top = maxf(top, _total(r))
+		var bar_w := size.x - NAME_W - 30.0
+		var y := 0.0
+		for r in rows:
+			var col := Color(0.6, 0.58, 0.65) if r["down"] else PreviewHud.INK
+			draw_string(font, Vector2(0, y + 8), r["name"], HORIZONTAL_ALIGNMENT_LEFT, NAME_W - 2, 8, col)
+			draw_rect(Rect2(NAME_W, y + 2, bar_w, 7), Color(0.08, 0.06, 0.09, 0.9))
+			var x := NAME_W
+			for sg in r["segs"]:
+				var w := roundf(bar_w * float(sg[0]) / top) if top > 0.0 else 0.0
+				if w > 0.0:
+					draw_rect(Rect2(x, y + 2, w, 7), sg[1])
+					x += w
+			draw_string(font, Vector2(NAME_W + bar_w + 3, y + 8), str(roundi(_total(r))), HORIZONTAL_ALIGNMENT_LEFT, 28, 8, PreviewHud.INK)
+			y += ROW_H
+		if mode == 0:
+			var lx := 0.0
+			for item in [["Basic", BASIC_COL], ["Ultimate", ULT_COL], ["Passive", PASSIVE_COL]]:
+				draw_rect(Rect2(lx, y + 3, 6, 6), item[1])
+				draw_string(font, Vector2(lx + 8, y + 9), item[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, PreviewHud.INK)
+				lx += 54.0
+		custom_minimum_size = Vector2(192, maxf(ROW_H * 7, y + (12 if mode == 0 else 0)))
 
 
 class Shadow:

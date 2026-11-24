@@ -6,7 +6,7 @@ extends CanvasLayer
 ## (a creature card) or `show_text(markup, self)`, and `hide_from(self)` when the mouse leaves.
 ## `attach(control, what)` wires a Control's mouse enter/exit to do that for you.
 
-const WIDTH := 190.0
+const WIDTH := 236.0
 const OFFSET := Vector2(10, 12)
 const SCREEN := Vector2(640, 360)
 

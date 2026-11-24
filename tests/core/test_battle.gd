@@ -56,24 +56,22 @@ func test_boss_is_safe_until_its_grid_falls() -> void:
 	check(b.ordinary_target(Formation.Side.PLAYER, 1).is_boss(), "boss exposed once alone")
 
 
-func test_guard_and_habitat_change_damage() -> void:
-	var b := _battle(TEAM, ["thornfang", "", ""], [])
-	var src: Fighter = b.fighters[0]
+func test_defense_and_habitat_change_damage() -> void:
+	var b := _battle({Vector2i(0, 0): "reedwake", Vector2i(0, 1): "scythelk"}, ["thornfang", "", ""], [])
 	var t := _enemy(b, Formation.Row.FRONT, 0)
-	var neutral := b.damage_for(src, t, 10.0, 10.0, "", false)
-	check_near(neutral, 10.0 * 100.0 / (100.0 + t.guard), 0.01)
-	check_near(b.damage_for(src, t, 10.0, 10.0, "River", false), neutral * CombatData.STRONG, 0.01, "River beats Forest")
-	check_near(b.damage_for(src, t, 10.0, 10.0, "Snow", false), neutral, 0.01)
-	check_near(b.damage_for(src, t, 10.0, 10.0, "", true), 10.0, 0.01, "pierce ignores guard")
+	check_near(b.damage_for(null, t, 100.0), 100.0 * 100.0 / (100.0 + t.def), 0.01, "defense formula")
+	var river: Fighter = b.fighters[0]
+	check_near(b.damage_for(river, t, 100.0), 100.0 * 100.0 / (100.0 + t.def) * CombatData.STRONG, 0.01, "River beats Forest")
+	check_near(b.damage_for(null, t, 100.0, true), 100.0, 0.01, "pierce ignores defense")
 
 
-func test_forest_pair_gets_guard_synergy() -> void:
+func test_forest_pair_gets_defense_synergy() -> void:
 	var b := _battle(TEAM, ["cairnram", "", ""], [])
 	for f in b.fighters:
 		if f.species == "brambleback":
-			check_near(f.guard, CombatData.stats("brambleback")["guard"] + 15.0, 0.01)
+			check_near(f.def, CombatData.stats("brambleback")["def"] + 12.0, 0.01)
 		if f.species == "scythelk":
-			check_near(f.guard, CombatData.stats("scythelk")["guard"], 0.01, "a lone Mountain gets no bonus")
+			check_near(f.def, CombatData.stats("scythelk")["def"], 0.01, "a lone Mountain gets no bonus")
 
 
 func test_synergy_tiers() -> void:
@@ -97,19 +95,28 @@ func test_healthy_team_beats_a_thornfang_pack_in_reasonable_time() -> void:
 	check(b.time > 8.0 and b.time < 90.0, "battle took %.1fs" % b.time)
 
 
-func test_lineup_matters_against_the_guardian() -> void:
-	var g := CombatData.GUARDIAN
+func test_lineup_matters_against_a_swarm() -> void:
+	var pack := CombatData.pack_by_id("frost_swarm")
 	var bad := {}
 	for cell in TEAM:
 		bad[Vector2i(1 - cell.x, cell.y)] = TEAM[cell]
 	var good_wins := 0
 	var bad_wins := 0
 	for s in 10:
-		var gb := Battle.create({"slots": TEAM}, {"front": g["front"], "back": g["back"], "boss": g["boss"], "scale": CombatData.GUARDIAN_SCALE}, {"seed": s})
-		var bb := Battle.create({"slots": bad}, {"front": g["front"], "back": g["back"], "boss": g["boss"], "scale": CombatData.GUARDIAN_SCALE}, {"seed": s})
+		var gb := Battle.create({"slots": TEAM}, {"front": pack["front"], "back": pack["back"], "scale": 1.35}, {"seed": s})
+		var bb := Battle.create({"slots": bad}, {"front": pack["front"], "back": pack["back"], "scale": 1.35}, {"seed": s})
 		good_wins += int(gb.run_to_end() == Battle.Outcome.VICTORY)
 		bad_wins += int(bb.run_to_end() == Battle.Outcome.VICTORY)
-	check(good_wins > bad_wins, "guards in front should win more (%d vs %d)" % [good_wins, bad_wins])
+	check(good_wins > bad_wins + 3, "guards in front should win clearly more (%d vs %d)" % [good_wins, bad_wins])
+
+
+func test_guardian_is_beatable_at_full_health() -> void:
+	var g := CombatData.GUARDIAN
+	var wins := 0
+	for s in 6:
+		var b := Battle.create({"slots": TEAM}, {"front": g["front"], "back": g["back"], "boss": g["boss"], "scale": CombatData.GUARDIAN_SCALE}, {"seed": s})
+		wins += int(b.run_to_end() == Battle.Outcome.VICTORY)
+	check(wins >= 4, "the guardian should usually fall to a healthy team (%d/6)" % wins)
 
 
 func test_knocked_out_creatures_sit_out_and_wiped_team_loses() -> void:
@@ -126,14 +133,16 @@ func test_tired_haulers_hit_softer() -> void:
 	var b := Battle.create({"slots": TEAM, "fatigue": {"coilhusk": 100.0}}, {"front": ["cairnram", "", ""], "back": []}, {"seed": 1})
 	for f in b.fighters:
 		if f.species == "coilhusk":
-			check_near(f.might, CombatData.stats("coilhusk")["might"] * (1.0 - Battle.FATIGUE_PENALTY), 0.01)
+			check_near(f.atk, CombatData.stats("coilhusk")["atk"] * (1.0 - Battle.FATIGUE_PENALTY), 0.01)
 
 
 func test_long_battles_end_in_withdrawal() -> void:
 	# Two walls of guards with healing can't finish each other quickly; the clock ends it.
 	var b := _battle({Vector2i(0, 1): "brambleback"}, ["", "plateflit", ""], [])
-	b.fighters[0].might = 0.1
-	b.fighters[1].might = 0.1
+	for f in b.fighters:
+		f.atk = 0.01
+		f.max_hp = 100000.0
+		f.hp = f.max_hp
 	check_eq(b.run_to_end(), Battle.Outcome.WITHDRAW)
 	check(b.time >= Battle.WITHDRAW_AT, "ends at the time limit")
 
@@ -144,3 +153,67 @@ func test_retreat_ends_the_battle_after_the_channel() -> void:
 	for i in int(Battle.RETREAT_SECS / Battle.TICK) + 2:
 		b.step()
 	check_eq(b.outcome, Battle.Outcome.RETREAT)
+
+
+func test_every_kit_is_complete() -> void:
+	for id in CombatData.KITS:
+		var moves := CombatData.kit_moves(id)
+		check_eq(moves.size(), 3)
+		for i in 3:
+			check(CombatData.MOVES.has(moves[i]), "%s: unknown move %s" % [id, moves[i]])
+			check_eq(CombatData.move(moves[i])["slot"], ["basic", "passive", "ultimate"][i], "%s slot" % moves[i])
+
+
+func test_attack_bar_fires_at_speed() -> void:
+	var b := _battle({Vector2i(0, 1): "cairnram"}, ["", "plateflit", ""], [])
+	var ram: Fighter = b.fighters[0]
+	ram.attack_bar = 0.0
+	var steps := 0
+	while ram.attacks == 0 and steps < 200:
+		b.step()
+		steps += 1
+	check_near(steps * Battle.TICK, ram.spd, 0.11, "first basic attack after spd seconds")
+
+
+func test_ultimates_fire_and_are_tallied() -> void:
+	var pack := CombatData.pack_by_id("thornfang_pack")
+	var b := _battle(TEAM, pack["front"], pack["back"])
+	b.run_to_end()
+	var ults := 0
+	var ult_dmg := 0.0
+	for f in b.side_fighters(Formation.Side.PLAYER):
+		ults += f.ults_fired
+		ult_dmg += f.dmg_ult
+	check(ults >= 3, "team should fire several ultimates (fired %d)" % ults)
+	check(ult_dmg > 0.0, "ultimate damage is tallied")
+
+
+func test_thorns_count_as_passive_damage() -> void:
+	var b := _battle({Vector2i(0, 1): "brambleback"}, ["", "thornfang", ""], [])
+	for i in 100:
+		b.step()
+	var bramble: Fighter = b.fighters[0]
+	check(bramble.dmg_passive > 0.0, "thorns hit back")
+
+
+func test_damage_tallies_match_damage_taken() -> void:
+	var b := _battle(TEAM, ["cairnram", "cairnram", ""], [])
+	b.run_to_end()
+	var dealt := b.wagon_damage
+	for f in b.side_fighters(Formation.Side.PLAYER):
+		dealt += f.damage_total()
+	var taken := 0.0
+	for f in b.side_fighters(Formation.Side.ENEMY):
+		taken += f.taken
+	check_near(dealt, taken, 0.5, "every point dealt is taken by someone")
+
+
+func test_move_descriptions_fill_in_numbers() -> void:
+	var t := CombatData.describe("shell_quake", 40.0, 30.0, 400.0)
+	check(t.contains("180% {k:atk|Attack} (72)"), t)
+	check(not t.contains("{atk:"), t)
+	for id in CombatData.MOVES:
+		var d := CombatData.describe(id, 30.0, 30.0, 300.0)
+		check(not d.contains("{atk") and not d.contains("{def") and not d.contains("{maxhp"), "%s: %s" % [id, d])
+		for k in CombatData.keywords(id):
+			check(Glossary.has(k), "%s mentions unknown keyword %s" % [id, k])

@@ -17,7 +17,7 @@ func test_every_habitat_and_terrain_has_an_entry() -> void:
 
 
 func test_every_role_has_an_entry() -> void:
-	for id in CombatData.STATS:
+	for id in CombatData.KITS:
 		var role: String = CombatData.stats(id)["role"]
 		check(Glossary.ROLES.has(role) and Glossary.has(Glossary.ROLES[role]), "no entry for role %s" % role)
 
@@ -51,14 +51,14 @@ func test_every_glossary_text_resolves() -> void:
 
 
 func test_tip_content_for_metas() -> void:
-	check(Tips.content("g:guard").contains("Guard"), "glossary tip")
+	check(Tips.content("g:def").contains("Defense"), "glossary tip")
 	check(Tips.content("c:mirelamp").contains("Mirelamp"), "creature tip")
 	check_eq(Tips.content("g:nonsense"), "")
 	check_eq(Tips.content("c:nonsense"), "")
 
 
 func test_every_creature_card_builds() -> void:
-	for id in CombatData.STATS:
+	for id in CombatData.KITS:
 		var bb := Rich.bb(CreatureCard.markup(id))
 		check(bb.contains(Species.info(id)["name"]), "card for %s" % id)
 		check(not bb.contains("{"), "unresolved markup in %s card" % id)
@@ -81,8 +81,8 @@ func test_card_shows_live_statuses() -> void:
 	check(t.contains("{i:slow}4s"), t)
 
 
-func test_ability_keywords_are_whole_words() -> void:
-	var t := CreatureCard.ability_text("mend_current")
-	check(t.contains("{k:shield|shielded}"), t)
-	check(not t.contains("{k:shield|shield}ed"), t)
-	check(CreatureCard.ability_text("breakstone").contains("{k:pierce}"), CreatureCard.ability_text("breakstone"))
+func test_card_shows_stat_block_and_moves() -> void:
+	var t := CreatureCard.markup("brambleback")
+	check(t.contains("{k:atk|ATK}"), t)
+	check(t.contains("Thorny Hide") and t.contains("Briar Wall") and t.contains("Bramble Swipe"), t)
+	check(t.contains("[b]Shield:[/b]"), "keyword box for Shield: " + t)

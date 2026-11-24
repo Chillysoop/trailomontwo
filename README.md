@@ -16,7 +16,7 @@ The title screen leads to the expedition (the playable crossing), a practice bat
 Battles happen on the trail (wild packs, more often on risky routes) and once on the last stretch to Westwatch, where the Hollow Stag waits with its pack.
 
 - **Lineup:** both teams stand on 2x3 grids. Click one of your creatures, then a cell, to move or swap it. Click any creature to read its stats and abilities. Habitat bonuses (two or more creatures of the same habitat) update as you arrange.
-- **Combat:** the grids hide and the fight runs by itself. Normal attacks hit the nearest row that still has creatures (same lane first), so the front row shields the second. Abilities fire on their own cooldowns. The wagon throws a small volley. Space pauses; the speed button cycles 1x, 2x, 4x; Retreat pulls back after 3 seconds.
+- **Combat:** the grids hide and the fight runs by itself. Every creature has its own basic attack (white attack bar), a passive, and an ultimate (gold bar that fills from attacking and being hit). Normal attacks hit the nearest row that still has creatures (same lane first), so the front row shields the second; reach and taunt override that. The wagon throws a small volley. The top-right window totals damage (split into basic, ultimate and passive), shielding, healing or damage taken. Space pauses; the speed button cycles 1x, 2x, 4x; Retreat pulls back after 3 seconds.
 - **Aftermath:** health carries over between battles. Knocked-out creatures can't fight, haul or help with events until you rest a day. Losing lets the enemy reach the wagon (integrity and supplies).
 
 Rules live in `src/core/battle/` (pure, tested headless); the screen is `src/battle/battle_screen.gd`.
