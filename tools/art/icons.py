@@ -55,6 +55,11 @@ ICONS = {
     "slow": "a blue snail shell with a frost crystal",
     "ko": "three yellow cartoon stars circling above, knocked out daze symbol",
     "tired": "a sleepy blue zzz letters over a small cloud",
+    # dust (permanent boosts, coming later)
+    "light_dust": "a small cloth pouch spilling glowing pale gold sparkling dust",
+    "dark_dust": "a small cloth pouch spilling glowing deep violet dust with dark sparkles",
+    # empty memory slot
+    "memory": "a small empty glass jar with a faint teal glow inside and a cork stopper",
     # trail resources
     "day": "a bright orange sun over a horizon line",
     "food": "a round loaf of bread with a sprig of wheat",

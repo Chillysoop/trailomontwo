@@ -33,6 +33,12 @@ const ENTRIES := {
 		"text": "Strips {k:shield} off the target before the hit lands. {i:river}River."},
 	"dodge": {"name": "Dodge", "icon": "jungle",
 		"text": "The next basic attack aimed at this creature misses completely. {i:jungle}Jungle."},
+	"light_dust": {"name": "Light dust", "icon": "light_dust",
+		"text": "Coming soon: a permanent boost you can give one of your Trailomon."},
+	"dark_dust": {"name": "Dark dust", "icon": "dark_dust",
+		"text": "Coming soon: a permanent boost with a cost, for one of your Trailomon."},
+	"memory": {"name": "Memory slot", "icon": "memory",
+		"text": "Each move has one memory slot that can hold a move it learned before. Swap them between battles."},
 	"ruin": {"name": "Ruin",
 		"text": "Healing received is halved while it lasts."},
 	# ----- habitats (filled in from the type chart) -----
