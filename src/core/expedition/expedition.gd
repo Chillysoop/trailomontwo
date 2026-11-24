@@ -39,6 +39,9 @@ var journal: Array[String] = []
 var creature_hp := {}
 ## Tamed Trailomon kept in storage, not travelling: no upkeep, can't fight or haul.
 var stored: Array[String] = []
+## Level of each tamed Trailomon (team and storage). Everyone starts at 1 until
+## experience and level-ups arrive.
+var levels := {}
 ## Memory slots, one per move slot: species -> {"basic": move id, "passive": ..., "ultimate": ...}.
 ## A stored move can be swapped in between battles. Empty ("") until level-ups teach moves.
 var memory := {}
@@ -453,6 +456,10 @@ func knocked_out() -> Array[String]:
 
 
 ## The move stored in a creature's memory slot for "basic", "passive" or "ultimate" ("" if empty).
+func level(id: String) -> int:
+	return int(levels.get(id, 1))
+
+
 func memory_move(id: String, slot: String) -> String:
 	return String(memory.get(id, {}).get(slot, ""))
 

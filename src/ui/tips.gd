@@ -105,7 +105,7 @@ static func _make_panel(bg: Color) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var box := PreviewHud.box(bg)
-	box.set_content_margin_all(4)
+	box.set_content_margin_all(6)
 	p.add_theme_stylebox_override("panel", box)
 	p.visible = false
 	return p
@@ -122,7 +122,7 @@ static func _make_label(width: float) -> RichTextLabel:
 	l.add_theme_font_size_override("normal_font_size", 8)
 	l.add_theme_font_size_override("bold_font_size", 9)
 	l.add_theme_color_override("default_color", PreviewHud.INK)
-	l.add_theme_constant_override("line_separation", 1)
+	l.add_theme_constant_override("line_separation", 2)
 	l.custom_minimum_size = Vector2(width, 0)
 	return l
 

@@ -11,9 +11,9 @@ func _screen() -> CompanionsScreen:
 
 func test_shows_six_cards_with_three_moves_and_memory_slots() -> void:
 	var s := _screen()
-	check_eq(s._cards.get_child_count(), 6, "one card per lineup spot")
+	check_eq(s._card_nodes.size(), 6, "one card per lineup spot")
 	var text := ""
-	for card in s._cards.get_children():
+	for card in s._card_nodes:
 		for l in card.find_children("*", "RichTextLabel", true, false):
 			text += (l as RichTextLabel).text + "\n"
 	for id in s.crossing.lineup.values():
@@ -43,3 +43,14 @@ func test_dust_and_memory_have_icons_and_tips() -> void:
 	for id in ["light_dust", "dark_dust", "memory"]:
 		check(Glossary.has(id), id)
 		check(ResourceLoader.exists(Rich.icon_path(Glossary.icon(id))), "icon for " + id)
+
+
+func test_every_card_and_stored_tile_shows_a_level() -> void:
+	var s := _screen()
+	var levels := 0
+	for n in s.find_children("*", "Label", true, false):
+		if (n as Label).text.begins_with("Lv "):
+			levels += 1
+	check_eq(levels, s.crossing.lineup.size() + s.crossing.stored.size(), "a level badge per Trailomon")
+	check_eq(s.crossing.level("coilhusk"), 1, "everyone starts at level 1")
+	s.free()

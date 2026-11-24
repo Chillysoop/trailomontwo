@@ -13,6 +13,11 @@ const SPD_COL := "a6e36b"
 const DPS_COL := "e08aff"
 ## Move-slot colors, matching the slot tags and the stats window (white, green, gold).
 const SLOT_COL := {"basic": "e8e4f0", "passive": "8fdc7a", "ultimate": "ffd36b"}
+## Softer text for descriptions and side notes, so names and numbers stand out.
+const SOFT := "cfc6d8"
+const MUTED := "8a8298"
+## A half-height blank line between sections.
+const GAP := "[font_size=3]\u00a0[/font_size]"
 
 
 ## opts (all optional):
@@ -33,7 +38,7 @@ static func markup(id: String, opts := {}) -> String:
 	if opts.get("enemy", false):
 		head += "  [color=#ff8a7a]foe[/color]"
 	lines.append(head)
-	lines.append("{k:%s|%s} {k:%s|%s}" % [hab, type, role, s["role"]] if role != "" else "{k:%s|%s}" % [hab, type])
+	lines.append("[color=#%s]%s[/color]" % [MUTED, "{k:%s|%s} · {k:%s|%s}" % [hab, type, role, s["role"]] if role != "" else "{k:%s|%s}" % [hab, type]])
 	var f: Fighter = opts.get("fighter", null)
 	var max_hp := float(opts.get("max_hp", CombatData.max_hp(id, scale)))
 	var hp_text := "%d" % roundi(max_hp)
@@ -47,22 +52,23 @@ static func markup(id: String, opts := {}) -> String:
 		def = f.def_now()
 		spd = f.spd
 	var dps := atk * float(CombatData.move(s["basic"]).get("pct", 100)) / 100.0 / spd
-	lines.append("{i:hp}[color=#%s]%s[/color]  {i:atk}[color=#%s]%d[/color]  {i:def}[color=#%s]%d[/color]" % [
+	lines.append("{i:hp} [color=#%s]%s[/color]    {i:atk} [color=#%s]%d[/color]    {i:def} [color=#%s]%d[/color]" % [
 		HP_COL, hp_text, ATK_COL, roundi(atk), DEF_COL, roundi(def)])
 	var ult_line := ""
 	if f != null:
 		ult_line = "  {i:ultimate}[color=#%s]%d%%[/color]" % [SLOT_COL["ultimate"], roundi(f.ult / CombatData.ULT_MAX * 100.0)]
-	lines.append("{i:spd}[color=#%s]%.1fs[/color]  {i:dps}[color=#%s]%.1f[/color] DPS%s" % [SPD_COL, spd, DPS_COL, dps, ult_line])
+	lines.append("{i:spd} [color=#%s]%.1fs[/color]    {i:dps} [color=#%s]%.1f[/color]%s" % [SPD_COL, spd, DPS_COL, dps, ult_line])
 	var keys: Array[String] = []
 	for mid in CombatData.kit_moves(id):
-		var mv := CombatData.move(mid)
-		lines.append(move_header(mid))
-		lines.append(CombatData.describe(mid, atk, def, max_hp))
+		lines.append(GAP)
+		lines.append(move_header(mid, true))
+		lines.append("[color=#%s]%s[/color]" % [SOFT, CombatData.describe(mid, atk, def, max_hp)])
 		for k in CombatData.keywords(mid):
 			if not keys.has(k) and Glossary.has(k) and not k in ["front_row", "back_row"]:
 				keys.append(k)
+	lines.append(GAP)
 	var chart: Array = CombatData.CHART[type]
-	lines.append("Strong vs {i:%s}  weak vs {i:%s}" % [Glossary.habitat_id(chart[0]), Glossary.habitat_id(chart[1])])
+	lines.append("[color=#%s]Strong vs[/color] {i:%s}  [color=#%s]weak vs[/color] {i:%s}" % [MUTED, Glossary.habitat_id(chart[0]), MUTED, Glossary.habitat_id(chart[1])])
 	var states: Array[String] = []
 	if f != null:
 		if not f.alive():
@@ -87,7 +93,7 @@ static func markup(id: String, opts := {}) -> String:
 		var parts: Array[String] = []
 		for c in caps:
 			parts.append("{k:cap_%s} %d" % [c, caps[c]])
-		lines.append("Trail: " + ", ".join(parts))
+		lines.append("[color=#%s]Trail:[/color] " % MUTED + ", ".join(parts))
 	if int(info["hauling"]) > 0 and not opts.get("enemy", false):
 		lines[lines.size() - 1] += "  {i:haul}%d" % int(info["hauling"])
 	var out := "\n".join(lines)
@@ -96,18 +102,21 @@ static func markup(id: String, opts := {}) -> String:
 	return out
 
 
-## "{tag} Move Name  Slot" line, colored by slot. Also used for memory slots later.
-static func move_header(move_id: String) -> String:
+## "{tag} Move Name" colored by slot (the tag's hover names the slot). with_slot adds the
+## slot's name in small muted text. Also used for memory slots.
+static func move_header(move_id: String, with_slot := false) -> String:
 	var mv := CombatData.move(move_id)
 	var slot: String = mv["slot"]
-	return "{i:%s} [b][color=#%s]%s[/color][/b]  [color=#8a8298]%s[/color]" % [
-		slot, SLOT_COL[slot], mv["name"], Glossary.entry_name(slot)]
+	var out := "{i:%s} [b][color=#%s]%s[/color][/b]" % [slot, SLOT_COL[slot], mv["name"]]
+	if with_slot:
+		out += "  [font_size=7][color=#%s]%s[/color][/font_size]" % [MUTED, Glossary.entry_name(slot)]
+	return out
 
 
 ## A keyword's popup: icon, name and explanation.
 static func keyword_box(k: String) -> String:
 	var head := "{i:%s} " % k if Glossary.icon(k) != "" else ""
-	return "%s[b]%s[/b]\n%s" % [head, Glossary.entry_name(k), Glossary.text(k)]
+	return "%s[b]%s[/b]\n[color=#%s]%s[/color]" % [head, Glossary.entry_name(k), SOFT, Glossary.text(k)]
 
 
 static func _is_letter(c: String) -> bool:
