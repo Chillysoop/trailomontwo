@@ -1,6 +1,18 @@
 class_name CreatureCard
 extends RefCounted
 ## Tooltip text for a creature: habitat, role, stats, abilities and (when known) its live state.
+## Keyword explanations come after Tips.SIDE markers, so they open as their own small
+## popups beside the card.
+
+## Stat colors, matching the stat icons (red heart, orange sword, blue shield, green
+## chevrons, purple impact).
+const HP_COL := "ff7a7a"
+const ATK_COL := "ffa04a"
+const DEF_COL := "86b8ff"
+const SPD_COL := "a6e36b"
+const DPS_COL := "e08aff"
+## Move-slot colors, matching the slot tags and the stats window (white, green, gold).
+const SLOT_COL := {"basic": "e8e4f0", "passive": "8fdc7a", "ultimate": "ffd36b"}
 
 
 ## opts (all optional):
@@ -35,16 +47,16 @@ static func markup(id: String, opts := {}) -> String:
 		def = f.def_now()
 		spd = f.spd
 	var dps := atk * float(CombatData.move(s["basic"]).get("pct", 100)) / 100.0 / spd
-	lines.append("[color=#9fe0a0]{k:hp|HP}[/color] %s   [color=#ff8a7a]{k:atk|ATK}[/color] %d   [color=#f0d27a]{k:spd|SPD}[/color] %.1fs" % [hp_text, roundi(atk), spd])
+	lines.append("{i:hp}[color=#%s]%s[/color]  {i:atk}[color=#%s]%d[/color]  {i:def}[color=#%s]%d[/color]" % [
+		HP_COL, hp_text, ATK_COL, roundi(atk), DEF_COL, roundi(def)])
 	var ult_line := ""
 	if f != null:
-		ult_line = "   {i:ultimate}%d%%" % roundi(f.ult / CombatData.ULT_MAX * 100.0)
-	lines.append("[color=#ffb36b]{k:def|DEF}[/color] %d   [color=#e0a070]{k:dps|DPS}[/color] %.1f%s" % [roundi(def), dps, ult_line])
+		ult_line = "  {i:ultimate}[color=#%s]%d%%[/color]" % [SLOT_COL["ultimate"], roundi(f.ult / CombatData.ULT_MAX * 100.0)]
+	lines.append("{i:spd}[color=#%s]%.1fs[/color]  {i:dps}[color=#%s]%.1f[/color] DPS%s" % [SPD_COL, spd, DPS_COL, dps, ult_line])
 	var keys: Array[String] = []
-	var slot_names := {"basic": "Basic attack", "passive": "Passive", "ultimate": "Ultimate"}
 	for mid in CombatData.kit_moves(id):
 		var mv := CombatData.move(mid)
-		lines.append("[color=#f0d27a]— %s[/color]  [color=#b8b0c8]{k:%s|%s}[/color]" % [mv["name"], mv["slot"], slot_names[mv["slot"]]])
+		lines.append(move_header(mid))
 		lines.append(CombatData.describe(mid, atk, def, max_hp))
 		for k in CombatData.keywords(mid):
 			if not keys.has(k) and Glossary.has(k) and not k in ["front_row", "back_row"]:
@@ -78,9 +90,24 @@ static func markup(id: String, opts := {}) -> String:
 		lines.append("Trail: " + ", ".join(parts))
 	if int(info["hauling"]) > 0 and not opts.get("enemy", false):
 		lines[lines.size() - 1] += "  {i:haul}%d" % int(info["hauling"])
+	var out := "\n".join(lines)
 	for k in keys:
-		lines.append("[color=#b8b0c8][b]%s:[/b] %s[/color]" % [Glossary.entry_name(k), Glossary.text(k)])
-	return "\n".join(lines)
+		out += Tips.SIDE + keyword_box(k)
+	return out
+
+
+## "{tag} Move Name  Slot" line, colored by slot. Also used for memory slots later.
+static func move_header(move_id: String) -> String:
+	var mv := CombatData.move(move_id)
+	var slot: String = mv["slot"]
+	return "{i:%s} [b][color=#%s]%s[/color][/b]  [color=#8a8298]%s[/color]" % [
+		slot, SLOT_COL[slot], mv["name"], Glossary.entry_name(slot)]
+
+
+## A keyword's popup: icon, name and explanation.
+static func keyword_box(k: String) -> String:
+	var head := "{i:%s} " % k if Glossary.icon(k) != "" else ""
+	return "%s[b]%s[/b]\n%s" % [head, Glossary.entry_name(k), Glossary.text(k)]
 
 
 static func _is_letter(c: String) -> bool:

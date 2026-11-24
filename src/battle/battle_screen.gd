@@ -54,6 +54,9 @@ var _combat_bar: PanelContainer
 var _stats_panel: PanelContainer
 var _stats: StatsWindow
 var _stats_mode_btn: Button
+var _stats_toggle: Button
+## Whether the stats window is open (kept between fights).
+static var stats_open := true
 var _clock: RichTextLabel
 var _pause_btn: Button
 var _speed_btn: Button
@@ -326,7 +329,8 @@ func _start_combat() -> void:
 	_info_panel.visible = false
 	_combat_bar.visible = true
 	_stats_panel.visible = true
-	_stats.battle = battle
+	_stats.set_battle(battle)
+	_refresh_stats_mode()
 	paused = false
 	_retreat_btn.disabled = _is_guardian()
 	_retreat_btn.set_meta("tip", "There's no way around this one." if _is_guardian() else "Pull back after 3 seconds. Costs {i:food} food and {i:wagon} wagon wear.")
@@ -536,9 +540,20 @@ func _cycle_stats_mode() -> void:
 	_refresh_stats_mode()
 
 
+func _toggle_stats() -> void:
+	stats_open = not stats_open
+	_refresh_stats_mode()
+
+
 func _refresh_stats_mode() -> void:
-	_stats_mode_btn.text = "%s   (click to switch)" % StatsWindow.MODES[_stats.mode]
+	_stats_mode_btn.text = "%s  >" % StatsWindow.MODES[_stats.mode]
+	_stats_mode_btn.visible = stats_open
+	_stats.visible = stats_open
+	_stats_toggle.text = "-" if stats_open else "+ Stats"
 	_stats.queue_redraw()
+	# Stay pinned to the top-right corner whatever the size.
+	_stats_panel.reset_size()
+	_stats_panel.position = Vector2(634.0 - _stats_panel.get_combined_minimum_size().x, 6.0)
 
 
 func _refresh_combat_bar() -> void:
@@ -699,19 +714,30 @@ func _build_ui() -> void:
 	_ui.add_child(_combat_bar)
 
 	_stats_panel = PanelContainer.new()
-	_stats_panel.position = Vector2(430, 6)
-	_stats_panel.custom_minimum_size = Vector2(204, 0)
-	_stats_panel.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.88)))
+	_stats_panel.position = Vector2(484, 6)
+	var sbox := PreviewHud.box(Color(0.13, 0.10, 0.15, 0.88))
+	sbox.set_content_margin_all(3)
+	_stats_panel.add_theme_stylebox_override("panel", sbox)
 	var scol := VBoxContainer.new()
 	scol.add_theme_constant_override("separation", 2)
 	_stats_panel.add_child(scol)
+	var shead := HBoxContainer.new()
+	shead.add_theme_constant_override("separation", 2)
+	scol.add_child(shead)
 	_stats_mode_btn = Ui.button("", 8)
 	_stats_mode_btn.focus_mode = Control.FOCUS_NONE
+	_stats_mode_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stats_mode_btn.pressed.connect(_cycle_stats_mode)
 	Tips.attach(_stats_mode_btn, func(): return "Click to switch between damage dealt, {k:shield|shielding} given, healing done and damage taken.")
-	scol.add_child(_stats_mode_btn)
+	shead.add_child(_stats_mode_btn)
+	_stats_toggle = Ui.button("-", 8)
+	_stats_toggle.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stats_toggle.focus_mode = Control.FOCUS_NONE
+	_stats_toggle.custom_minimum_size = Vector2(12, 0)
+	_stats_toggle.pressed.connect(_toggle_stats)
+	Tips.attach(_stats_toggle, func(): return "Hide the fight stats." if stats_open else "Show the fight stats.")
+	shead.add_child(_stats_toggle)
 	_stats = StatsWindow.new()
-	_stats.custom_minimum_size = Vector2(192, 0)
 	scol.add_child(_stats)
 	_stats_panel.visible = false
 	_ui.add_child(_stats_panel)
@@ -811,14 +837,47 @@ class HpBar:
 ## Damage mode splits each bar into basic attacks, ultimates and passives.
 class StatsWindow:
 	extends Control
-	const MODES := ["Damage dealt", "Shielding given", "Healing done", "Damage taken"]
+	const MODES := ["Damage", "Shielding", "Healing", "Taken"]
+	const LONG := ["Damage dealt", "Shielding given", "Healing done", "Damage taken"]
 	const BASIC_COL := Color("e8e4f0")
 	const ULT_COL := Color("ffd04a")
 	const PASSIVE_COL := Color("8fd06a")
-	const ROW_H := 11.0
-	const NAME_W := 56.0
+	const WIDTH := 132.0
+	const ROW_H := 14.0
+	const PIC := 13.0
+	const NUM_W := 24.0
 	var battle: Battle
 	var mode := 0
+	## Portraits, loaded outside _draw (a texture first loaded in _draw renders white):
+	## species -> [texture, region of the sprite that isn't empty].
+	var _pics := {}
+	var _wagon: Texture2D
+	var _hover_row := -1
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		mouse_exited.connect(func():
+			_hover_row = -1
+			Tips.hide_from(self))
+		tree_exiting.connect(func(): Tips.hide_from(self))
+
+	func set_battle(b: Battle) -> void:
+		battle = b
+		_wagon = Rich.icon_tex("wagon")
+		for f in b.side_fighters(Formation.Side.PLAYER):
+			if _pics.has(f.species):
+				continue
+			var tex: Texture2D = load("res://assets/creatures/%s.png" % f.species)
+			var used := Rect2(Vector2.ZERO, tex.get_size())
+			var img := tex.get_image()
+			if img != null:
+				var r := img.get_used_rect()
+				if r.size.x > 0:
+					# Square crop around the used area, so every portrait is the same shape.
+					var side := maxf(r.size.x, r.size.y)
+					used = Rect2(Vector2(r.position) + Vector2(r.size) / 2.0 - Vector2(side, side) / 2.0, Vector2(side, side))
+			_pics[f.species] = [tex, used]
+		queue_redraw()
 
 	func _rows() -> Array:
 		var rows: Array = []
@@ -831,9 +890,9 @@ class StatsWindow:
 				1: segs = [[f.shield_done, Color("bfe6ff")]]
 				2: segs = [[f.heal_done, Color("74c86a")]]
 				3: segs = [[f.taken, Color("d9645a")]]
-			rows.append({"name": f.display_name(), "segs": segs, "down": not f.alive()})
+			rows.append({"species": f.species, "name": f.display_name(), "segs": segs, "down": not f.alive()})
 		if mode == 0:
-			rows.append({"name": "Wagon", "segs": [[battle.wagon_damage, BASIC_COL]], "down": false})
+			rows.append({"species": "", "name": "Wagon", "segs": [[battle.wagon_damage, BASIC_COL]], "down": false})
 		rows.sort_custom(func(a, b): return _total(a) > _total(b))
 		return rows
 
@@ -843,8 +902,30 @@ class StatsWindow:
 			t += float(sg[0])
 		return t
 
+	func _height() -> float:
+		return ROW_H * maxf(1.0, _rows().size()) + (10.0 if mode == 0 else 0.0)
+
 	func _get_minimum_size() -> Vector2:
-		return Vector2(192, ROW_H * 7 + (12 if mode == 0 else 0))
+		return Vector2(WIDTH, _height())
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseMotion:
+			var i := int(event.position.y / ROW_H)
+			var rows := _rows()
+			if i < 0 or i >= rows.size():
+				_hover_row = -1
+				Tips.hide_from(self)
+				return
+			_hover_row = i
+			var r: Dictionary = rows[i]
+			var parts: Array[String] = []
+			if mode == 0:
+				parts = ["Basic %d" % roundi(r["segs"][0][0])]
+				if r["segs"].size() > 1:
+					parts.append("Ultimate %d" % roundi(r["segs"][1][0]))
+					parts.append("Passive %d" % roundi(r["segs"][2][0]))
+			Tips.show_text("[b]%s[/b]\n%s: %d%s" % [r["name"], LONG[mode], roundi(_total(r)),
+				("\n" + ", ".join(parts)) if not parts.is_empty() else ""], self)
 
 	func _draw() -> void:
 		var font := ThemeDB.fallback_font
@@ -852,27 +933,34 @@ class StatsWindow:
 		var top := 0.0
 		for r in rows:
 			top = maxf(top, _total(r))
-		var bar_w := size.x - NAME_W - 30.0
+		var bar_x := PIC + 3.0
+		var bar_w := size.x - bar_x - NUM_W - 2.0
 		var y := 0.0
 		for r in rows:
-			var col := Color(0.6, 0.58, 0.65) if r["down"] else PreviewHud.INK
-			draw_string(font, Vector2(0, y + 8), r["name"], HORIZONTAL_ALIGNMENT_LEFT, NAME_W - 2, 8, col)
-			draw_rect(Rect2(NAME_W, y + 2, bar_w, 7), Color(0.08, 0.06, 0.09, 0.9))
-			var x := NAME_W
+			var tint := Color(1, 1, 1, 0.4) if r["down"] else Color.WHITE
+			var pic: Rect2 = Rect2(0, y, PIC, PIC)
+			draw_rect(pic, Color(0.42, 0.36, 0.44, 0.9 * tint.a))
+			if r["species"] != "" and _pics.has(r["species"]):
+				draw_texture_rect_region(_pics[r["species"]][0], pic, _pics[r["species"]][1], tint)
+			elif r["species"] == "" and _wagon != null:
+				draw_texture_rect(_wagon, pic, false, tint)
+			draw_rect(Rect2(bar_x, y + 4, bar_w, 6), Color(0.08, 0.06, 0.09, 0.9))
+			var x := bar_x
 			for sg in r["segs"]:
 				var w := roundf(bar_w * float(sg[0]) / top) if top > 0.0 else 0.0
 				if w > 0.0:
-					draw_rect(Rect2(x, y + 2, w, 7), sg[1])
+					draw_rect(Rect2(x, y + 4, w, 6), sg[1])
 					x += w
-			draw_string(font, Vector2(NAME_W + bar_w + 3, y + 8), str(roundi(_total(r))), HORIZONTAL_ALIGNMENT_LEFT, 28, 8, PreviewHud.INK)
+			draw_string(font, Vector2(bar_x + bar_w + 2, y + 10), str(roundi(_total(r))), HORIZONTAL_ALIGNMENT_RIGHT, NUM_W, 8, PreviewHud.INK * tint)
 			y += ROW_H
 		if mode == 0:
 			var lx := 0.0
-			for item in [["Basic", BASIC_COL], ["Ultimate", ULT_COL], ["Passive", PASSIVE_COL]]:
-				draw_rect(Rect2(lx, y + 3, 6, 6), item[1])
-				draw_string(font, Vector2(lx + 8, y + 9), item[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, PreviewHud.INK)
-				lx += 54.0
-		custom_minimum_size = Vector2(192, maxf(ROW_H * 7, y + (12 if mode == 0 else 0)))
+			for item in [["Basic", BASIC_COL], ["Ult", ULT_COL], ["Passive", PASSIVE_COL]]:
+				draw_rect(Rect2(lx, y + 2, 5, 5), item[1])
+				draw_string(font, Vector2(lx + 7, y + 8), item[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 7, PreviewHud.INK)
+				lx += 42.0
+		if custom_minimum_size.y != _height():
+			custom_minimum_size = Vector2(WIDTH, _height())
 
 
 ## A red line with an arrow head from a creature to the one it is attacking.
