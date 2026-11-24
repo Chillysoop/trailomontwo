@@ -10,7 +10,7 @@ signal closed
 
 const SCREEN := Vector2(640, 360)
 const PANEL := Vector2(460, 0)
-const OPTION := Vector2(218, 112)
+const OPTION := Vector2(218, 124)
 
 var crossing: Expedition
 var _col: VBoxContainer
@@ -97,7 +97,7 @@ func refresh() -> void:
 
 func _option(id: String, o: Dictionary, index: int) -> Control:
 	var b := Button.new()
-	b.custom_minimum_size = OPTION if o["kind"] == "move" else Vector2(OPTION.x, 92)
+	b.custom_minimum_size = OPTION if o["kind"] == "move" else Vector2(OPTION.x, 100)
 	b.focus_mode = Control.FOCUS_NONE
 	var edge := Color("e8d6a8")
 	if o["kind"] == "stat":
@@ -119,6 +119,7 @@ func _option(id: String, o: Dictionary, index: int) -> Control:
 	var text := Rich.label(_option_text(id, o), 8, OPTION.x - 16)
 	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text.add_theme_constant_override("line_separation", 2)
+	text.add_theme_font_size_override("italics_font_size", 7)
 	margin.add_child(text)
 	b.pressed.connect(_pick.bind(index))
 	return b
@@ -131,7 +132,7 @@ func _option_text(id: String, o: Dictionary) -> String:
 		var before := crossing.max_hp(id) if stat == "hp" else crossing.stat(id, stat)
 		var after := before - float(o["amount"]) if stat == "spd" else before + float(o["amount"])
 		var fmt := "%.2fs" if stat == "spd" else "%d"
-		return "[font_size=10][b][color=#%s]%s[/color][/b][/font_size]\n{i:%s} [font_size=11][b]%s[/b][/font_size]\n[color=#%s]%s %s -> %s[/color]" % [
+		return "[font_size=10][b][color=#%s]%s[/color][/b][/font_size]\n{i:%s} [font_size=11][b]%s[/b][/font_size]\n[color=#%s]Current: %s %s\nAfter: %s[/color]" % [
 			col, Leveling.RARITY_NAMES[o["rarity"]].to_upper(), stat, Leveling.boost_text(stat, o["amount"]),
 			CreatureCard.MUTED, Leveling.STAT_NAMES[stat], fmt % before, fmt % after]
 	var mid: String = o["move"]
@@ -142,7 +143,8 @@ func _option_text(id: String, o: Dictionary) -> String:
 	var text := "[color=#e8d6a8]%s[/color]  [color=#%s]%s[/color]\n" % [String(arc["name"]).to_upper(), CreatureCard.MUTED, arc["line"]]
 	text += CreatureCard.move_header(mid, true) + "\n"
 	text += "[color=#%s]%s[/color]\n" % [CreatureCard.SOFT, CombatData.describe(mid, crossing.stat(id, "atk"), crossing.stat(id, "def"), crossing.max_hp(id))]
-	text += "[color=#%s]Instead of %s[/color]" % [CreatureCard.MUTED, CombatData.move(current)["name"]]
+	text += "[color=#%s]Current:[/color] %s\n[i][color=#%s]%s[/color][/i]" % [CreatureCard.MUTED, CreatureCard.move_header(current, true), CreatureCard.MUTED,
+		CombatData.describe_short(current, crossing.stat(id, "atk"), crossing.stat(id, "def"), crossing.max_hp(id))]
 	return text
 
 
