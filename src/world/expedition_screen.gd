@@ -10,8 +10,9 @@ var crossing: Expedition
 var _backdrop: TravelBackdrop
 var _caravan: Caravan
 var _ui: CanvasLayer
-var _hud: Label
-var _hud_health: Label
+var _hud: RichTextLabel
+var _hud_health: RichTextLabel
+var _hover: HoverZones
 var _panel: PanelContainer
 var _title: Label
 var _map: RouteMapView
@@ -19,13 +20,13 @@ var _route_page: VBoxContainer
 var _wagon_page: VBoxContainer
 var _tab_route: Button
 var _tab_wagon: Button
-var _wagon_status: Label
+var _wagon_status: RichTextLabel
 var _hauler_list: VBoxContainer
 var _cargo_list: VBoxContainer
 var _rest: Button
 var _repair: Button
 var _routes: GridContainer
-var _card: Label
+var _card: RichTextLabel
 var _go: Button
 var _log: Label
 var _end: PanelContainer
@@ -35,7 +36,7 @@ var _event_text: Label
 var _event_choices: VBoxContainer
 var _event_result: Label
 var _event_continue: Button
-var _team_status: Label
+var _team_status: VBoxContainer
 var _battle: BattleScreen
 ## What happens when the event panel's Continue is pressed: "" resumes travel, "battle" or "ambush" opens a fight.
 var _continue_to := ""
@@ -50,13 +51,15 @@ func _ready() -> void:
 	_caravan = Caravan.new()
 	add_child(_caravan)
 	_backdrop.add_foreground(self)
+	_hover = HoverZones.new()
+	add_child(_hover)
 	_build_ui()
 	start_new()
 
 
 func start_new() -> void:
 	crossing = Expedition.new_default()
-	_caravan.setup(crossing.haulers, "rimehare")
+	_setup_caravan()
 	_caravan.set_walking(false)
 	_backdrop.set_moving(false)
 	_end.visible = false
@@ -74,8 +77,12 @@ func _show_junction() -> void:
 		c.queue_free()
 	var exits := crossing.exits()
 	for seg in exits:
-		var b := _button("%s\n%s, %d day%s" % [TestRoute.junction_name(seg["to"]), seg["terrain"], seg["days"], "" if seg["days"] == 1 else "s"], 8)
+		var b := _button("%s\n%d day%s" % [TestRoute.junction_name(seg["to"]), seg["days"], "" if seg["days"] == 1 else "s"], 8)
+		b.icon = Rich.icon_tex(Glossary.habitat_id(seg["terrain"]))
+		b.add_theme_constant_override("icon_max_width", 16)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		Tips.attach(b, func(): return "{ik:%s} road to %s\n{i:day} %d day%s   %s risk" % [Glossary.habitat_id(seg["terrain"]), TestRoute.junction_name(seg["to"]),
+			seg["days"], "" if seg["days"] == 1 else "s", "{i:risk}".repeat(seg["risk"])])
 		b.pressed.connect(_pick.bind(seg))
 		_routes.add_child(b)
 	_pick(exits[0])
@@ -90,21 +97,23 @@ func _pick(seg: Dictionary) -> void:
 	_map.queue_redraw()
 	var f := crossing.forecast(seg)
 	var lines: Array[String] = []
-	lines.append("%s  ·  %s  ·  risk %s" % [TestRoute.junction_name(seg["to"]), seg["terrain"], "●".repeat(seg["risk"]) + "○".repeat(3 - seg["risk"])])
-	lines.append("Travel: %d day%s%s" % [f["days"], "" if f["days"] == 1 else "s", "  (pushing, slower)" if f["hauling"] == Hauling.Result.PUSH else ""])
-	lines.append("Food: uses %d of %d%s" % [roundi(f["provisions"]), roundi(crossing.provisions), "" if f["enough_food"] else "  NOT ENOUGH"])
-	lines.append("Water: uses %d of %d%s" % [roundi(f["water"]), roundi(crossing.water), "" if f["enough_water"] else "  NOT ENOUGH"])
-	var haul := "Hauling: needs %d, haulers give %d  " % [roundi(f["demand"]), roundi(f["available"])]
+	lines.append("[b]%s[/b]  {ik:%s}  {k:risk|Risk} %s" % [TestRoute.junction_name(seg["to"]), Glossary.habitat_id(seg["terrain"]), "{i:risk}".repeat(seg["risk"])])
+	lines.append("{i:day} %d day%s%s" % [f["days"], "" if f["days"] == 1 else "s", "  ({k:push|pushing}, slower)" if f["hauling"] == Hauling.Result.PUSH else ""])
+	var bad := "[color=#ff8a7a]%s[/color]"
+	lines.append("{i:food} uses %d of %d%s     {i:water} uses %d of %d%s" % [
+		roundi(f["provisions"]), roundi(crossing.provisions), "" if f["enough_food"] else " " + bad % "NOT ENOUGH",
+		roundi(f["water"]), roundi(crossing.water), "" if f["enough_water"] else " " + bad % "NOT ENOUGH"])
+	var haul := "{i:haul} needs %d, haulers give %d  " % [roundi(f["demand"]), roundi(f["available"])]
 	match f["hauling"]:
-		Hauling.Result.NORMAL: haul += "OK"
-		Hauling.Result.PUSH: haul += "PUSH (slower)"
-		Hauling.Result.BLOCKED: haul += "TOO HEAVY"
+		Hauling.Result.NORMAL: haul += "[color=#9fe0a0]OK[/color]"
+		Hauling.Result.PUSH: haul += "[color=#f0d27a]{k:push|PUSHING}[/color]"
+		Hauling.Result.BLOCKED: haul += bad % "TOO HEAVY"
 	lines.append(haul)
-	var wear := "Wagon wear: %d -> %d" % [roundi(crossing.wagon.wear), mini(100, roundi(f["wear_after"]))]
+	var wear := "{i:wagon} wear %d -> %d" % [roundi(crossing.wagon.wear), mini(100, roundi(f["wear_after"]))]
 	if f["wear_after"] >= Wagon.WARN_WEAR:
-		wear += "  BREAKDOWN RISK"
+		wear += "  " + bad % "{k:breakdown|BREAKDOWN} RISK"
 	lines.append(wear)
-	_card.text = "\n".join(lines)
+	Rich.set_text(_card, "\n".join(lines))
 	_go.disabled = not f["can_go"]
 	if f["can_go"]:
 		_go.text = "Set off"
@@ -184,9 +193,20 @@ func _show_event() -> void:
 			var who: String = Species.info(v["helper"])["name"] + " helps" if v["helper"] != "" else "nobody can help"
 			line += "\n    %s:  %d%% success, %d%% mixed, %d%% bad" % [who, odds["success"], odds["mixed"], odds["failure"]]
 		var b := _button(line, 8)
+		_helper_icon(b, v)
 		b.pressed.connect(_choose_event.bind(i))
 		_event_choices.add_child(b)
 	_event_choices.get_child(0).grab_focus.call_deferred()
+
+
+## Shows the helping creature's portrait on a choice, with its card on hover.
+func _helper_icon(b: Button, v: Dictionary) -> void:
+	var helper: String = v.get("helper", "")
+	if v.get("safe", true) or helper == "":
+		return
+	b.icon = load("res://assets/creatures/%s.png" % helper)
+	b.add_theme_constant_override("icon_max_width", 16)
+	Tips.attach(b, _creature_tip.bind(helper, false))
 
 
 func _choose_event(i: int) -> void:
@@ -238,6 +258,7 @@ func _show_encounter() -> void:
 			var who: String = Species.info(v["helper"])["name"] + " scouts" if v["helper"] != "" else "nobody can scout"
 			line += "\n    %s:  %d%% clean, %d%% tiring detour, %d%% ambushed" % [who, odds["success"], odds["mixed"], odds["failure"]]
 		var b := _button(line, 8)
+		_helper_icon(b, v)
 		b.pressed.connect(_choose_encounter.bind(v["id"]))
 		_event_choices.add_child(b)
 	_event_choices.get_child(0).grab_focus.call_deferred()
@@ -310,41 +331,54 @@ func _show_tab(wagon: bool) -> void:
 		_routes.get_child(0).grab_focus.call_deferred()
 
 
-func _refresh_wagon_page() -> void:
+func _wagon_summary() -> String:
 	var w := crossing.wagon
-	var status := "Wagon: integrity %d%%, wear %d/100" % [w.integrity, roundi(w.wear)]
+	var status := "{i:wagon} %d%%  wear %d/100     {i:repair_kit} %d kit%s" % [w.integrity, roundi(w.wear), crossing.repair_kits, "" if crossing.repair_kits == 1 else "s"]
 	if w.broken != Wagon.Part.NONE:
-		status += "\nBROKEN %s: %s" % [w.part_name().to_upper(), {
+		status += "\n[color=#ff8a7a]BROKEN %s[/color]: %s" % [w.part_name().to_upper(), {
 			Wagon.Part.RUNNING_GEAR: "can't leave until repaired",
 			Wagon.Part.HARNESS: "hauling is weaker",
 			Wagon.Part.CANOPY: "water spoils faster"}[w.broken]]
 	elif w.warning():
-		status += "\nWorn: it may break down on the trail"
-	status += "\nRepair kits: %d" % crossing.repair_kits
-	_wagon_status.text = status
-	var team: Array[String] = []
+		status += "\n[color=#f0d27a]Worn[/color]: it may have a {k:breakdown} on the trail"
+	return status
+
+
+func _refresh_wagon_page() -> void:
+	var w := crossing.wagon
+	Rich.set_text(_wagon_status, _wagon_summary())
+	# Team: one hoverable portrait per creature with its health.
+	for c in _team_status.get_children():
+		c.queue_free()
+	_team_status.add_child(Rich.label("Team {i:hp} (rest a day to heal):", 8))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 2)
+	grid.add_theme_constant_override("v_separation", 1)
+	_team_status.add_child(grid)
 	for id in crossing.roster:
 		var hp := roundi(float(crossing.creature_hp.get(id, 0.0)))
-		team.append("%s %s" % [Species.info(id)["name"], ("%d/%d" % [hp, roundi(crossing.max_hp(id))]) if hp > 0 else "KNOCKED OUT"])
-	var pairs: Array[String] = []
-	for i in range(0, team.size(), 2):
-		pairs.append("   ".join(team.slice(i, i + 2)))
-	_team_status.text = "Team health (rest to heal):\n" + "\n".join(pairs)
+		var cell := Rich.label("{c:%s} %s" % [id, ("%d" % hp) if hp > 0 else "{i:ko}"], 8)
+		cell.custom_minimum_size = Vector2(92, 0)
+		grid.add_child(cell)
 	for c in _hauler_list.get_children():
 		c.queue_free()
 	for id in crossing.roster:
 		if not crossing.can_haul(id):
 			continue
 		var on := crossing.haulers.has(id)
-		var b := _button("%s %s  pulls %d  tired %d%%" % ["[x]" if on else "[  ]", Species.info(id)["name"], roundi(crossing.hauler_strength(id)), roundi(crossing.fatigue.get(id, 0.0))], 8)
+		var b := _button("%s %s   pulls %d   tired %d%%" % ["[x]" if on else "[  ]", Species.info(id)["name"], roundi(crossing.hauler_strength(id)), roundi(crossing.fatigue.get(id, 0.0))], 8)
+		b.icon = load("res://assets/creatures/%s.png" % id)
+		b.add_theme_constant_override("icon_max_width", 16)
 		b.pressed.connect(_toggle_hauler.bind(id))
+		Tips.attach(b, _creature_tip.bind(id, on))
 		_hauler_list.add_child(b)
 	for c in _cargo_list.get_children():
 		c.queue_free()
 	for i in crossing.cargo.size():
 		var item: Dictionary = crossing.cargo[i]
 		var row := HBoxContainer.new()
-		var l := PreviewHud.label("%s  ·  %d wt  ·  worth %d" % [item["name"], roundi(item["weight"]), item.get("value", 0)], 8)
+		var l := Rich.label("{i:cargo} %s   {i:weight}%d   {i:value}%d" % [item["name"], roundi(item["weight"]), item.get("value", 0)], 8)
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(l)
 		var drop := _button("Drop", 8)
@@ -355,11 +389,38 @@ func _refresh_wagon_page() -> void:
 		_cargo_list.add_child(PreviewHud.label("Nothing left to deliver.", 8))
 	var kit := crossing.repair_kits > 0
 	_repair.text = "Repair (1 day, uses a kit)" if kit else "Patch up (2 days, no kit)"
+	_repair.icon = Rich.icon_tex("repair_kit")
 	_repair.disabled = w.broken == Wagon.Part.NONE and w.wear < 1.0
 
 
-func _after_action() -> void:
+func _setup_caravan() -> void:
 	_caravan.setup(crossing.haulers, "rimehare")
+	_hover.clear()
+	_hover.add(Rect2(Caravan.WAGON_FEET + Vector2(-80, -170), Vector2(160, 172)), _wagon_tip)
+	var shown := crossing.haulers.slice(0, Caravan.HAULER_SLOTS.size())
+	for i in shown.size():
+		_hover.add(HoverZones.creature_rect(Caravan.HAULER_SLOTS[i]), _creature_tip.bind(shown[i], true))
+	_hover.add(HoverZones.creature_rect(Caravan.COMPANION_FEET), _creature_tip.bind("rimehare", false))
+
+
+func _creature_tip(id: String, hauling: bool) -> String:
+	if crossing == null:
+		return ""
+	var t := CreatureCard.markup(id, {"hp": crossing.creature_hp.get(id, 0.0), "max_hp": crossing.max_hp(id),
+		"fatigue": crossing.fatigue.get(id, 0.0)})
+	if hauling:
+		t += "\nIn harness: pulls {i:haul}%d" % roundi(crossing.hauler_strength(id))
+	return t
+
+
+func _wagon_tip() -> String:
+	if crossing == null:
+		return ""
+	return "{ik:wagon}\n" + _wagon_summary()
+
+
+func _after_action() -> void:
+	_setup_caravan()
 	_refresh_hud()
 	if crossing.state == Expedition.State.FAILED:
 		_show_end(false)
@@ -392,11 +453,10 @@ func _do_repair() -> void:
 # ---------- HUD and end ----------
 
 func _refresh_hud() -> void:
-	_hud.text = "Day %d    Food %d (%.1f days)    Water %d (%.1f days)    Cargo %d    Haul %d    Wagon %d%%" % [
+	Rich.set_text(_hud, "{i:day}Day %d    {i:food}%d [color=#c8bca8](%.1fd)[/color]    {i:water}%d [color=#c8bca8](%.1fd)[/color]    {i:cargo}%d    {i:haul}%d    {i:wagon}%d%%" % [
 		crossing.day, roundi(crossing.provisions), crossing.days_of(crossing.provisions, crossing.daily_provisions()),
-		roundi(crossing.water), crossing.days_of(crossing.water, crossing.daily_water()), roundi(crossing.cargo_weight()), roundi(crossing.hauling_available()), crossing.wagon.integrity]
-	_hud_health.text = "Health %d" % crossing.health
-	_hud_health.add_theme_color_override("font_color", Color("ff8a7a") if crossing.health < 50 else PreviewHud.INK)
+		roundi(crossing.water), crossing.days_of(crossing.water, crossing.daily_water()), roundi(crossing.cargo_weight()), roundi(crossing.hauling_available()), crossing.wagon.integrity])
+	Rich.set_text(_hud_health, ("{i:health}[color=#ff8a7a]%d[/color]" if crossing.health < 50 else "{i:health}%d") % crossing.health)
 
 
 func _show_end(won: bool) -> void:
@@ -424,10 +484,10 @@ func _build_ui() -> void:
 	bar.add_theme_stylebox_override("panel", PreviewHud.box())
 	var row := HBoxContainer.new()
 	bar.add_child(row)
-	_hud = PreviewHud.label("", 9)
+	_hud = Rich.label("", 9)
 	_hud.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_hud)
-	_hud_health = PreviewHud.label("", 9)
+	_hud_health = Rich.label("", 9)
 	row.add_child(_hud_health)
 	_ui.add_child(bar)
 
@@ -447,6 +507,7 @@ func _build_ui() -> void:
 	_tab_route.pressed.connect(_show_tab.bind(false))
 	tabs.add_child(_tab_route)
 	_tab_wagon = _button("Wagon & cargo", 9)
+	_tab_wagon.icon = Rich.icon_tex("wagon")
 	_tab_wagon.pressed.connect(_show_tab.bind(true))
 	tabs.add_child(_tab_wagon)
 	col.add_child(tabs)
@@ -462,7 +523,7 @@ func _build_ui() -> void:
 	_routes.add_theme_constant_override("h_separation", 3)
 	_routes.add_theme_constant_override("v_separation", 3)
 	_route_page.add_child(_routes)
-	_card = PreviewHud.label("", 8)
+	_card = Rich.label("", 8, 284)
 	_route_page.add_child(_card)
 	_go = _button("Set off", 10)
 	_go.pressed.connect(_set_off)
@@ -472,21 +533,24 @@ func _build_ui() -> void:
 	_wagon_page.add_theme_constant_override("separation", 3)
 	_wagon_page.visible = false
 	col.add_child(_wagon_page)
-	_wagon_status = PreviewHud.label("", 8)
+	_wagon_status = Rich.label("", 8, 284)
 	_wagon_page.add_child(_wagon_status)
-	_team_status = PreviewHud.label("", 8)
+	_team_status = VBoxContainer.new()
+	_team_status.add_theme_constant_override("separation", 1)
 	_wagon_page.add_child(_team_status)
-	_wagon_page.add_child(PreviewHud.label("Haulers (click to harness or unhitch)", 9))
+	_wagon_page.add_child(Rich.label("{i:haul} Haulers (click to harness or unhitch)", 9))
 	_hauler_list = VBoxContainer.new()
 	_hauler_list.add_theme_constant_override("separation", 2)
 	_wagon_page.add_child(_hauler_list)
-	_wagon_page.add_child(PreviewHud.label("Cargo (drop it to lighten the load)", 9))
+	_wagon_page.add_child(Rich.label("{i:cargo} Cargo (drop it to lighten the load)", 9))
 	_cargo_list = VBoxContainer.new()
 	_cargo_list.add_theme_constant_override("separation", 2)
 	_wagon_page.add_child(_cargo_list)
 	var acts := HBoxContainer.new()
 	acts.add_theme_constant_override("separation", 4)
 	_rest = _button("Rest a day", 9)
+	_rest.icon = Rich.icon_tex("tired")
+	Tips.attach(_rest, func(): return "Spend a {i:day} day. Haulers lose {k:tired|tiredness}, creatures heal, {k:ko|knocked out} ones wake up. Costs {i:food} and {i:water}.")
 	_rest.pressed.connect(_do_rest)
 	acts.add_child(_rest)
 	_repair = _button("Repair", 9)
