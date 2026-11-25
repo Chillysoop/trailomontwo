@@ -8,9 +8,11 @@ func _seg(from: String, to: String) -> Dictionary:
 	return {}
 
 
-func test_there_are_six_events_each_with_a_safe_choice() -> void:
-	check_eq(TrailEvents.EVENTS.size(), 6)
+func test_twenty_plus_events_each_with_one_safe_choice() -> void:
+	check(TrailEvents.EVENTS.size() >= 20, "lots of trail events")
+	var kinds := {}
 	for e in TrailEvents.EVENTS:
+		kinds[e["kind"]] = true
 		var safe := 0
 		var rolled := 0
 		for c in e["choices"]:
@@ -18,10 +20,12 @@ func test_there_are_six_events_each_with_a_safe_choice() -> void:
 				rolled += 1
 				for k in ["success", "mixed", "failure"]:
 					check(c.has(k), "%s: %s missing %s" % [e["id"], c["label"], k])
-			else:
+			if Expedition.is_safe(c):
 				safe += 1
 		check_eq(safe, 1, e["id"] + " needs exactly one safe choice")
-		check(rolled >= 1, e["id"] + " needs a rolled choice")
+		check(rolled >= 1 or e["id"] == "trader", e["id"] + " needs a rolled choice")
+		check(String(e["text"]).length() <= 80, e["id"] + " text should be one short line")
+	check_eq(kinds.size(), 5)
 
 
 func test_every_segment_can_have_an_event() -> void:
