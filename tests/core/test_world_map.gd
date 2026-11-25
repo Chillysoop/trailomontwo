@@ -160,3 +160,98 @@ func test_region_names_with_a_suffix_share_the_landmark() -> void:
 		m.regions[rid]["terrain"] = "Forest"
 	var any: String = m.junctions.keys()[0]
 	check_eq(m.landmark(any), "lm_lanternwood")
+
+
+# ---------- dust biomes ----------
+
+func _count_biomes(m: WorldMap) -> Dictionary:
+	var n := {"Blight": 0, "Glow": 0}
+	for rid in m.regions:
+		var b := String(m.regions[rid].get("biome", ""))
+		if b != "":
+			n[b] += 1
+	return n
+
+
+func test_dust_biomes_spread_from_crossing_three() -> void:
+	var m := WorldMap.generate(21)
+	for no in [1, 2]:
+		m.setup_crossing(no)
+		check_eq(_count_biomes(m), {"Blight": 0, "Glow": 0}, "no biomes on crossing %d" % no)
+	m.setup_crossing(3)
+	check_eq(_count_biomes(m), {"Blight": 1, "Glow": 1}, "one of each on crossing 3")
+	m.setup_crossing(4)
+	check_eq(_count_biomes(m), {"Blight": 1, "Glow": 1}, "still one of each on crossing 4")
+	m.setup_crossing(5)
+	check_eq(_count_biomes(m), {"Blight": 2, "Glow": 2}, "two of each on crossing 5")
+	m.setup_crossing(9)
+	check_eq(_count_biomes(m), {"Blight": 3, "Glow": 3}, "three of each from crossing 7")
+
+
+func test_biomes_change_regions_roads_and_stops() -> void:
+	var m := WorldMap.generate(8)
+	var before := {}
+	for s in m.segments:
+		before[s["a"] + s["b"]] = int(s["risk"])
+	m.setup_crossing(3)
+	var seen_road := false
+	for rid in m.regions:
+		var reg: Dictionary = m.regions[rid]
+		if not reg.has("biome"):
+			continue
+		check(not rid.begins_with("r0_") and not rid.begins_with("r6_"), "never the edge columns")
+		check(WorldMap.REGION_NAMES[reg["biome"]].has(reg["name"]), "renamed %s" % reg["name"])
+		check(m.landmark(_any_in(m, rid)).begins_with("lm_"), "has a landmark")
+		for id in m.junctions:
+			if m.junctions[id]["region"] == rid and m.kind_of(id) != "town":
+				check(WorldMap.KIND_WEIGHTS[reg["biome"]].has(m.kind_of(id)), "%s stop is a biome kind" % id)
+	for s in m.segments:
+		if m.is_biome(String(s["terrain"])):
+			seen_road = true
+			check_eq(int(s["risk"]), mini(3, int(before[s["a"] + s["b"]]) + 1), "biome roads are riskier")
+	check(seen_road, "some roads run through the biomes")
+
+
+func _any_in(m: WorldMap, rid: String) -> String:
+	for id in m.junctions:
+		if m.junctions[id]["region"] == rid:
+			return id
+	return ""
+
+
+func test_biome_regions_list_only_biome_trailomon() -> void:
+	var m := WorldMap.generate(8)
+	m.setup_crossing(3)
+	for rid in m.regions:
+		var b := String(m.regions[rid].get("biome", ""))
+		for sp in m.region_species(rid):
+			check_eq(String(Species.DATA[sp].get("biome", "")), b, "%s belongs in %s" % [sp, rid])
+
+
+func test_biome_events_weather_and_dust() -> void:
+	for t in ["Blight", "Glow"]:
+		var evs := TrailEvents.for_segment({"terrain": t, "risk": 2})
+		var own := 0
+		for e in evs:
+			if (e["terrains"] as Array).has(t):
+				own += 1
+		check(own >= 3, "%s has its own events" % t)
+		check(TrailLife.WEATHER_TABLE.has(t), "%s has weather" % t)
+	var e := _world()
+	e.weather = "ashfall"
+	var h := e.health
+	e.spend_day()
+	check(e.health < h, "ashfall hurts the crew")
+	e.trip = {"terrain": "Blight"}
+	check_eq(e.biome_dust_bonus(), {"light": 0, "dark": 1}, "Blight wins give Dark dust")
+	e.trip = {"terrain": "Glow"}
+	check_eq(e.biome_dust_bonus(), {"light": 1, "dark": 0}, "Glow wins give Light dust")
+
+
+func test_biomes_survive_the_next_crossing() -> void:
+	var e := _world()
+	var data := SaveGame.caravan(e)
+	var third := SaveGame.next_crossing(data, 5, 3)
+	check_eq(_count_biomes(third.map), {"Blight": 1, "Glow": 1}, "crossing 3 has its biomes")
+	var fourth := SaveGame.next_crossing(SaveGame.caravan(third), 6, 4)
+	check_eq(_count_biomes(fourth.map), {"Blight": 1, "Glow": 1}, "and they carry over")

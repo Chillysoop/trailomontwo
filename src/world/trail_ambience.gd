@@ -18,10 +18,12 @@ const SCREEN := Vector2(640, 360)
 const TERRAIN_TINT := {
 	"Forest": Color(1, 1, 1), "Hills": Color(1, 1, 1), "River": Color(1, 1, 1),
 	"Swamp": Color(0.95, 0.98, 0.94), "Mountain": Color(0.97, 0.98, 1.0),
+	"Blight": Color(0.88, 0.84, 0.94), "Glow": Color(1.04, 1.02, 0.96),
 }
 const WEATHER_TINT := {
 	"clear": Color(1, 1, 1), "rain": Color(0.8, 0.84, 0.92), "fog": Color(0.9, 0.9, 0.93),
 	"storm": Color(0.6, 0.6, 0.74), "heat": Color(1.0, 0.92, 0.8), "cold": Color(0.86, 0.91, 1.0),
+	"ashfall": Color(0.78, 0.74, 0.84), "shimmer": Color(1.03, 1.0, 0.92),
 }
 ## Roadside props by terrain (assets/props). Graves and signposts can turn up anywhere.
 const ROADSIDE := {
@@ -30,11 +32,15 @@ const ROADSIDE := {
 	"River": ["signpost", "river_reeds", "river_rocks", "grave_marker", "wheel_buried"],
 	"Swamp": ["swamp_shrooms", "shrine_stone", "grave_marker", "swamp_cattails", "swamp_boiler"],
 	"Mountain": ["mtn_boulder", "shrine_stone", "signpost", "grave_marker", "mtn_minecart", "mtn_shrub"],
+	"Blight": ["blight_crystal", "blight_wreck", "grave_marker", "blight_brambles", "abandoned_cart"],
+	"Glow": ["glow_crystal", "glow_pylon", "glow_flowers", "shrine_stone", "signpost"],
 }
 ## Buildings swapped in at a stop in one terrain (a mountain post is a log mining cabin).
 const TERRAIN_BUILDINGS := {
 	"Mountain": {"trading_post": "bld_mine_post", "bld_inn": "bld_mine_post"},
 	"Swamp": {"hut": "stilt_house"},
+	"Blight": {"hut": "bld_ward_post"},
+	"Glow": {"hut": "bld_sanctum"},
 }
 
 var moving := false
@@ -51,6 +57,8 @@ var _settlement: Array[Node2D] = []
 var _tint: CanvasModulate
 var _rain: CPUParticles2D
 var _snow: CPUParticles2D
+var _ash: CPUParticles2D
+var _motes: CPUParticles2D
 var _fog: Array[TextureRect] = []
 var _flash: ColorRect
 var _timers := {"wild": 1.0, "birds": 2.0, "traveler": 6.0, "roadside": 2.0, "flash": 5.0}
@@ -67,6 +75,12 @@ func _ready() -> void:
 	_rain.color = Color(0.82, 0.9, 1.0, 0.8)
 	_snow = _particles(_dot_tex(), 90, Vector2(-12, 42), 6.0)
 	_snow.color = Color(1, 1, 1, 0.85)
+	_ash = _particles(_dot_tex(), 110, Vector2(-18, 30), 6.0)
+	_ash.color = Color(0.36, 0.28, 0.46, 0.9)
+	_motes = _particles(_dot_tex(), 60, Vector2(-8, -10), 6.0)
+	_motes.color = Color(1.0, 0.9, 0.55, 0.85)
+	_motes.position = Vector2(340, 250)
+	_motes.emission_rect_extents = Vector2(380, 110)
 	for i in 3:
 		var f := TextureRect.new()
 		var g := GradientTexture2D.new()
@@ -113,6 +127,8 @@ func set_weather(w: String) -> void:
 	_rain.emitting = weather == "rain" or weather == "storm"
 	_rain.amount = 260 if weather == "storm" else 180
 	_snow.emitting = weather == "cold"
+	_ash.emitting = weather == "ashfall"
+	_motes.emitting = weather == "shimmer"
 	for f in _fog:
 		f.visible = weather == "fog"
 	_update_tint()

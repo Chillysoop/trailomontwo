@@ -114,3 +114,26 @@ swamps a murky sky and dark mud, mountains big snowy peaks and grey scree.
   mining cabins, plus terrain swaps (stilt houses in the swamp).
 - **Roadside**: each terrain has its own props scrolling past (fences and heather, reeds and
   jetties, mangroves and glowing mushrooms, pines and mine carts).
+
+## Dust biomes (late game)
+
+From crossing 3, dust seeps over the overworld. Regions turn into the **Blight** (Dark dust:
+withered black trees, violet crystals, ash) or the **Glow** (Light dust: white-gold trees,
+radiant crystals, glowing flowers). One of each on crossings 3 and 4, two from crossing 5,
+three from crossing 7. Always the same regions for a map, never the edge columns, never undone.
+
+- **Roads** into a biome take its terrain and +1 risk. Wild packs there are the biome's own
+  Trailomon (Species `"biome"` key, from the battle thread's roster); until they land, roads use
+  the any-terrain packs.
+- **Weather**: Blight has ashfall (-3 crew health a day, tired haulers, ambushes), fog and storms.
+  Glow has shimmer (+3 crew health a day, haulers rest as they walk), clear skies and rain.
+- **Dust**: wins give +1 Dark dust in the Blight and +1 Light dust in the Glow. Blight stalls sell
+  Dark dust cheap (8 coins, 3 in stock).
+- **Stops**: warden camps (Light dust wards, medicine) and ruins in the Blight; sanctums in the
+  Glow.
+- **Events**: a dark seam, an ash squall (burn a Light dust ward), a sick warden; a glimmer spring,
+  a crystal grove, dust pilgrims (who cleanse 1 Dark into 2 Light). Moments: dust drifts, ash
+  coughs, dead lanterns, drifting Light motes, glowing flowers.
+- **Landmarks**: the Ashen Hollow, Duskmire Scar, the Withering; Lumen Meadows, the Shining
+  Steppe, Halo Glade.
+- Balance: `world_sim.gd -- crossing 7` (three of each biome): 99-120 of 120 crossings arrive.

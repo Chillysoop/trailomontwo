@@ -12,6 +12,8 @@ const KINDS := {
 	"ruins": {"name": "Ruins", "props": ["bld_ruins", "abandoned_cart", "shrine_stone"]},
 	"stilts": {"name": "Stilt village", "props": ["stilt_house", "trading_post", "stilt_house"]},
 	"lookout": {"name": "Lookout", "props": ["bld_lookout", "signpost", "campfire"]},
+	"warden": {"name": "Warden camp", "props": ["bld_ward_post", "tent_camp", "campfire"]},
+	"sanctum": {"name": "Sanctum", "props": ["bld_sanctum", "glow_flowers", "well"]},
 }
 
 ## One lot of each good: what it gives (TrailEffects deltas).
