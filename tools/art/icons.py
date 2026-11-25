@@ -116,6 +116,7 @@ ICONS = {
     "job_steady": "a brass anchor with a green vine",
     "job_cold": "a warm red knitted scarf with fur trim",
     "job_heal": "a green healing herb bundle tied with string",
+    "map": "a folded parchment treasure map with a dotted trail and a red x",
     "job_forage": "a small woven basket full of red berries and mushrooms",
 }
 

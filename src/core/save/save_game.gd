@@ -22,7 +22,8 @@ const SALT := "trailomon-hardcore-v1"
 
 ## Team progress that carries into the next crossing. Fields a build doesn't have are skipped.
 const CARRY := ["roster", "stored", "levels", "xp", "kits", "boosts", "known", "pending_levels",
-	"memory", "lineup", "items", "item_slots", "techniques", "light_dust", "dark_dust", "dust_used", "coins"]
+	"memory", "lineup", "items", "item_slots", "techniques", "light_dust", "dark_dust", "dust_used", "coins",
+	"map", "seen", "encountered", "met_in"]
 
 ## The save picked on the title screen for the crossing being played ("" = none, e.g. tests).
 static var current_slot := ""
@@ -116,7 +117,7 @@ static func caravan(e: Expedition) -> Dictionary:
 
 ## A fresh crossing with a caravan carried over: same team and progress, everyone rested and
 ## healed, new supplies, cargo and wagon.
-static func next_crossing(caravan_data: Dictionary, rng_seed := -1) -> Expedition:
+static func next_crossing(caravan_data: Dictionary, rng_seed := -1, crossing_no := 2) -> Expedition:
 	var e := Expedition.new_default(rng_seed)
 	decode_into(e, caravan_data)
 	e.fatigue.clear()
@@ -130,6 +131,8 @@ static func next_crossing(caravan_data: Dictionary, rng_seed := -1) -> Expeditio
 			e.haulers.append(id)
 	e.pending_recruit = ""
 	e.tidy_lineup()
+	# Same overworld, the fog you lifted stays lifted, and the next crossing runs the other way.
+	e.setup_map(crossing_no)
 	return e
 
 
@@ -186,6 +189,7 @@ static func summary(slot: String) -> Dictionary:
 	for id in e.roster:
 		levels.append(e.level(id))
 	return {"crossing_no": r["crossing_no"], "day": e.day, "at": e.at, "state": e.state,
+		"at_name": e.map.name_of(e.at) if e.map != null else e.at,
 		"roster": e.roster.duplicate(), "levels": levels, "saved_at": r["saved_at"]}
 
 

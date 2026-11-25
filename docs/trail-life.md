@@ -73,3 +73,27 @@ abandoned wagons scrolling past.
 - Results: icon deltas (`-10 food`, `+1 Light dust`), one short line at most.
 - Moments: icon + portrait + up to five words.
 - Everything with an icon has a hover tip, so the screen stays short.
+
+## Overworld map
+
+Every caravan gets its own big generated overworld (`src/core/data/world_map.gd`): 14 columns of
+stops from east to west, 4 to 6 stops per column, roads to one or two stops in the next column,
+side roads, and dead-end lookouts and ruins. The land is split into 14 named regions, each a
+terrain (Forest, Hills, River, Swamp, Mountain) that sets the road's terrain, the stops' kinds
+and the names. Big towns sit at both edges.
+
+- **Crossings**: crossing 1 runs east to west, crossing 2 west to east, and so on, each from a
+  different edge town. The map, the fog you lifted and the Trailomon you met carry over.
+- **Fog of war**: you see the stops one road out from where you are. A scout of job rank 4+ sees
+  two roads out, and a lookout three. Each stop's rumor lifts the fog over one stop further on.
+  The goal is always marked.
+- **Forks**: click a road in the junction panel or a stop on either map to pick it.
+- **Creatures**: a region shows a Trailomon only once you've met it there (battle or recruit),
+  with a "?" for the ones still unmet. Wild Trailomon on the roadside are only species you've met.
+- **Map views**: the small map in the Route tab, a minimap in the corner while travelling, and
+  the full overworld (map button in the top bar, drag to pan, wheel to zoom). Travel pauses while
+  it is open.
+- **Balance**: a world crossing is about 13 roads and 25 to 30 days, so food and water at stops
+  are cheaper than on the test route and a caravan sets out with 70 coins. `tools/sim/world_sim.gd`
+  plays 120 crossings per pace, buying food when low and repairing breaks: 95-100% arrive.
+- Tests keep using the small hand-made route (`Expedition.default_map = "test"`).

@@ -4,6 +4,8 @@ extends SceneTree
 
 
 func _init() -> void:
+	# The hand-made test route (tools/sim/world_sim.gd plays the generated overworld).
+	Expedition.default_map = "test"
 	for pace in ["steady", "hard", "easy"]:
 		var arrived := 0
 		var days := 0

@@ -16,6 +16,9 @@ var _hover: HoverZones
 var _panel: PanelContainer
 var _title: RichTextLabel
 var _map: RouteMapView
+var _travel_map: RouteMapView
+var _world: PanelContainer
+var _world_map: RouteMapView
 var _route_page: VBoxContainer
 var _wagon_page: VBoxContainer
 var _tab_route: Button
@@ -118,6 +121,11 @@ func _reset_view() -> void:
 	for t in _toasts.get_children():
 		t.queue_free()
 	_map.expedition = crossing
+	_travel_map.expedition = crossing
+	_world_map.expedition = crossing
+	_map.fit()
+	_travel_map.fit()
+	_ambience.encountered = crossing.encountered
 	_ambience.set_weather(crossing.weather)
 
 
@@ -194,7 +202,7 @@ func _notification(what: int) -> void:
 
 ## After reaching Westwatch: the same team sets out on a new crossing.
 func _next_crossing() -> void:
-	_begin(SaveGame.next_crossing(SaveGame.caravan(crossing)), crossing_no + 1)
+	_begin(SaveGame.next_crossing(SaveGame.caravan(crossing), -1, crossing_no + 1), crossing_no + 1)
 
 
 ## After a failed crossing: try it again with the team as it was when the crossing began.
@@ -203,27 +211,28 @@ func _retry() -> void:
 	if SaveGame.is_hardcore(_slot):
 		_begin(Expedition.new_default(), 1)
 	else:
-		_begin(SaveGame.next_crossing(_start), crossing_no)
+		_begin(SaveGame.next_crossing(_start, -1, crossing_no), crossing_no)
 
 
 # ---------- junction ----------
 
 func _show_junction() -> void:
 	_panel.visible = true
-	var kind := Settlements.kind(crossing.at)
-	Rich.set_text(_title, "{i:settlement} [b]%s[/b]  [color=#c8bca8]%s[/color]" % [TestRoute.junction_name(crossing.at), kind["name"]])
+	var kind: Dictionary = Settlements.KINDS.get(crossing.stop()["kind"], {"name": "Stop"})
+	Rich.set_text(_title, "{i:settlement} [b]%s[/b]  [color=#c8bca8]%s[/color]" % [crossing.map.name_of(crossing.at), kind["name"]])
 	_ambience.set_moving(false)
-	_ambience.show_settlement(Settlements.stop(crossing.at)["kind"])
+	_ambience.encountered = crossing.encountered
+	_ambience.show_settlement(crossing.stop()["kind"])
 	_refresh_trade()
 	for c in _routes.get_children():
 		c.queue_free()
 	var exits := crossing.exits()
 	for seg in exits:
-		var b := _button("%s\n%d day%s" % [TestRoute.junction_name(seg["to"]), seg["days"], "" if seg["days"] == 1 else "s"], 8)
+		var b := _button("%s\n%d day%s" % [crossing.map.name_of(seg["to"]), seg["days"], "" if seg["days"] == 1 else "s"], 8)
 		b.icon = Rich.icon_tex(Glossary.habitat_id(seg["terrain"]))
 		b.add_theme_constant_override("icon_max_width", 16)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		Tips.attach(b, func(): return "{ik:%s} road to %s\n{i:day} %d day%s   %s risk" % [Glossary.habitat_id(seg["terrain"]), TestRoute.junction_name(seg["to"]),
+		Tips.attach(b, func(): return "{ik:%s} road to %s\n{i:day} %d day%s   %s risk" % [Glossary.habitat_id(seg["terrain"]), crossing.map.name_of(seg["to"]),
 			seg["days"], "" if seg["days"] == 1 else "s", "{i:risk}".repeat(seg["risk"])])
 		b.pressed.connect(_pick.bind(seg))
 		_routes.add_child(b)
@@ -239,7 +248,7 @@ func _pick(seg: Dictionary) -> void:
 	_map.queue_redraw()
 	var f := crossing.forecast(seg)
 	var lines: Array[String] = []
-	lines.append("[b]%s[/b]  {ik:%s}  {k:risk|Risk} %s" % [TestRoute.junction_name(seg["to"]), Glossary.habitat_id(seg["terrain"]), "{i:risk}".repeat(seg["risk"])])
+	lines.append("[b]%s[/b]  {ik:%s}  {k:risk|Risk} %s" % [crossing.map.name_of(seg["to"]), Glossary.habitat_id(seg["terrain"]), "{i:risk}".repeat(seg["risk"])])
 	lines.append("{i:day} %d day%s at {i:%s}%s     {k:weather|Weather} %s" % [f["days"], "" if f["days"] == 1 else "s", TrailLife.pace(crossing.pace)["icon"],
 		"  ({k:push|pushing})" if f["hauling"] == Hauling.Result.PUSH else "", _forecast_icons(seg["terrain"])])
 	var bad := "[color=#ff8a7a]%s[/color]"
@@ -289,12 +298,14 @@ func _set_off() -> void:
 	_caravan.set_walking(true)
 	_ambience.set_terrain(_picked["terrain"])
 	_ambience.set_moving(true)
-	_log.text = "Travelling to %s..." % TestRoute.junction_name(_picked["to"])
+	_log.text = "Travelling to %s..." % crossing.map.name_of(_picked["to"])
 	_day_timer = SECONDS_PER_DAY
 
 
 func _process(delta: float) -> void:
-	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null or _companions != null:
+	if _travel_map != null:
+		_travel_map.visible = crossing != null and crossing.state == Expedition.State.TRAVELLING and _battle == null
+	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null or _companions != null or _world.visible:
 		return
 	_day_timer -= delta
 	if _day_timer > 0.0:
@@ -583,13 +594,13 @@ func _show_tab(page: Variant) -> void:
 func _refresh_trade() -> void:
 	if _trade_list == null:
 		return
-	var stop := Settlements.stop(crossing.at)
-	Rich.set_text(_rumor, ("{i:ev_travelers} [color=#e8dcc0]%s[/color]" % stop["rumor"]) if String(stop["rumor"]) != "" else "")
+	var rumor := crossing.hear_rumor()
+	Rich.set_text(_rumor, ("{i:ev_travelers} [color=#e8dcc0]%s[/color]" % rumor) if rumor != "" else "")
 	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  {i:repair_kit}%d  {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d" % [
 		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), crossing.repair_kits, _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust])
 	for c in _trade_list.get_children():
 		c.queue_free()
-	var stall := Settlements.stall(crossing.at)
+	var stall: Dictionary = crossing.stop()["stall"]
 	if stall.is_empty():
 		_trade_list.add_child(Rich.label("Nothing for sale here.", 8))
 	for good in stall:
@@ -764,7 +775,7 @@ func _show_end(won: bool) -> void:
 	var body: Label = _end.find_child("EndBody", true, false)
 	var again: Button = _end.find_child("Again", true, false)
 	if won:
-		title.text = "Crossing %d: you reached Westwatch" % crossing_no
+		title.text = "Crossing %d: you reached %s" % [crossing_no, crossing.map.name_of(crossing.map.goal)]
 		body.text = "Day %d. %d food and %d water left.\nDelivered %d cargo worth %d. Wagon at %d%%.\nYour team, levels, dust and items come with you." % [crossing.day, roundi(crossing.provisions), roundi(crossing.water), crossing.cargo.size(), crossing.cargo_value(), crossing.wagon.integrity]
 		again.text = "Next crossing"
 	else:
@@ -821,6 +832,13 @@ func _build_ui() -> void:
 	Tips.attach(comp, func(): return "Your team: stats, moves and memory slots, plus the Trailomon in storage. Travel pauses while it's open.")
 	row.add_child(comp)
 	_comp_btn = comp
+	var map_btn := _button("", 8)
+	map_btn.icon = Rich.icon_tex("map")
+	map_btn.focus_mode = Control.FOCUS_NONE
+	map_btn.pressed.connect(_toggle_world)
+	Tips.attach(map_btn, func(): return "{i:map} [b]Overworld map[/b]\nWhere you've been and what you've seen. Travel pauses while it's open.")
+	row.add_child(map_btn)
+	row.move_child(map_btn, comp.get_index())
 	_ui.add_child(bar)
 
 	_panel = PanelContainer.new()
@@ -857,6 +875,7 @@ func _build_ui() -> void:
 	col.add_child(_route_page)
 	_map = RouteMapView.new()
 	_map.custom_minimum_size = Vector2(296 - 12, 128)
+	_map.junction_clicked.connect(_on_map_click)
 	_route_page.add_child(_map)
 	_routes = GridContainer.new()
 	_routes.columns = 2
@@ -943,6 +962,35 @@ func _build_ui() -> void:
 	_event.visible = false
 	_ui.add_child(_event)
 
+	_travel_map = RouteMapView.new()
+	_travel_map.position = Vector2(500, 286)
+	_travel_map.size = Vector2(134, 68)
+	_travel_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_travel_map.visible = false
+	_ui.add_child(_travel_map)
+
+	_world = PanelContainer.new()
+	_world.position = Vector2(8, 28)
+	_world.custom_minimum_size = Vector2(624, 326)
+	_world.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.10, 0.08, 0.11, 0.97)))
+	var wcol := VBoxContainer.new()
+	_world.add_child(wcol)
+	var whead := HBoxContainer.new()
+	var wtitle := Rich.label("{i:map} [b]Overworld[/b]   [color=#c8bca8]drag to look around, wheel to zoom[/color]", 9)
+	wtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	whead.add_child(wtitle)
+	var wclose := _button("Close", 8)
+	wclose.pressed.connect(_toggle_world)
+	whead.add_child(wclose)
+	wcol.add_child(whead)
+	_world_map = RouteMapView.new()
+	_world_map.full = true
+	_world_map.custom_minimum_size = Vector2(612, 296)
+	_world_map.junction_clicked.connect(_on_map_click)
+	wcol.add_child(_world_map)
+	_world.visible = false
+	_ui.add_child(_world)
+
 	_toasts = VBoxContainer.new()
 	_toasts.position = Vector2(6, 28)
 	_toasts.add_theme_constant_override("separation", 2)
@@ -970,6 +1018,27 @@ func _build_ui() -> void:
 	back.pressed.connect(_to_title)
 	ecol.add_child(back)
 	_ui.add_child(_end)
+
+
+func _toggle_world() -> void:
+	_world.visible = not _world.visible
+	if _world.visible:
+		_world_map.size = _world_map.custom_minimum_size
+		_world_map.fit()
+		_world_map.picked = _picked.get("to", "")
+		_world_map.queue_redraw()
+
+
+## Clicking a stop you can drive to picks that road.
+func _on_map_click(id: String) -> void:
+	if crossing.state != Expedition.State.AT_JUNCTION:
+		return
+	for seg in crossing.exits():
+		if seg["to"] == id:
+			_pick(seg)
+			_world_map.picked = id
+			_world_map.queue_redraw()
+			return
 
 
 func _open_companions() -> void:
