@@ -8,7 +8,7 @@ extends Node2D
 
 const DIR := "res://assets/backgrounds/travel/"
 const LAYER_WIDTH := 1280.0
-const TERRAINS := ["Forest", "Hills", "River", "Swamp", "Mountain", "Blight", "Glow"]
+const TERRAINS := ["Forest", "Hills", "River", "Swamp", "Mountain", "Snow", "Jungle", "Blight", "Glow"]
 
 ## File, pixels per second at walking pace (nearer layers move faster). "landmark" is the region's
 ## landmark, drawn between the mountains and the far tree line.

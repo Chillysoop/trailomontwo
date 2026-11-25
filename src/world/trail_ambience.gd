@@ -18,6 +18,7 @@ const SCREEN := Vector2(640, 360)
 const TERRAIN_TINT := {
 	"Forest": Color(1, 1, 1), "Hills": Color(1, 1, 1), "River": Color(1, 1, 1),
 	"Swamp": Color(0.95, 0.98, 0.94), "Mountain": Color(0.97, 0.98, 1.0),
+	"Snow": Color(0.97, 0.99, 1.02), "Jungle": Color(1.0, 1.0, 0.96),
 	"Blight": Color(0.88, 0.84, 0.94), "Glow": Color(1.04, 1.02, 0.96),
 }
 const WEATHER_TINT := {
@@ -32,6 +33,8 @@ const ROADSIDE := {
 	"River": ["signpost", "river_reeds", "river_rocks", "grave_marker", "wheel_buried"],
 	"Swamp": ["swamp_shrooms", "shrine_stone", "grave_marker", "swamp_cattails", "swamp_boiler"],
 	"Mountain": ["mtn_boulder", "shrine_stone", "signpost", "grave_marker", "mtn_minecart", "mtn_shrub"],
+	"Snow": ["snow_drift", "snow_sled", "snow_ice", "signpost", "grave_marker"],
+	"Jungle": ["jungle_idol", "jungle_ferns", "jungle_vines", "signpost", "abandoned_cart"],
 	"Blight": ["blight_crystal", "blight_wreck", "grave_marker", "blight_brambles", "abandoned_cart"],
 	"Glow": ["glow_crystal", "glow_pylon", "glow_flowers", "shrine_stone", "signpost"],
 }
@@ -39,6 +42,8 @@ const ROADSIDE := {
 const TERRAIN_BUILDINGS := {
 	"Mountain": {"trading_post": "bld_mine_post", "bld_inn": "bld_mine_post"},
 	"Swamp": {"hut": "stilt_house"},
+	"Snow": {"hut": "bld_snow_lodge", "bld_inn": "bld_snow_lodge"},
+	"Jungle": {"hut": "bld_treehouse"},
 	"Blight": {"hut": "bld_ward_post"},
 	"Glow": {"hut": "bld_sanctum"},
 }
