@@ -69,6 +69,8 @@ var techniques := {}
 var light_dust := 0
 var dark_dust := 0
 var dust_used := {}
+## A wild creature that offered to join after the last win ("" if none).
+var pending_recruit := ""
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -93,7 +95,7 @@ static func new_default(rng_seed := -1) -> Expedition:
 		{"name": "Tool chests", "weight": 60.0, "value": 150},
 		{"name": "Seed stock", "weight": 40.0, "value": 90},
 	]
-	for id in e.roster:
+	for id in e.roster + e.stored:
 		e.fatigue[id] = 0.0
 		e.creature_hp[id] = e.max_hp(id)
 	e.tidy_lineup()
@@ -752,6 +754,8 @@ const VICTORY_FOOD := 6.0
 const VICTORY_WATER := 4.0
 const ITEM_DROP_CHANCE := 0.5
 const TECHNIQUE_DROP_CHANCE := 0.2
+const RECRUIT_CHANCE := 0.35
+const STORAGE_MAX := 9
 
 ## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
 func finish_battle(battle: Battle) -> Array[String]:
@@ -763,7 +767,9 @@ func finish_battle(battle: Battle) -> Array[String]:
 			creature_hp[id] = float(hp[id])
 	var guardian := bool(pending_encounter.get("guardian", false))
 	var battle_scale := float(pending_encounter.get("scale", 1.0))
+	var pack: Dictionary = pending_encounter.get("pack", {})
 	pending_encounter = {}
+	pending_recruit = ""
 	match outcome:
 		Battle.Outcome.VICTORY:
 			provisions += VICTORY_FOOD
@@ -799,6 +805,10 @@ func finish_battle(battle: Battle) -> Array[String]:
 				found.append(BattleItems.item_name(id))
 		if not found.is_empty():
 			lines.append("Found a battle item: %s." % ", ".join(found))
+		var wild: Array[String] = recruit_candidates(pack)
+		if not wild.is_empty() and battle_rng.randf() < RECRUIT_CHANCE:
+			pending_recruit = wild[battle_rng.randi_range(0, wild.size() - 1)]
+			lines.append("A wild %s lingers after the fight. It could join you." % Species.info(pending_recruit)["name"])
 		var light := Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT
 		var dark := Dust.GUARDIAN_DARK if guardian else (1 if battle_scale >= Dust.STRONG_SCALE else 0)
 		light_dust += light
@@ -903,6 +913,54 @@ func use_technique(id: String, mid: String, to_memory: bool) -> String:
 	if techniques[mid] == 0:
 		techniques.erase(mid)
 	return _learn(id, mid, to_memory)
+
+
+# ---------- recruiting and storage ----------
+
+## Species from a beaten pack that could join: not the boss, not one you already have.
+func recruit_candidates(pack: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	if stored.size() >= STORAGE_MAX:
+		return out
+	for id in pack.get("front", []) + pack.get("back", []):
+		var sid := String(id)
+		if sid != "" and Species.DATA.has(sid) and not roster.has(sid) and not stored.has(sid) and not out.has(sid):
+			out.append(sid)
+	return out
+
+
+## Take in the creature that offered to join. It goes to storage, rested and healthy.
+func recruit() -> String:
+	if pending_recruit == "" or stored.size() >= STORAGE_MAX:
+		return ""
+	var id := pending_recruit
+	pending_recruit = ""
+	stored.append(id)
+	fatigue[id] = 0.0
+	creature_hp[id] = max_hp(id)
+	var line := "%s joined you. It waits in storage until you swap it into the team." % Species.info(id)["name"]
+	journal.append(line)
+	return line
+
+
+## Swap a stored creature with one travelling in the team. The stored one takes its place in
+## the team and the lineup; the other goes to storage.
+func swap_stored(stored_id: String, team_id: String) -> bool:
+	var si := stored.find(stored_id)
+	var ri := roster.find(team_id)
+	if si < 0 or ri < 0:
+		return false
+	stored[si] = team_id
+	roster[ri] = stored_id
+	var cell: Variant = lineup_cell(team_id)
+	if cell != null:
+		lineup[cell] = stored_id
+	haulers.erase(team_id)
+	if not fatigue.has(stored_id):
+		fatigue[stored_id] = 0.0
+	if not creature_hp.has(stored_id):
+		creature_hp[stored_id] = max_hp(stored_id)
+	return true
 
 
 # ---------- dust ----------

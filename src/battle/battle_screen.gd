@@ -622,6 +622,21 @@ func _end_combat() -> void:
 		var cont := Ui.button("Continue", 10)
 		cont.pressed.connect(func(): finished.emit(_result_lines))
 		_after_buttons.add_child(cont)
+		if crossing.pending_recruit != "":
+			var rid := crossing.pending_recruit
+			var take := Ui.button("Take in %s" % Species.info(rid)["name"], 10)
+			take.icon = CompanionsScreen.portrait(rid)
+			take.expand_icon = false
+			take.add_theme_constant_override("icon_max_width", 16)
+			take.pressed.connect(func():
+				var line := crossing.recruit()
+				if line != "":
+					_result_lines.append(line)
+					Rich.set_text(_after_body, "\n".join(_result_lines))
+				take.disabled = true
+				take.text = "%s joined" % Species.info(rid)["name"])
+			Tips.attach(take, func(): return CreatureCard.markup(rid, {"enemy": false}) + "\n[color=#ffe3a3]It goes to storage. Swap it into your team from the Companions screen.[/color]")
+			_after_buttons.add_child(take)
 		if crossing.pending_count() > 0:
 			var lv := Ui.button("Level ups (%d)" % crossing.pending_count(), 10)
 			lv.pressed.connect(func():
@@ -780,7 +795,7 @@ func _build_ui() -> void:
 	_ui.add_child(_log)
 
 	_after = PanelContainer.new()
-	_after.position = Vector2(110, 132)
+	_after.position = Vector2(110, 96)
 	_after.custom_minimum_size = Vector2(340, 0)
 	_after.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.94)))
 	var acol := VBoxContainer.new()
