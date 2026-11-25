@@ -365,6 +365,9 @@ const GUARDIANS := [
 	{"id": "rimewyrm", "title": "The Rimewyrm", "terrains": [], "min_risk": 1, "boss": "rimewyrm",
 		"text": "Snow begins to fall upward. A great wyrm of ice uncoils across the road, and the cold bites to the bone.",
 		"front": ["flurrypup", "rimehare", "flurrypup"], "back": ["", "rimewing", ""]},
+	{"id": "duskmaw", "title": "The Duskmaw", "terrains": [], "min_risk": 1, "boss": "duskmaw",
+		"text": "Dark dust drifts across the road like smoke. A panther the size of a wagon drops from the dead canopy on wide bat wings, and its brood follows.",
+		"front": ["vampape", "", "sootseal"], "back": ["howlbat", "", "howlbat"]},
 ]
 
 ## Enemy strength by segment risk (health and power multiplier).
