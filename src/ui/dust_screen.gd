@@ -150,7 +150,7 @@ func _portrait(id: String) -> Control:
 
 
 func _option(stat: String) -> Control:
-	var o := Dust.offer(kind, stat)
+	var o := Dust.offer(kind, stat, _who)
 	var ok := crossing.dust_count(kind) > 0 and crossing.dust_left(_who) > 0
 	var b := Button.new()
 	b.custom_minimum_size = OPTION

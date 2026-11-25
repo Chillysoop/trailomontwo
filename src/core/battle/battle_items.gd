@@ -9,6 +9,7 @@ extends RefCounted
 ##   haste: [pct, secs]     ult_pct: start with N% ultimate charge
 ##   regen: [pct, every]    heal N% of max HP every `every` seconds
 ##   foe_slow / foe_weaken: [pct, secs] on every foe at the start
+##   foe_atk_pct: every foe has -N% Attack for the fight
 
 const SLOTS := 3
 
@@ -20,7 +21,7 @@ const ITEMS := {
 	"rally_horn": {"name": "Rally Horn", "ult_pct": 50},
 	"mending_moss": {"name": "Mending Moss", "regen": [3, 5]},
 	"smoke_pouch": {"name": "Smoke Pouch", "foe_slow": [30, 10]},
-	"bitter_ash": {"name": "Bitter Ash", "foe_weaken": [25, 12]},
+	"bitter_ash": {"name": "Bitter Ash", "foe_atk_pct": 12},
 }
 
 
@@ -49,6 +50,8 @@ static func desc(id: String) -> String:
 		return "Every %ds, your team heals %d%% of their max HP." % [it["regen"][1], it["regen"][0]]
 	if it.has("foe_slow"):
 		return "Every foe is {k:slow|Slowed} %d%% for the first %ds." % it["foe_slow"]
+	if it.has("foe_atk_pct"):
+		return "Every foe has -%d%% {k:atk|Attack} for the whole fight." % it["foe_atk_pct"]
 	if it.has("foe_weaken"):
 		return "Every foe is {k:weaken|Weakened} %d%% for the first %ds." % it["foe_weaken"]
 	return ""
