@@ -85,6 +85,32 @@ T = {
         road=['mtn_pine', 'mtn_boulder', 'mtn_minecart', 'mtn_shrub', 'mtn_pine', 'rocks_crystal', 'mtn_boulder', 'mtn_pine'],
         fg=['mtn_shrub', 'mtn_boulder', 'mtn_shrub', 'grass_wildflower', 'mtn_shrub'],
     ),
+    'blight': dict(
+        road_tint=('#3a3040', 0.5),
+        sky=[(0, '#1c1424'), (.35, '#3a2c48'), (.62, '#7a5a7a'), (.85, '#a88a96'), (1, '#c4aab0')],
+        cloud=('#8a7a90', '#5e4e68', '#3a2e44'), sun=False,
+        mtn1=('#4a3e58', '#6e5e7e', '#382e46', None, 64), mtn2=('#352a40', '#54446a', '#261e30', None, 40),
+        haze='#7a6080', murk=True,
+        far=('#1e1824', '#2e2436', '#463650', '#a070c0', 1.2, (5, 10)),
+        near=('#1a1420', '#2a2030', '#40304a', '#b080d0', 0.8, (6, 14)),
+        grass=('#5e5862', '#3a343e', ['#2c2630', '#6a6070', '#4a4250', '#7a7080'], ['#a070e0', '#c090f0', '#604070']),
+        grass_near='#2a2430', far_props=['blight_tree', 'pylon_overgrown'], far_tint='#5a4a68',
+        road=['blight_tree', 'blight_crystal', 'blight_wreck', 'blight_brambles', 'blight_tree', 'abandoned_cart', 'blight_crystal', 'grave_marker'],
+        fg=['blight_brambles', 'blight_crystal', 'blight_brambles', 'blight_wreck', 'blight_brambles'],
+    ),
+    'glow': dict(
+        road_tint=('#f0e0b8', 0.35),
+        sky=[(0, '#4a7aa8'), (.35, '#9cc0d8'), (.62, '#f4e4b8'), (.85, '#fff0c8'), (1, '#fff8e4')],
+        cloud=('#ffffff', '#fbe8c8', '#e8c8a8'), sun=True,
+        mtn1=('#c8c4e0', '#f4f0f8', '#aeaacc', '#ffffff', 60), mtn2=('#a8c0c8', '#d4e4e4', '#8aa8b0', None, 36),
+        haze='#fff2d4',
+        far=('#4a8a6a', '#6ab08a', '#a8e0b0', '#fff0a0', 1.1, (6, 11)),
+        near=('#3e7a58', '#5ea47a', '#9cdca0', '#fff4b0', 0.8, (7, 16)),
+        grass=('#a4d47a', '#70a85a', ['#5a9a50', '#b4e48a', '#80c070', '#d4f4a0'], ['#fff4a0', '#ffffff', '#f0d060', '#a0e8ff']),
+        grass_near='#5a9050', far_props=['glow_tree', 'glow_pylon'], far_tint='#c8d8c0',
+        road=['glow_tree', 'glow_crystal', 'glow_flowers', 'glow_pylon', 'glow_tree', 'shrine_stone', 'glow_crystal', 'glow_flowers'],
+        fg=['glow_flowers', 'glow_crystal', 'glow_flowers', 'fern_cluster', 'glow_flowers'],
+    ),
 }
 
 

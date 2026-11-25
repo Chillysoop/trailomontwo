@@ -338,7 +338,8 @@ func spend_day(travelling := false) -> String:
 	var need_food := daily_provisions() * TrailLife.weather_value(weather, "food_mult", 1.0)
 	var need_water := daily_water() * TrailLife.weather_value(weather, "water_mult", 1.0)
 	water += TrailLife.weather_value(weather, "water_gain")
-	health = mini(100, health + int(TrailLife.ration(rations)["health"]) + (int(TrailLife.pace(pace)["health"]) if travelling else 0))
+	health = mini(100, health + int(TrailLife.ration(rations)["health"]) + (int(TrailLife.pace(pace)["health"]) if travelling else 0) \
+		+ int(TrailLife.weather_value(weather, "health")))
 	if fever_days > 0:
 		fever_days -= 1
 		health -= TrailLife.FEVER_DAMAGE
@@ -492,7 +493,7 @@ static func is_safe(choice: Dictionary) -> bool:
 func _wear_day(terrain_factor: float, pushing: bool) -> void:
 	var p := TrailLife.pace(pace)
 	for id in haulers:
-		fatigue[id] = minf(100.0, float(fatigue.get(id, 0.0)) + HAUL_FATIGUE * (2.0 if pushing else 1.0) * float(p["fatigue"]) + TrailLife.weather_value(weather, "fatigue"))
+		fatigue[id] = clampf(float(fatigue.get(id, 0.0)) + HAUL_FATIGUE * (2.0 if pushing else 1.0) * float(p["fatigue"]) + TrailLife.weather_value(weather, "fatigue"), 0.0, 100.0)
 	var chance := Wagon.breakdown_chance(wagon.wear)
 	wagon.wear = minf(100.0, wagon.wear + Wagon.wear_per_day(terrain_factor, cargo_weight(), pushing) * float(p["wear"]) + TrailLife.weather_value(weather, "wear"))
 	if wagon.broken == Wagon.Part.NONE and rng.randf() < chance:
@@ -598,7 +599,8 @@ func best_helper(cap: String) -> String:
 ## Can the crew pay this cost right now? (Costs are negative deltas.)
 func can_afford(cost: Dictionary) -> bool:
 	return coins + int(cost.get("coins", 0)) >= 0 and provisions + float(cost.get("food", 0)) >= 0.0 \
-		and water + float(cost.get("water", 0)) >= 0.0 and repair_kits + int(cost.get("repair_kits", 0)) >= 0
+		and water + float(cost.get("water", 0)) >= 0.0 and repair_kits + int(cost.get("repair_kits", 0)) >= 0 \
+		and light_dust + int(cost.get("light_dust", 0)) >= 0 and dark_dust + int(cost.get("dark_dust", 0)) >= 0
 
 
 ## What each choice of an event looks like: helper, odds (or safe), cost, whether it's affordable.
@@ -1259,8 +1261,9 @@ func finish_battle(battle: Battle) -> Array[String]:
 		if not wild.is_empty() and not from_event and battle_rng.randf() < RECRUIT_CHANCE:
 			pending_recruit = Species.pick_weighted(wild, battle_rng)
 			lines.append("A wild %s lingers after the fight. It could join you." % Species.info(pending_recruit)["name"])
-		var light := Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT
-		var dark := Dust.GUARDIAN_DARK if guardian else (1 if battle_scale >= Dust.STRONG_SCALE else 0)
+		var bonus := biome_dust_bonus()
+		var light := (Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT) + int(bonus["light"])
+		var dark := (Dust.GUARDIAN_DARK if guardian else (1 if battle_scale >= Dust.STRONG_SCALE else 0)) + int(bonus["dark"])
 		light_dust += light
 		dark_dust += dark
 		lines.append("Gathered dust: +%d {i:light_dust} Light%s." % [light, "" if dark == 0 else ", +%d {i:dark_dust} Dark" % dark])
@@ -1414,6 +1417,12 @@ func swap_stored(stored_id: String, team_id: String) -> bool:
 
 
 # ---------- dust ----------
+
+## Extra dust from a win in a dust biome: Dark in the Blight, Light in the Glow.
+func biome_dust_bonus() -> Dictionary:
+	var t := String(trip.get("terrain", "")) if not trip.is_empty() else ""
+	return {"light": 1 if t == WorldMap.GLOW else 0, "dark": 1 if t == WorldMap.BLIGHT else 0}
+
 
 func dust_left(id: String) -> int:
 	return Dust.CAP - int(dust_used.get(id, 0))

@@ -8,7 +8,7 @@ extends Node2D
 
 const DIR := "res://assets/backgrounds/travel/"
 const LAYER_WIDTH := 1280.0
-const TERRAINS := ["Forest", "Hills", "River", "Swamp", "Mountain"]
+const TERRAINS := ["Forest", "Hills", "River", "Swamp", "Mountain", "Blight", "Glow"]
 
 ## File, pixels per second at walking pace (nearer layers move faster). "landmark" is the region's
 ## landmark, drawn between the mountains and the far tree line.
@@ -64,7 +64,7 @@ func set_scene(new_terrain: String, new_landmark := "") -> void:
 		if _landmark.texture != null:
 			_landmark.position = LANDMARK_FEET - Vector2(_landmark.texture.get_width() / 2.0, _landmark.texture.get_height())
 	if _sun != null:
-		_sun.visible = terrain != "Swamp"
+		_sun.visible = terrain != "Swamp" and terrain != "Blight"
 
 
 func add_foreground(parent: Node) -> Node2D:

@@ -67,6 +67,24 @@ PROPS = {
     "lm_the_anvil_teeth": (128, "a huge anvil-shaped rock with a forge chimney glowing orange, snow around it"),
     "lm_slate_wall": (128, "a towering slate cliff wall with a giant carved stone door and brass hinges"),
 
+    # ---- Dust biomes (late game): Dark-dust Blight and Light-dust Glow ----
+    "blight_tree": (128, "a dead blackened tree with cracked bark leaking glowing violet dark dust, withered twisted branches"),
+    "blight_crystal": (96, "a cluster of jagged black-violet crystals oozing dark mist from cracked brass pipes"),
+    "blight_wreck": (96, "a corroded brass machine wreck dripping dark violet ooze, withered grey vines on it"),
+    "blight_brambles": (96, "black thorny brambles with ashen leaves and small glowing violet buds, short and wide"),
+    "glow_tree": (128, "a pale white-barked tree with glowing golden leaves and floating light motes, brass rings on the trunk"),
+    "glow_crystal": (96, "a cluster of radiant white-gold crystals humming with light, set in polished brass"),
+    "glow_pylon": (96, "a restored shining brass pylon wrapped in blooming white flowers, glowing gold core"),
+    "glow_flowers": (96, "luminous white and gold flowers and glowing grass, short and wide"),
+    "lm_the_ashen_hollow": (128, "a huge hollow black dead tree split open, a violet dark-dust vortex swirling inside, ash all around"),
+    "lm_duskmire_scar": (128, "a tall jagged black rock spire split by a glowing violet crack venting dark mist, broken brass pipes, isolated object, empty transparent background, no sky"),
+    "lm_the_withering": (128, "a giant toppled brass colossus statue covered in black thorns and violet crystals"),
+    "lm_lumen_meadows": (128, "a tall white crystal obelisk radiating golden light over a ring of glowing flowers"),
+    "lm_the_shining_steppe": (128, "a floating island of golden crystal hovering above a brass pedestal, light motes around it"),
+    "lm_halo_glade": (128, "a giant white tree with a glowing golden halo ring of light floating above its crown"),
+    "bld_ward_post": (128, "a small warden outpost: a wooden palisade gate with a tall brass lantern glowing gold on top, isolated object, empty transparent background, no sky"),
+    "bld_sanctum": (128, "a small white stone sanctuary shrine with a golden glowing dome and flowering vines"),
+
     # ---- Stops ----
     "bld_town_gate": (128, "a big walled town gate with stone towers, a brass clock above the arch and banners"),
     "bld_lookout": (128, "a tall wooden lookout tower with a ladder, a brass spyglass and a flag on top"),

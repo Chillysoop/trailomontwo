@@ -24,8 +24,16 @@ func _run() -> void:
 	crossing.water = 9999.0
 	var m := crossing.map
 	var picks := {"Forest": "lm_lanternwood", "Hills": "lm_copper_barrows", "River": "lm_the_silverrun",
-		"Swamp": "lm_the_murkfens", "Mountain": "lm_the_cogspires"}
-	var stops := {"Forest": "village", "Hills": "lookout", "River": "post", "Swamp": "ruins", "Mountain": "waystation"}
+		"Swamp": "lm_the_murkfens", "Mountain": "lm_the_cogspires", "Blight": "lm_the_ashen_hollow", "Glow": "lm_halo_glade"}
+	var stops := {"Forest": "village", "Hills": "lookout", "River": "post", "Swamp": "ruins", "Mountain": "waystation", "Blight": "warden", "Glow": "sanctum"}
+	# The overworld on crossing 5, all revealed, with the dust biomes spread over it.
+	m.spread_biomes(5)
+	for id in m.junctions:
+		crossing.seen[id] = true
+	exp.call("_toggle_world")
+	await _frames(5)
+	await _shot("0_overworld_biomes")
+	exp.call("_toggle_world")
 	exp.call("_set_off")
 	crossing.trip_days_left = 50.0
 	var bd: TravelBackdrop = exp.get("_backdrop")
@@ -34,6 +42,7 @@ func _run() -> void:
 	for t in picks:
 		bd.set_scene(t, picks[t])
 		amb.set_terrain(t)
+		amb.set_weather({"Blight": "ashfall", "Glow": "shimmer"}.get(t, "clear"))
 		amb.show_settlement("")
 		await _frames(150)
 		await _shot("%d_%s_road" % [i, t.to_lower()])

@@ -17,6 +17,9 @@ const WEATHER := {
 	"storm": {"name": "Storm", "icon": "w_storm", "favours": "Mountain", "wear": 3.0, "fatigue": 4.0},
 	"heat": {"name": "Heat", "icon": "w_heat", "favours": "Jungle", "water_mult": 1.4},
 	"cold": {"name": "Cold", "icon": "w_cold", "favours": "Snow", "food_mult": 1.25, "fatigue": 3.0},
+	# Dust biomes only: Dark dust ash hurts the crew and tires the haulers; Light dust shimmer mends.
+	"ashfall": {"name": "Ashfall", "icon": "w_ashfall", "favours": "", "health": -3.0, "fatigue": 3.0, "ambush": 0.06},
+	"shimmer": {"name": "Shimmer", "icon": "w_shimmer", "favours": "", "health": 3.0, "fatigue": -3.0},
 }
 
 ## Weather odds by terrain (weights).
@@ -26,10 +29,13 @@ const WEATHER_TABLE := {
 	"River": {"clear": 35, "rain": 35, "fog": 20, "storm": 10},
 	"Swamp": {"fog": 35, "heat": 25, "rain": 25, "clear": 15},
 	"Mountain": {"cold": 40, "clear": 25, "storm": 20, "fog": 15},
+	"Blight": {"ashfall": 50, "fog": 30, "storm": 20},
+	"Glow": {"shimmer": 55, "clear": 35, "rain": 10},
 }
 
 ## The habitat whose Trailomon are on home ground on this terrain ("" for none).
-const TERRAIN_HABITAT := {"Forest": "Forest", "River": "River", "Swamp": "Swamp", "Mountain": "Mountain", "Hills": ""}
+const TERRAIN_HABITAT := {"Forest": "Forest", "River": "River", "Swamp": "Swamp", "Mountain": "Mountain", "Hills": "",
+	"Blight": "", "Glow": ""}
 
 
 static func roll_weather(terrain: String, rng: RandomNumberGenerator) -> String:
