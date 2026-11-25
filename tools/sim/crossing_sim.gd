@@ -55,6 +55,6 @@ func _crossings() -> void:
 		for level in [1 + (n - 1) * 3, 1 + (n - 1) * 5]:
 			var g := CombatData.guardian_for(n)
 			var line := "crossing %d, team Lv %2d: guardian %s %d%%" % [n, level, g["id"], _rate(level, n, g, CombatData.GUARDIAN_SCALE)]
-			for pid in ["bogjaw_lair", "quarry_herd", "emberoak_grove", "auroryx_lights"]:
+			for pid in ["emberoak_grove", "auroryx_lights", "tidewyrm_rise", "mirehydra_den", "titanox_pass", "quetzalith_sky"]:
 				line += "   %s %d%%" % [pid, _rate(level, n, CombatData.pack_by_id(pid), 1.45)]
 			print(line)
