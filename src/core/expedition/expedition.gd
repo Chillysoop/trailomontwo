@@ -741,9 +741,24 @@ func make_battle(ambush := false, rng_seed := -1) -> Battle:
 	return Battle.create(
 		{"slots": lineup.duplicate(), "hp": creature_hp.duplicate(), "fatigue": fatigue.duplicate(),
 			"kits": kits.duplicate(true), "boosts": boosts.duplicate(true)},
-		{"front": pack["front"], "back": pack["back"], "boss": pack.get("boss", ""), "scale": float(pending_encounter.get("scale", 1.0))},
+		{"front": pack["front"], "back": pack["back"], "boss": pack.get("boss", ""), "scale": enemy_scale()},
 		opts)
 
+
+## How strong the pending foes are: the route's risk, plus a little for every level your
+## lineup has gained, so a levelled team still gets a real fight.
+func enemy_scale() -> float:
+	var base := float(pending_encounter.get("scale", 1.0))
+	var total := 0
+	var n := 0
+	for cell in lineup:
+		total += level(lineup[cell])
+		n += 1
+	var avg := float(total) / maxf(1.0, float(n))
+	return base * (1.0 + LEVEL_SCALE * maxf(0.0, avg - 1.0))
+
+
+const LEVEL_SCALE := 0.015
 
 ## What a battle defeat costs (breach): wagon integrity and a share of food and water.
 const BREACH_INTEGRITY := 15
@@ -977,7 +992,7 @@ func dust_count(kind: String) -> int:
 func use_dust(id: String, kind: String, stat: String) -> String:
 	if dust_count(kind) <= 0 or dust_left(id) <= 0 or not Leveling.STATS.has(stat):
 		return ""
-	var o := Dust.offer(kind, stat)
+	var o := Dust.offer(kind, stat, id)
 	var b: Dictionary = boosts.get(id, {})
 	b[stat] = float(b.get(stat, 0.0)) + float(o["amount"])
 	if float(o["cost"]) > 0.0:

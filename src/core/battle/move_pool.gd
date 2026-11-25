@@ -68,8 +68,8 @@ const ARCHETYPES := {
 const MOVES := {
 	# ----- Brambleback -----
 	"thorn_rake": {"name": "Thorn Rake", "slot": "basic", "pct": 60, "def_pct": 30, "splash": 30},
-	"bramble_coat": {"name": "Bramble Coat", "slot": "passive", "kind": "thorns", "pct": 45},
-	"thicket_burst": {"name": "Thicket Burst", "slot": "ultimate", "target": "adjacent", "pct": 140, "self": {"shield_def": 80}},
+	"bramble_coat": {"name": "Bramble Coat", "slot": "passive", "kind": "thorns", "pct": 60},
+	"thicket_burst": {"name": "Thicket Burst", "slot": "ultimate", "target": "adjacent", "pct": 140, "self": {"shield_def": 120}, "taunt": 4.0},
 	"bark_bash": {"name": "Bark Bash", "slot": "basic", "pct": 70, "self": {"shield_def": 35}},
 	"heartwood": {"name": "Heartwood", "slot": "passive", "kind": "start_shield", "def_pct": 250},
 	"great_oak": {"name": "Great Oak", "slot": "ultimate", "target": "none", "team": {"shield_def": 80, "shield_flat": 40}, "taunt": 5.0},
@@ -84,8 +84,8 @@ const MOVES := {
 	"soothing_ripple": {"name": "Soothing Ripple", "slot": "basic", "pct": 50, "ally": {"heal_atk": 85}},
 	"wellspring": {"name": "Wellspring", "slot": "passive", "kind": "every", "n": 3, "ally_heal_atk": 90},
 	"spring_rain": {"name": "Spring Rain", "slot": "ultimate", "target": "none", "team": {"heal_maxhp": 10, "cleanse": true}},
-	"drain_lance": {"name": "Drain Lance", "slot": "basic", "pct": 120, "self": {"heal_atk": 25}},
-	"riptide_pull": {"name": "Riptide Pull", "slot": "passive", "kind": "drain", "pct": 30},
+	"drain_lance": {"name": "Drain Lance", "slot": "basic", "pct": 120, "ally": {"heal_atk": 45}},
+	"riptide_pull": {"name": "Riptide Pull", "slot": "passive", "kind": "drain", "pct": 50, "to_ally": true},
 	"whirlpool": {"name": "Whirlpool", "slot": "ultimate", "target": "all", "pct": 90, "wash": 60},
 	# ----- Mirelamp -----
 	"spore_spit": {"name": "Spore Spit", "slot": "basic", "pct": 60, "poison": [20, 5.0]},
@@ -240,6 +240,8 @@ static func _passive_text(m: Dictionary, brief: bool) -> String:
 				return "While you have {k:shield|Shield}, a basic attack that hits you deals {atk:%d} back to the attacker." % m["pct"]
 			return "When a basic attack hits you, deal {atk:%d} back to the attacker." % m["pct"]
 		"drain":
+			if m.get("to_ally", false):
+				return ("Heals most hurt ally %d%% of damage dealt" % m["pct"]) if brief else "Heal your most hurt ally for %d%% of the damage you deal." % m["pct"]
 			return ("Heals self for %d%% of damage dealt" % m["pct"]) if brief else "Heal yourself for %d%% of the damage you deal." % m["pct"]
 		"armor_low":
 			return ("Below half health: +%d Defense" % m["amount"]) if brief else "Below half health, gain %d Defense." % m["amount"]

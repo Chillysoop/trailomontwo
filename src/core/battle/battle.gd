@@ -128,6 +128,8 @@ func _use_item(id: String) -> void:
 	for f in side_fighters(Formation.Side.ENEMY):
 		if it.has("foe_slow"):
 			f.add_mod("slow", float(it["foe_slow"][0]) / 100.0, float(it["foe_slow"][1]))
+		if it.has("foe_atk_pct"):
+			f.atk *= 1.0 - float(it["foe_atk_pct"]) / 100.0
 		if it.has("foe_weaken"):
 			f.add_mod("weaken", float(it["foe_weaken"][0]) / 100.0, float(it["foe_weaken"][1]))
 	if it.has("regen"):
@@ -840,7 +842,7 @@ func _deal(src: Fighter, t: Fighter, amount: float, tag: String, label: String, 
 		elif src.alive() and tag != "passive":
 			var dp := CombatData.move(src.passive)
 			if dp.get("kind", "") == "drain":
-				_heal(src, src, (absorbed + lost) * float(dp["pct"]) / 100.0)
+				_heal(src, _weakest_ally(src) if dp.get("to_ally", false) else src, (absorbed + lost) * float(dp["pct"]) / 100.0)
 	else:
 		wagon_damage += absorbed + lost
 	if tag != "passive" and not raw:

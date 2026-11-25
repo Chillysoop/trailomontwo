@@ -6,7 +6,7 @@ func test_light_dust_boosts_a_stat() -> void:
 	var e := Expedition.new_default(8)
 	var before := e.stat("scythelk", "atk")
 	check(e.use_dust("scythelk", "light", "atk") != "", "used")
-	check_eq(e.stat("scythelk", "atk"), before + float(Leveling.BOOSTS["atk"][Dust.LIGHT_RARITY]))
+	check_eq(e.stat("scythelk", "atk"), before + float(Dust.offer("light", "atk", "scythelk")["amount"]))
 	check_eq(e.light_dust, 1, "one spent")
 
 
@@ -15,8 +15,8 @@ func test_dark_dust_trades_the_opposite_stat() -> void:
 	var atk := e.stat("scythelk", "atk")
 	var def := e.stat("scythelk", "def")
 	e.use_dust("scythelk", "dark", "atk")
-	check_eq(e.stat("scythelk", "atk"), atk + float(Leveling.BOOSTS["atk"][Dust.DARK_RARITY]))
-	check_eq(e.stat("scythelk", "def"), def - float(Leveling.BOOSTS["def"][Dust.DARK_COST_RARITY]))
+	check_eq(e.stat("scythelk", "atk"), atk + float(Dust.offer("dark", "atk", "scythelk")["amount"]))
+	check_eq(e.stat("scythelk", "def"), def - float(Dust.offer("dark", "atk", "scythelk")["cost"]))
 	check_eq(e.dark_dust, 0)
 	check_eq(e.use_dust("scythelk", "dark", "atk"), "", "no dark dust left")
 
@@ -28,7 +28,7 @@ func test_dust_cap_and_hp() -> void:
 	for i in Dust.CAP:
 		check(e.use_dust("rimehare", "light", "hp") != "", "dust %d" % i)
 	check_eq(e.use_dust("rimehare", "light", "hp"), "", "capped")
-	check_eq(e.max_hp("rimehare"), hp + Dust.CAP * float(Leveling.BOOSTS["hp"][Dust.LIGHT_RARITY]))
+	check_eq(e.max_hp("rimehare"), hp + Dust.CAP * float(Dust.offer("light", "hp", "rimehare")["amount"]))
 	check_eq(float(e.creature_hp["rimehare"]), e.max_hp("rimehare"), "current health grows too")
 
 
@@ -60,3 +60,21 @@ func test_dust_screen_builds() -> void:
 	s._sheets.free()
 	s._sheets = null
 	s.free()
+
+
+func test_dust_is_a_share_of_the_species_stats() -> void:
+	var tank := Dust.offer("light", "hp", "brambleback")
+	var glass := Dust.offer("light", "hp", "inkhoot")
+	check(float(tank["amount"]) > float(glass["amount"]), "bigger creatures gain more raw HP")
+	var dark := Dust.offer("dark", "atk", "scythelk")
+	check(float(dark["amount"]) > float(Dust.offer("light", "atk", "scythelk")["amount"]), "dark gives more")
+	check(float(dark["cost"]) > 0.0 and dark["cost_stat"] == "def", "dark costs the opposite stat")
+
+
+func test_foes_grow_a_little_with_team_level() -> void:
+	var e := Expedition.new_default(8)
+	e.pending_encounter = {"pack": CombatData.pack_by_id("thornfang_pack"), "scale": 1.2, "guardian": false}
+	check_eq(e.enemy_scale(), 1.2, "level 1 team: route scale only")
+	for id in e.roster:
+		e.levels[id] = 5
+	check(e.enemy_scale() > 1.2 and e.enemy_scale() < 1.4, "a level 5 team meets slightly tougher foes")
