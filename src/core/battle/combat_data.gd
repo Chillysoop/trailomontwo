@@ -377,6 +377,12 @@ const GUARDIANS := [
 	{"id": "sturgebull", "title": "The Sturgebull", "terrains": [], "min_risk": 1, "boss": "sturgebull",
 		"text": "The ford starts to churn. An ancient sturgeon with the horns and shoulders of a bull wades up the river toward you, and the water rises with it.",
 		"front": ["platygator", "", "goosetoise"], "back": ["ospreyfox", "", "minktrout"]},
+	{"id": "mirewyrm", "title": "The Mirewyrm", "terrains": [], "min_risk": 1, "boss": "mirewyrm",
+		"text": "Bubbles rise all across the bog. A salamander longer than the wagon train lifts its frilled head out of the muck, gills dripping slime.",
+		"front": ["buffotoad", "", "beaverback"], "back": ["skipnewt", "", "viperweasel"]},
+	{"id": "condorgon", "title": "The Condorgon", "terrains": [], "min_risk": 1, "boss": "condorgon",
+		"text": "A shadow swallows the whole pass. A mammoth on vast condor wings lands on the ridge ahead, and its tusks scrape the rock.",
+		"front": ["kodiram", "", "chamoise"], "back": ["", "hyrahawk", ""]},
 ]
 
 ## Enemy strength by segment risk (health and power multiplier).
