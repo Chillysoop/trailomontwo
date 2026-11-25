@@ -85,6 +85,26 @@ PROPS = {
     "bld_ward_post": (128, "a small warden outpost: a wooden palisade gate with a tall brass lantern glowing gold on top, isolated object, empty transparent background, no sky"),
     "bld_sanctum": (128, "a small white stone sanctuary shrine with a golden glowing dome and flowering vines"),
 
+    # ---- Snow and Jungle terrains ----
+    "snow_fir": (128, "a snow-laden fir tree with icicles and a small brass lantern hanging from a branch"),
+    "snow_drift": (96, "a snowdrift with a half-buried brass gear and frosted grass, short and wide"),
+    "snow_sled": (96, "an abandoned wooden supply sled with brass runners, covered in snow"),
+    "snow_ice": (96, "jagged blue ice chunks with frozen copper pipes, isolated object, empty transparent background"),
+    "jungle_palm": (128, "a tall curved jungle palm tree with huge leaves and climbing vines around a brass pipe"),
+    "jungle_ferns": (96, "giant tropical leaves, monstera and bright orange flowers, short and wide"),
+    "jungle_idol": (96, "a moss-covered carved stone idol head with brass eyes and vines"),
+    "jungle_vines": (96, "a hanging curtain of thick jungle vines with purple flowers on a rusted brass arch"),
+    "lm_the_white_reach": (128, "a giant frozen brass airship half buried in snow, icicles hanging from it, isolated object, empty transparent background, no sky"),
+    "lm_frostfang_pass": (128, "two huge curved ice spikes like fangs over a snowy brass gate, isolated object, empty transparent background, no sky"),
+    "lm_rimeholt": (128, "a snowy wooden watchtower village on stilts with smoking brass chimneys, isolated object, empty transparent background, no sky"),
+    "lm_the_hoarwood": (128, "a huge ancient frost-covered tree with blue glowing ice crystals in its branches, isolated object, empty transparent background, no sky"),
+    "lm_the_emerald_canopy": (128, "a colossal jungle tree with a waterfall pouring from its hollow trunk, isolated object, empty transparent background, no sky"),
+    "lm_vinehold": (128, "an ancient stepped stone temple overgrown with jungle vines and brass gears, isolated object, empty transparent background, no sky"),
+    "lm_the_sunken_gardens": (128, "a ruined brass greenhouse dome overgrown with giant tropical flowers, isolated object, empty transparent background, no sky"),
+    "lm_parrotspire": (128, "a tall rusted radio tower wrapped in jungle vines with colorful birds perched on it, isolated object, empty transparent background, no sky"),
+    "bld_snow_lodge": (128, "a cozy snow-covered log lodge with a round brass door and warm glowing windows, isolated object, empty transparent background"),
+    "bld_treehouse": (128, "a jungle treehouse hut on a thick trunk with a rope ladder and leaf roof, isolated object, empty transparent background"),
+
     # ---- Stops ----
     "bld_town_gate": (128, "a big walled town gate with stone towers, a brass clock above the arch and banners"),
     "bld_lookout": (128, "a tall wooden lookout tower with a ladder, a brass spyglass and a flag on top"),

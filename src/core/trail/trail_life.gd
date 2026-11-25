@@ -29,12 +29,15 @@ const WEATHER_TABLE := {
 	"River": {"clear": 35, "rain": 35, "fog": 20, "storm": 10},
 	"Swamp": {"fog": 35, "heat": 25, "rain": 25, "clear": 15},
 	"Mountain": {"cold": 40, "clear": 25, "storm": 20, "fog": 15},
+	"Snow": {"cold": 55, "clear": 25, "fog": 10, "storm": 10},
+	"Jungle": {"heat": 35, "rain": 35, "fog": 15, "clear": 15},
 	"Blight": {"ashfall": 50, "fog": 30, "storm": 20},
 	"Glow": {"shimmer": 55, "clear": 35, "rain": 10},
 }
 
 ## The habitat whose Trailomon are on home ground on this terrain ("" for none).
 const TERRAIN_HABITAT := {"Forest": "Forest", "River": "River", "Swamp": "Swamp", "Mountain": "Mountain", "Hills": "",
+	"Snow": "Snow", "Jungle": "Jungle",
 	"Blight": "", "Glow": ""}
 
 

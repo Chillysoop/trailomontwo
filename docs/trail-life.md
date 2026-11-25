@@ -137,3 +137,13 @@ three from crossing 7. Always the same regions for a map, never the edge columns
 - **Landmarks**: the Ashen Hollow, Duskmire Scar, the Withering; Lumen Meadows, the Shining
   Steppe, Halo Glade.
 - Balance: `world_sim.gd -- crossing 7` (three of each biome): 99-120 of 120 crossings arrive.
+
+## Snow and Jungle
+
+Two more ordinary terrains join the overworld, so every habitat has home ground: **Snow** (snowy
+firs, ice, drifts, sleds; cold weather most days; Snow Trailomon on home ground) and **Jungle**
+(palms, giant leaves, stone idols, vine arches; heat and rain; Jungle Trailomon on home ground).
+Regions are now drawn from seven terrains. Landmarks: the White Reach (frozen airship),
+Frostfang Pass, Rimeholt, the Hoarwood; the Emerald Canopy, Vinehold, the Sunken Gardens,
+Parrotspire. Snow lodges and treehouses replace huts there. Events: frozen lake, snow slide,
+rope bridge, vine-choked temple; moments: snow melt, frost bite, fruit haul, vine snag.
