@@ -81,11 +81,31 @@ func setup(with_crossing: Expedition, was_ambushed := false, is_practice := fals
 		crossing.pending_encounter = {"pack": CombatData.PACKS[0], "scale": CombatData.RISK_SCALE[1], "guardian": false}
 
 
+## The terrain's battle backdrop with the region's landmark between its sky and its ground
+## (tools/art/regions.py makes the layers).
+func _add_backdrop() -> void:
+	var scene := crossing.scenery() if crossing != null else {"terrain": "Forest", "landmark": ""}
+	var t := String(scene["terrain"]).to_lower()
+	var dir := "res://assets/backgrounds/battle/"
+	if not ResourceLoader.exists(dir + t + "_back.png"):
+		t = "forest"
+	for part in ["back", "landmark", "front"]:
+		var bg := Sprite2D.new()
+		bg.centered = false
+		if part == "landmark":
+			var path := "res://assets/props/%s.png" % String(scene["landmark"])
+			if String(scene["landmark"]) == "" or not ResourceLoader.exists(path):
+				continue
+			bg.texture = load(path)
+			bg.position = Vector2(540, 142) - Vector2(bg.texture.get_width() * 0.5, bg.texture.get_height())
+			bg.modulate = TravelBackdrop.LANDMARK_HAZE
+		else:
+			bg.texture = load(dir + "%s_%s.png" % [t, part])
+		add_child(bg)
+
+
 func _ready() -> void:
-	var bg := Sprite2D.new()
-	bg.texture = load("res://assets/backgrounds/battle/trail_forest.png")
-	bg.centered = false
-	add_child(bg)
+	_add_backdrop()
 	add_child(Stand.sprite(load("res://assets/wagon/wagon.png"), Formation.WAGON_FEET))
 	_grid = GridView.new()
 	_grid.screen = self

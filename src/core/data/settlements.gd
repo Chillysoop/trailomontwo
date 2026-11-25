@@ -5,12 +5,13 @@ extends RefCounted
 
 ## Buildings shown around the wagon at each kind of stop (props in assets/props).
 const KINDS := {
-	"town": {"name": "Town", "props": ["hut", "trading_post", "well", "hut"]},
+	"town": {"name": "Town", "props": ["bld_town_gate", "hut", "trading_post", "well"]},
 	"village": {"name": "Village", "props": ["hut", "well", "campfire"]},
-	"waystation": {"name": "Waystation", "props": ["tent_camp", "signpost", "campfire"]},
+	"waystation": {"name": "Waystation", "props": ["bld_inn", "tent_camp", "signpost"]},
 	"post": {"name": "Trading post", "props": ["trading_post", "tent_camp", "signpost"]},
-	"ruins": {"name": "Ruins", "props": ["abandoned_cart", "shrine_stone", "signpost"]},
+	"ruins": {"name": "Ruins", "props": ["bld_ruins", "abandoned_cart", "shrine_stone"]},
 	"stilts": {"name": "Stilt village", "props": ["stilt_house", "trading_post", "stilt_house"]},
+	"lookout": {"name": "Lookout", "props": ["bld_lookout", "signpost", "campfire"]},
 }
 
 ## One lot of each good: what it gives (TrailEffects deltas).

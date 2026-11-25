@@ -154,7 +154,7 @@ func _resume(ui: Dictionary) -> void:
 	elif not crossing.pending_encounter.is_empty():
 		_show_encounter()
 	else:
-		_ambience.set_terrain(String(crossing.trip.get("terrain", "Forest")))
+		_set_scenery()
 		_resume_travel()
 		_day_timer = SECONDS_PER_DAY
 
@@ -221,6 +221,7 @@ func _show_junction() -> void:
 	Rich.set_text(_title, "{i:settlement} [b]%s[/b]  [color=#c8bca8]%s[/color]" % [crossing.map.name_of(crossing.at), kind["name"]])
 	_ambience.set_moving(false)
 	_ambience.encountered = crossing.encountered
+	_set_scenery()
 	_ambience.show_settlement(crossing.stop()["kind"])
 	_refresh_trade()
 	for c in _routes.get_children():
@@ -289,13 +290,20 @@ func _forecast_icons(terrain: String) -> String:
 	return out
 
 
+## Terrain scenery and the region's landmark, for the road or the stop the wagon is at.
+func _set_scenery() -> void:
+	var scene := crossing.scenery()
+	_backdrop.set_scene(scene["terrain"], scene["landmark"])
+	_ambience.set_terrain(scene["terrain"])
+
+
 func _set_off() -> void:
 	if _picked.is_empty() or not crossing.start_trip(_picked):
 		return
 	_panel.visible = false
 	_backdrop.set_moving(true)
 	_caravan.set_walking(true)
-	_ambience.set_terrain(_picked["terrain"])
+	_set_scenery()
 	_ambience.set_moving(true)
 	_log.text = "Travelling to %s..." % crossing.map.name_of(_picked["to"])
 	_day_timer = SECONDS_PER_DAY

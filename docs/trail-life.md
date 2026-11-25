@@ -97,3 +97,20 @@ and the names. Big towns sit at both edges.
   are cheaper than on the test route and a caravan sets out with 70 coins. `tools/sim/world_sim.gd`
   plays 120 crossings per pace, buying food when low and repairing breaks: 95-100% arrive.
 - Tests keep using the small hand-made route (`Expedition.default_map = "test"`).
+
+## Region art
+
+Each terrain has its own painted scenery, made by `tools/art/regions.py` from Sprite Fusion props
+(`tools/art/props.py`): a travel set (`assets/backgrounds/travel/<terrain>/`: sky, mountains, far
+tree line, ground with the trail, foreground) and a battle backdrop (`battle/<terrain>_back.png`
+and `_front.png`). Hills get rolling downs, rivers and swamps a band of water behind the road,
+swamps a murky sky and dark mud, mountains big snowy peaks and grey scree.
+
+- **Landmarks**: every region name has its own landmark (`assets/props/lm_*.png`, 20 in all, e.g.
+  a lantern tree in Lanternwood, a cog spire in the Cogspires, a sunken locomotive in the
+  Murkfens). It stands far off between the mountains and the tree line on the road, and behind
+  the battlefield. `WorldMap.landmark(id)` picks it; `Expedition.scenery()` says what to show.
+- **Stops**: town gates, lookout towers, ruined arches, roadside inns and (in the mountains) log
+  mining cabins, plus terrain swaps (stilt houses in the swamp).
+- **Roadside**: each terrain has its own props scrolling past (fences and heather, reeds and
+  jetties, mangroves and glowing mushrooms, pines and mine carts).

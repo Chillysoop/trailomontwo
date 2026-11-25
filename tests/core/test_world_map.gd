@@ -126,3 +126,37 @@ func test_world_map_survives_a_save_and_next_crossing() -> void:
 	check_eq(next.map.seed, e.map.seed, "same overworld next crossing")
 	check_eq(int(next.map.junctions[next.at]["layer"]), WorldMap.LAYERS - 1, "crossing 2 starts in the west")
 	check(next.is_seen(e.visited[1]), "fog lifted last crossing stays lifted")
+
+
+func test_every_terrain_and_region_has_scenery() -> void:
+	for t in TravelBackdrop.TERRAINS:
+		var low := String(t).to_lower()
+		for f in ["sky", "mountains", "far", "ground", "foreground"]:
+			check(ResourceLoader.exists("res://assets/backgrounds/travel/%s/%s.png" % [low, f]), "%s travel %s" % [t, f])
+		for part in ["back", "front"]:
+			check(ResourceLoader.exists("res://assets/backgrounds/battle/%s_%s.png" % [low, part]), "%s battle %s" % [t, part])
+	for t in WorldMap.REGION_NAMES:
+		for n in WorldMap.REGION_NAMES[t]:
+			var id := "lm_" + String(n).to_lower().replace(" ", "_")
+			check(ResourceLoader.exists("res://assets/props/%s.png" % id), "landmark for %s" % n)
+
+
+func test_scenery_follows_the_road_and_the_region() -> void:
+	var e := _world()
+	var here := e.scenery()
+	check_eq(here["terrain"], e.map.region_of(e.at)["terrain"], "a stop shows its own region")
+	check(String(here["landmark"]).begins_with("lm_"), "and its landmark")
+	var seg: Dictionary = e.exits()[0]
+	e.start_trip(seg)
+	var road := e.scenery()
+	check_eq(road["terrain"], seg["terrain"], "the road shows its terrain")
+	check_eq(road["landmark"], e.map.landmark(seg["to"]), "and the landmark of the region ahead")
+
+
+func test_region_names_with_a_suffix_share_the_landmark() -> void:
+	var m := WorldMap.generate(2)
+	for rid in m.regions:
+		m.regions[rid]["name"] = "Lanternwood South"
+		m.regions[rid]["terrain"] = "Forest"
+	var any: String = m.junctions.keys()[0]
+	check_eq(m.landmark(any), "lm_lanternwood")

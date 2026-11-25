@@ -194,6 +194,21 @@ func is_seen(id: String) -> bool:
 	return seen.has(id) or visited.has(id)
 
 
+## What the scenery shows now: {"terrain", "landmark"}. On the road, the road's terrain and the
+## landmark of the region ahead; at a stop, the stop's own region (or the last road's terrain).
+func scenery() -> Dictionary:
+	var terrain := "Forest"
+	var where: String = at
+	if not trip.is_empty():
+		terrain = String(trip.get("terrain", terrain))
+		if state == State.TRAVELLING:
+			where = String(trip["to"])
+	var reg := map.region_of(where) if map != null else {}
+	if state != State.TRAVELLING and reg.has("terrain"):
+		terrain = String(reg["terrain"])
+	return {"terrain": terrain, "landmark": map.landmark(where, terrain) if map != null else ""}
+
+
 func stop() -> Dictionary:
 	return map.stop(at)
 
