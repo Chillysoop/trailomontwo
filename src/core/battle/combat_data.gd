@@ -383,6 +383,12 @@ const GUARDIANS := [
 	{"id": "condorgon", "title": "The Condorgon", "terrains": [], "min_risk": 1, "boss": "condorgon",
 		"text": "A shadow swallows the whole pass. A mammoth on vast condor wings lands on the ridge ahead, and its tusks scrape the rock.",
 		"front": ["kodiram", "", "chamoise"], "back": ["", "hyrahawk", ""]},
+	{"id": "tuskursa", "title": "The Tuskursa", "terrains": [], "min_risk": 1, "boss": "tuskursa",
+		"text": "The wind drops dead. A polar bear as tall as a pine walks out of the whiteout, a narwhal's spiral tusk jutting from its jaw.",
+		"front": ["wolverbear", "", "crabrus"], "back": ["", "huskydeer", ""]},
+	{"id": "cobrilla", "title": "The Cobrilla", "terrains": [], "min_risk": 1, "boss": "cobrilla",
+		"text": "The jungle goes quiet. A silverback the size of a temple swings down from the canopy, a cobra's hood flaring behind its head.",
+		"front": ["cassorhino", "", "tapirhino"], "back": ["", "tigruana", ""]},
 ]
 
 ## Enemy strength by segment risk (health and power multiplier).

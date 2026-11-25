@@ -203,3 +203,24 @@ func test_round_robin_runs() -> void:
 	check_eq(rates.size(), 3)
 	for id in rates:
 		check(rates[id] >= 0.0 and rates[id] <= 1.0, "%s rate" % id)
+
+
+func test_the_full_roster_is_300() -> void:
+	var wild := 0
+	var guardians := 0
+	var per_habitat := {}
+	for id in Species.DATA:
+		var r: String = Species.rarity(id)
+		if r == "guardian":
+			guardians += 1
+			continue
+		wild += 1
+		if Species.biome(id) == "":
+			var key := "%s %s" % [Species.info(id)["type"], r]
+			per_habitat[key] = int(per_habitat.get(key, 0)) + 1
+	check_eq(wild, 300, "300 wild Trailomon")
+	check_eq(guardians, 12, "12 guardians")
+	check_eq(CombatData.GUARDIANS.size(), 12, "one guardian per crossing in the cycle")
+	for hab in ["Forest", "River", "Swamp", "Mountain", "Snow", "Jungle"]:
+		check_eq([per_habitat.get(hab + " common", 0), per_habitat.get(hab + " rare", 0), per_habitat.get(hab + " legendary", 0)],
+			[22, 13, 5], "%s has 22 common, 13 rare and 5 legendary" % hab)

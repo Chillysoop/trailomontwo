@@ -24,6 +24,10 @@ const SPECIES := {
 		"capabilities": {}},
 	"condorgon": {"rarity": "guardian", "name": "Condorgon", "type": "Mountain", "size": "large", "hauling": 0,
 		"capabilities": {}},
+	"tuskursa": {"rarity": "guardian", "name": "Tuskursa", "type": "Snow", "size": "large", "hauling": 0,
+		"capabilities": {}},
+	"cobrilla": {"rarity": "guardian", "name": "Cobrilla", "type": "Jungle", "size": "large", "hauling": 0,
+		"capabilities": {}},
 }
 
 const KITS := {
@@ -53,6 +57,12 @@ const KITS := {
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 	"condorgon": {"role": "Boss", "hp": 1150, "atk": 32, "def": 32, "spd": 2.3,
 		"basic": "tusk_gale", "passive": "high_shadow", "ultimate": "skyfall_stampede",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"tuskursa": {"role": "Boss", "hp": 1300, "atk": 36, "def": 34, "spd": 2.2,
+		"basic": "narwhal_lance", "passive": "polar_hunger", "ultimate": "endless_winter",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"cobrilla": {"role": "Boss", "hp": 1300, "atk": 38, "def": 30, "spd": 2.1,
+		"basic": "hood_slam", "passive": "jungle_king", "ultimate": "canopy_crush",
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 }
 
@@ -93,4 +103,12 @@ const MOVES := {
 	"tusk_gale": {"name": "Tusk Gale", "slot": "basic", "pct": 100, "stagger": 20, "splash": 30},
 	"high_shadow": {"name": "High Shadow", "slot": "passive", "kind": "bonus_vs", "vs": "hurt", "amount": 25},
 	"skyfall_stampede": {"name": "Skyfall Stampede", "slot": "ultimate", "target": "row", "pct": 120, "pierce": true, "stagger": 35},
+	# Tuskursa
+	"narwhal_lance": {"name": "Narwhal Lance", "slot": "basic", "pct": 95, "slow": [20, 3], "splash": 30},
+	"polar_hunger": {"name": "Polar Hunger", "slot": "passive", "kind": "bonus_vs", "vs": "slowed", "amount": 25},
+	"endless_winter": {"name": "Endless Winter", "slot": "ultimate", "target": "all", "pct": 85, "slow": [35, 4], "team": {"haste": [25, 4]}},
+	# Cobrilla
+	"hood_slam": {"name": "Hood Slam", "slot": "basic", "pct": 95, "reach": true, "splash": 30},
+	"jungle_king": {"name": "Jungle King", "slot": "passive", "kind": "every", "n": 3, "extra_pct": 50},
+	"canopy_crush": {"name": "Canopy Crush", "slot": "ultimate", "target": "row", "pct": 140, "reach": true, "self": {"dodge": true}},
 }
