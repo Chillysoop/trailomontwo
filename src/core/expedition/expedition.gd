@@ -59,6 +59,9 @@ var memory := {}
 var lineup := {}
 ## Separate dice for battles, so adding battles doesn't change which trail events roll.
 var battle_rng := RandomNumberGenerator.new()
+## Battle items owned (id -> count) and the 3 item slots used in the next battle ("" = empty).
+var items := {}
+var item_slots: Array[String] = ["", "", ""]
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -73,6 +76,7 @@ static func new_default(rng_seed := -1) -> Expedition:
 		e.level_rng.randomize()
 	e.roster = ["brambleback", "coilhusk", "reedwake", "mirelamp", "rimehare", "scythelk"]
 	e.stored = ["gillhorn", "inkhoot"]
+	e.items = {"ironbark_salve": 2, "swiftwind_feather": 1, "smoke_pouch": 1, "rally_horn": 1}
 	e.haulers = ["brambleback", "coilhusk"]
 	e.cargo = [
 		{"name": "Medicine crates", "weight": 40.0, "value": 120},
@@ -712,6 +716,7 @@ func make_battle(ambush := false, rng_seed := -1) -> Battle:
 	var pack: Dictionary = pending_encounter.get("pack", CombatData.PACKS[0])
 	var opts := {"ambush": ambush}
 	opts["seed"] = rng_seed if rng_seed >= 0 else battle_rng.randi()
+	opts["items"] = slotted_items()
 	return Battle.create(
 		{"slots": lineup.duplicate(), "hp": creature_hp.duplicate(), "fatigue": fatigue.duplicate(),
 			"kits": kits.duplicate(true), "boosts": boosts.duplicate(true)},
@@ -726,6 +731,7 @@ const RETREAT_FOOD := 5.0
 const RETREAT_WEAR := 8.0
 const VICTORY_FOOD := 6.0
 const VICTORY_WATER := 4.0
+const ITEM_DROP_CHANCE := 0.5
 
 ## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
 func finish_battle(battle: Battle) -> Array[String]:
@@ -756,6 +762,22 @@ func finish_battle(battle: Battle) -> Array[String]:
 			wagon.integrity = maxi(0, wagon.integrity - BREACH_INTEGRITY)
 			lines.append("Defeat. They break through to the wagon.")
 			lines.append("The wagon takes a beating (-%d%% integrity) and they make off with %d food and %d water." % [BREACH_INTEGRITY, food, drink])
+	# Battle items in the slots are used up; loot after a win.
+	if battle != null and not battle.items_used.is_empty():
+		var used: Array[String] = []
+		for id in battle.items_used:
+			used.append(BattleItems.item_name(id))
+		_spend_items(battle.items_used)
+		lines.append("Used up: %s." % ", ".join(used))
+	if outcome == Battle.Outcome.VICTORY:
+		var found: Array[String] = []
+		for i in (2 if guardian else 1):
+			if battle_rng.randf() < (1.0 if guardian else ITEM_DROP_CHANCE):
+				var id: String = BattleItems.ITEMS.keys()[battle_rng.randi_range(0, BattleItems.ITEMS.size() - 1)]
+				items[id] = int(items.get(id, 0)) + 1
+				found.append(BattleItems.item_name(id))
+		if not found.is_empty():
+			lines.append("Found a battle item: %s." % ", ".join(found))
 	# Experience for everyone who stood in the lineup.
 	if battle != null:
 		var award := Leveling.XP_LOSS
@@ -781,6 +803,47 @@ func finish_battle(battle: Battle) -> Array[String]:
 		state = State.FAILED
 		fail_reason = "The wagon was torn apart in battle."
 	return lines
+
+
+# ---------- battle items ----------
+
+func item_count(id: String) -> int:
+	return int(items.get(id, 0))
+
+
+## How many of an item are left after the ones already in slots.
+func item_free(id: String) -> int:
+	return item_count(id) - item_slots.count(id)
+
+
+## Put an item in a slot ("" clears it). Returns false if none are free.
+func set_item_slot(slot: int, id: String) -> bool:
+	if slot < 0 or slot >= BattleItems.SLOTS:
+		return false
+	if id != "" and (not BattleItems.has(id) or (item_slots[slot] != id and item_free(id) <= 0)):
+		return false
+	item_slots[slot] = id
+	return true
+
+
+func slotted_items() -> Array[String]:
+	var out: Array[String] = []
+	for id in item_slots:
+		if id != "" and item_count(id) > 0:
+			out.append(id)
+	return out
+
+
+## Take used items out of the bag. A slot keeps its item while there are more of it.
+func _spend_items(used: Array[String]) -> void:
+	for id in used:
+		items[id] = maxi(0, item_count(id) - 1)
+		if items[id] == 0:
+			items.erase(id)
+	for i in item_slots.size():
+		var id := item_slots[i]
+		if id != "" and item_slots.slice(0, i + 1).count(id) > item_count(id):
+			item_slots[i] = ""
 
 
 ## Fight the pending encounter instantly (used by travel() and tests).

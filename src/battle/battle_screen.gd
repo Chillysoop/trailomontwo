@@ -50,6 +50,8 @@ var _syn_theirs: RichTextLabel
 var _fight: Button
 var _bench_btn: Button
 var _foe_btn: Button
+var _item_slots: ItemSlots
+var _items_used: RichTextLabel
 var _combat_bar: PanelContainer
 var _stats_panel: PanelContainer
 var _stats: StatsWindow
@@ -178,6 +180,9 @@ func _refresh_lineup() -> void:
 	_fight.disabled = mine.is_empty()
 	_fight.text = "Fight!" if not mine.is_empty() else "Nobody can fight"
 	_foe_btn.visible = practice
+	if _item_slots.crossing == null:
+		_item_slots.crossing = crossing
+	_item_slots.refresh()
 	_bench_btn.visible = _selected != "" and crossing.lineup_cell(_selected) != null
 	_show_info()
 	_grid.queue_redraw()
@@ -324,6 +329,10 @@ func _start_combat() -> void:
 	if not crossing.can_fight():
 		return
 	battle = crossing.make_battle(ambush)
+	var used := ""
+	for id in battle.items_used:
+		used += "{%s:%s}" % ["ik" if battle.items_used.size() == 1 else "i", id]
+	Rich.set_text(_items_used, used)
 	phase = Phase.COMBAT
 	_selected = ""
 	_grid.visible = false
@@ -679,6 +688,8 @@ func _build_ui() -> void:
 	_syn_theirs = Rich.label("", 8, 134)
 	syn.add_child(_syn_theirs)
 	col.add_child(syn)
+	_item_slots = ItemSlots.new()
+	col.add_child(_item_slots)
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 4)
 	_fight = Ui.button("Fight!", 10)
@@ -727,6 +738,9 @@ func _build_ui() -> void:
 	_retreat_btn.pressed.connect(_retreat)
 	Tips.attach(_retreat_btn, func(): return str(_retreat_btn.get_meta("tip", "")))
 	row.add_child(_retreat_btn)
+	_items_used = Rich.label("", 9)
+	_items_used.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_items_used)
 	_ui.add_child(_combat_bar)
 
 	_stats_panel = PanelContainer.new()

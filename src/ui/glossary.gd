@@ -37,6 +37,8 @@ const ENTRIES := {
 		"text": "Coming soon: a permanent boost you can give one of your Trailomon."},
 	"dark_dust": {"name": "Dark dust", "icon": "dark_dust",
 		"text": "Coming soon: a permanent boost with a cost, for one of your Trailomon."},
+	"battle_items": {"name": "Battle items", "icon": "item_slot",
+		"text": "Up to 3 consumables you choose before a fight. Each boosts your whole team (or hinders the foes) for that battle and is used up when it ends. Wins sometimes drop more."},
 	"memory": {"name": "Memory slot", "icon": "memory",
 		"text": "Each move has one memory slot that can hold a move it learned before. Swap them between battles."},
 	"ruin": {"name": "Ruin",
@@ -136,14 +138,18 @@ const ROLES := {"Guard": "role_guard", "Bruiser": "role_bruiser", "Healer": "rol
 
 
 static func has(id: String) -> bool:
-	return ENTRIES.has(id)
+	return ENTRIES.has(id) or BattleItems.has(id)
 
 
 static func entry_name(id: String) -> String:
+	if BattleItems.has(id):
+		return BattleItems.item_name(id)
 	return ENTRIES[id]["name"] if ENTRIES.has(id) else id
 
 
 static func icon(id: String) -> String:
+	if BattleItems.has(id):
+		return id
 	return ENTRIES[id].get("icon", "") if ENTRIES.has(id) else ""
 
 
@@ -154,6 +160,8 @@ static func habitat_id(type: String) -> String:
 
 ## Explanation in Rich markup.
 static func text(id: String) -> String:
+	if BattleItems.has(id):
+		return BattleItems.desc(id) + " Used up when the fight ends."
 	if not ENTRIES.has(id):
 		return ""
 	var e: Dictionary = ENTRIES[id]
