@@ -14,7 +14,7 @@ const LAYERS := 14
 const LAYER_GAP := 180.0
 const HEIGHT := 1000.0
 const SIZE := Vector2(LAYER_GAP * (LAYERS - 1) + 160.0, HEIGHT)
-const TERRAIN_FACTOR := {"Forest": 1.0, "Hills": 1.2, "River": 1.1, "Swamp": 1.2, "Mountain": 1.45, "Blight": 1.3, "Glow": 1.0}
+const TERRAIN_FACTOR := {"Forest": 1.0, "Hills": 1.2, "River": 1.1, "Swamp": 1.2, "Mountain": 1.45, "Snow": 1.35, "Jungle": 1.25, "Blight": 1.3, "Glow": 1.0}
 
 ## Dust biomes: from crossing 3 Dark dust (the Blight) and Light dust (the Glow) spread over
 ## regions of the overworld, more of them on later crossings. Their roads are riskier, their
@@ -32,6 +32,8 @@ const KIND_WEIGHTS := {
 	"River": {"post": 3, "village": 3, "waystation": 2},
 	"Swamp": {"stilts": 4, "ruins": 2, "waystation": 1},
 	"Mountain": {"lookout": 2, "ruins": 1, "waystation": 3, "post": 1},
+	"Snow": {"village": 3, "waystation": 2, "lookout": 1, "post": 1},
+	"Jungle": {"village": 3, "post": 2, "ruins": 2},
 	"Blight": {"warden": 3, "ruins": 3, "lookout": 1},
 	"Glow": {"sanctum": 3, "village": 1, "lookout": 1},
 }
@@ -55,6 +57,8 @@ const NAME_PARTS := {
 	"River": [["Reed", "Weir", "Otter", "Silver", "Rush", "Willow", "Kettle", "Mill"], ["ford", "bridge", "bank", "wharf", "falls", "landing", "mouth", "pool"]],
 	"Swamp": [["Bog", "Mire", "Fen", "Murk", "Thorn", "Gloam", "Rot", "Peat"], ["marsh", "mire", "stilts", "hollow", "pool", "reach", "wallow", "end"]],
 	"Mountain": [["Cog", "Iron", "Slate", "Frost", "Crag", "Anvil", "Spire", "Flint"], ["spire", "peak", "pass", "watch", "crag", "top", "cleft", "hold"]],
+	"Snow": [["Rime", "Snow", "Hoar", "Ice", "Drift", "Sleet", "White", "Glacier"], ["holt", "fall", "haven", "lodge", "mere", "field", "stead", "hollow"]],
+	"Jungle": [["Vine", "Parrot", "Mango", "Liana", "Orchid", "Canopy", "Ember", "Jade"], ["hold", "falls", "grove", "tangle", "court", "bloom", "reach", "landing"]],
 }
 const REGION_NAMES := {
 	"Forest": ["The Mossdeeps", "Lanternwood", "The Green Tangle", "Elderglade"],
@@ -62,6 +66,8 @@ const REGION_NAMES := {
 	"River": ["The Silverrun", "Reedwater Vale", "The Kettle Flats", "Otterbend"],
 	"Swamp": ["The Murkfens", "Gloamwallow", "The Rotting Reach", "Peatmoor"],
 	"Mountain": ["The Cogspires", "Frostcrag Range", "The Anvil Teeth", "Slate Wall"],
+	"Snow": ["The White Reach", "Frostfang Pass", "Rimeholt", "The Hoarwood"],
+	"Jungle": ["The Emerald Canopy", "Vinehold", "The Sunken Gardens", "Parrotspire"],
 	"Blight": ["The Ashen Hollow", "Duskmire Scar", "The Withering"],
 	"Glow": ["Lumen Meadows", "The Shining Steppe", "Halo Glade"],
 }
@@ -165,7 +171,7 @@ static func generate(rng_seed: int) -> WorldMap:
 
 
 func _make_regions(rng: RandomNumberGenerator) -> void:
-	var terrains := ["Forest", "Hills", "River", "Swamp", "Mountain"]
+	var terrains := ["Forest", "Hills", "River", "Swamp", "Mountain", "Snow", "Jungle"]
 	var name_used := {}
 	var cols := 7
 	for c in cols:

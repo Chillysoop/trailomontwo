@@ -24,8 +24,8 @@ func _run() -> void:
 	crossing.water = 9999.0
 	var m := crossing.map
 	var picks := {"Forest": "lm_lanternwood", "Hills": "lm_copper_barrows", "River": "lm_the_silverrun",
-		"Swamp": "lm_the_murkfens", "Mountain": "lm_the_cogspires", "Blight": "lm_the_ashen_hollow", "Glow": "lm_halo_glade"}
-	var stops := {"Forest": "village", "Hills": "lookout", "River": "post", "Swamp": "ruins", "Mountain": "waystation", "Blight": "warden", "Glow": "sanctum"}
+		"Swamp": "lm_the_murkfens", "Mountain": "lm_the_cogspires", "Snow": "lm_the_hoarwood", "Jungle": "lm_vinehold", "Blight": "lm_the_ashen_hollow", "Glow": "lm_halo_glade"}
+	var stops := {"Forest": "village", "Hills": "lookout", "River": "post", "Swamp": "ruins", "Mountain": "waystation", "Snow": "village", "Jungle": "village", "Blight": "warden", "Glow": "sanctum"}
 	# The overworld on crossing 5, all revealed, with the dust biomes spread over it.
 	m.spread_biomes(5)
 	for id in m.junctions:

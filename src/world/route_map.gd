@@ -16,6 +16,7 @@ const GOAL := Color("f2a35e")
 const LAND := {
 	"Forest": Color("31533a"), "Hills": Color("5d6a3c"), "River": Color("2f5566"),
 	"Swamp": Color("3d4b36"), "Mountain": Color("5b5b66"),
+	"Snow": Color("8a9cae"), "Jungle": Color("2f6a3a"),
 	"Blight": Color("4a2f5c"), "Glow": Color("b8a85a"),
 }
 const REVEAL := 95.0
