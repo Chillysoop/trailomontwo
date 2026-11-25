@@ -118,6 +118,7 @@ func test_dust_biome_species_stay_in_their_biome() -> void:
 	check(not Encounters.pool("Hills", 3).has("thornrat"), "not in the Hills")
 	check(not blight.has("mossmole"), "only biome species in the Blight")
 	check(not Encounters.pool("Glow", 3).has("thornrat"), "not in the Glow")
+	check(not blight.has("dawnhare"), "no Glow Trailomon in the Blight")
 	for id in blight:
 		check_eq(Species.biome(id), "Blight")
 	var habitats := {}
@@ -131,6 +132,13 @@ func test_dust_biome_species_stay_in_their_biome() -> void:
 	e.set_crossing(3)
 	check(e.wild_for("Blight").has("thornrat"), "wild Blight Trailomon to catch")
 	check(not e.wild_for("Blight").has("mossmole"), "no ordinary ones")
+	var glow := Encounters.pool("Glow", 3)
+	check(glow.has("dawnhare") and not glow.has("thornrat"), "Glow Trailomon in the Glow, Blight ones in the Blight")
+	var glow_habitats := {}
+	for id in Species.DATA:
+		if Species.biome(id) == "Glow":
+			glow_habitats[Species.info(id)["type"]] = int(glow_habitats.get(Species.info(id)["type"], 0)) + 1
+	check_eq(glow_habitats, {"Forest": 5, "River": 5, "Swamp": 5, "Mountain": 5, "Snow": 5, "Jungle": 5})
 
 
 func test_evolved_forms_turn_up_later() -> void:

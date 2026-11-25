@@ -368,6 +368,9 @@ const GUARDIANS := [
 	{"id": "duskmaw", "title": "The Duskmaw", "terrains": [], "min_risk": 1, "boss": "duskmaw",
 		"text": "Dark dust drifts across the road like smoke. A panther the size of a wagon drops from the dead canopy on wide bat wings, and its brood follows.",
 		"front": ["vampape", "", "sootseal"], "back": ["howlbat", "", "howlbat"]},
+	{"id": "dawnshell", "title": "The Dawnshell", "terrains": [], "min_risk": 1, "boss": "dawnshell",
+		"text": "The river turns to gold. A sea turtle as big as a hill rises from the water, a fan of shining feathers opening over its shell.",
+		"front": ["halotaur", "", "pearlotter"], "back": ["seraseal", "", "lumifrog"]},
 ]
 
 ## Enemy strength by segment risk (health and power multiplier).

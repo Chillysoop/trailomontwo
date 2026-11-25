@@ -14,6 +14,8 @@ const SPECIES := {
 		"capabilities": {}},
 	"duskmaw": {"rarity": "guardian", "name": "Duskmaw", "type": "Jungle", "size": "large", "hauling": 0,
 		"capabilities": {}},
+	"dawnshell": {"rarity": "guardian", "name": "Dawnshell", "type": "River", "size": "large", "hauling": 0,
+		"capabilities": {}},
 }
 
 const KITS := {
@@ -28,6 +30,9 @@ const KITS := {
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 	"duskmaw": {"role": "Boss", "hp": 950, "atk": 33, "def": 28, "spd": 2.0,
 		"basic": "dusk_rake", "passive": "shadow_pelt", "ultimate": "nightfall_pounce",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"dawnshell": {"role": "Boss", "hp": 1150, "atk": 35, "def": 36, "spd": 2.2,
+		"basic": "sunfan_wave", "passive": "dawn_drink", "ultimate": "radiant_tide",
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 }
 
@@ -48,4 +53,8 @@ const MOVES := {
 	"dusk_rake": {"name": "Dusk Rake", "slot": "basic", "pct": 95, "reach": true, "splash": 30},
 	"shadow_pelt": {"name": "Shadow Pelt", "slot": "passive", "kind": "every", "n": 3, "extra_pct": 50},
 	"nightfall_pounce": {"name": "Nightfall Pounce", "slot": "ultimate", "target": "all", "pct": 90, "reach": true, "self": {"dodge": true}},
+	# Dawnshell
+	"sunfan_wave": {"name": "Sunfan Wave", "slot": "basic", "pct": 85, "wash": 60, "splash": 30},
+	"dawn_drink": {"name": "Dawn Drink", "slot": "passive", "kind": "drain", "pct": 25},
+	"radiant_tide": {"name": "Radiant Tide", "slot": "ultimate", "target": "all", "pct": 85, "wash": 80, "team": {"heal_maxhp": 8, "cleanse": true}},
 }

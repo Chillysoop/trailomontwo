@@ -51,7 +51,7 @@ func _packs() -> void:
 
 
 func _crossings() -> void:
-	for n in range(1, 6):
+	for n in range(1, CombatData.GUARDIANS.size() + 1):
 		for level in [1 + (n - 1) * 3, 1 + (n - 1) * 5]:
 			var g := CombatData.guardian_for(n)
 			var line := "crossing %d, team Lv %2d: guardian %s %d%%" % [n, level, g["id"], _rate(level, n, g, CombatData.GUARDIAN_SCALE)]
