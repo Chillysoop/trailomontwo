@@ -27,7 +27,7 @@ const BASE := {
 		"capabilities": {"strength": 2, "steady": 3}},
 	"reedwake": {"rarity": "common", "name": "Reedwake", "type": "River", "size": "medium", "hauling": 0,
 		"capabilities": {"float": 3, "scout": 1, "forage": 1}},
-	"mirelamp": {"rarity": "common", "name": "Mirelamp", "type": "Swamp", "size": "small", "hauling": 0,
+	"mirelamp": {"rarity": "common", "name": "Mirelamp", "type": "Swamp", "size": "small", "hauling": 0, "evolves_to": "anglenewt",
 		"capabilities": {"light": 3, "heal": 2, "scout": 1, "forage": 2}},
 	"rimehare": {"rarity": "common", "name": "Rimehare", "type": "Snow", "size": "small", "hauling": 0,
 		"capabilities": {"scout": 3, "cold": 2, "forage": 2}},
@@ -40,7 +40,7 @@ const BASE := {
 	# Wild creatures met in battle (not in the starting roster).
 	"thornfang": {"rarity": "common", "name": "Thornfang", "type": "Forest", "size": "medium", "hauling": 0, "evolves_to": "briarwolf",
 		"capabilities": {"scout": 2, "guard": 1, "forage": 2}},
-	"cairnram": {"rarity": "common", "name": "Cairnram", "type": "Mountain", "size": "large", "hauling": 120,
+	"cairnram": {"rarity": "common", "name": "Cairnram", "type": "Mountain", "size": "large", "hauling": 120, "evolves_to": "rhinoram",
 		"capabilities": {"clear": 2, "strength": 3}},
 	"lianetail": {"rarity": "common", "name": "Lianetail", "type": "Jungle", "size": "small", "hauling": 0,
 		"capabilities": {"scout": 3, "clear": 1, "forage": 3}},
