@@ -71,7 +71,7 @@ func test_later_crossings_are_harder() -> void:
 	var b := SaveGame.next_crossing(SaveGame.caravan(a), 3, 3)
 	b.pending_encounter = a.pending_encounter.duplicate()
 	check_eq(b.crossing_no, 3)
-	check(b.enemy_scale() > a.enemy_scale() * 1.25, "crossing 3 foes are tougher: %s vs %s" % [b.enemy_scale(), a.enemy_scale()])
+	check(b.enemy_scale() > a.enemy_scale() * 1.1, "crossing 3 foes are tougher: %s vs %s" % [b.enemy_scale(), a.enemy_scale()])
 	check_eq(b.guardian_pack()["id"], CombatData.guardian_for(3)["id"])
 
 

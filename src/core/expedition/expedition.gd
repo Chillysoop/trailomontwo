@@ -23,6 +23,18 @@ var day := 1
 ## a different guardian.
 var crossing_no := 1
 var at := TestRoute.START
+## "world" makes a generated overworld; "test" uses the small hand-made TestRoute (tests set this).
+static var default_map := "world"
+## The overworld (kept across crossings), the fog of war lifted so far, and species met so far.
+var map: WorldMap
+## Stops you can see on the map: junction id -> true.
+var seen := {}
+## Species met in battle or on the road: id -> true. Only these show on the map.
+var encountered := {}
+## Where on the map each species was met: region id -> {species: true}.
+var met_in := {}
+## Rumors heard: junction id -> markup.
+var rumors := {}
 var state := State.AT_JUNCTION
 var fail_reason := ""
 var humans := 1
@@ -76,6 +88,8 @@ var dust_used := {}
 var pending_recruit := ""
 ## Trail life (see TrailLife and docs/trail-life.md): coins, today's weather, pace, rations, fever.
 var coins := 30
+## Starting coins on a full overworld crossing (the hand-made test route keeps 30).
+const WORLD_START_COINS := 70
 var weather := "clear"
 var pace := "steady"
 var rations := "normal"
@@ -119,15 +133,22 @@ static func new_default(rng_seed := -1) -> Expedition:
 		e.fatigue[id] = 0.0
 		e.creature_hp[id] = e.max_hp(id)
 	e.tidy_lineup()
-	e.visited = [TestRoute.START]
+	if default_map == "test":
+		e.map = WorldMap.test_route()
+	else:
+		e.map = WorldMap.generate(rng_seed if rng_seed >= 0 else randi())
+		# The overworld is long: set out with a purse for the stalls along the way.
+		e.coins = WORLD_START_COINS
+	for id in e.roster + e.stored:
+		e.encountered[id] = true
+	e.setup_map(1)
 	return e
 
 
 ## Which crossing this is: sets the guardian and how tough the foes are (the map hooks in here too).
 func set_crossing(no: int) -> void:
 	crossing_no = maxi(1, no)
-	if has_method("setup_map"):
-		call("setup_map", crossing_no)
+	setup_map(crossing_no)
 
 
 ## The guardian waiting on the last stretch of this crossing.
@@ -141,6 +162,75 @@ const CROSSING_SCALE := 0.06
 
 func crossing_factor() -> float:
 	return 1.0 + CROSSING_SCALE * float(crossing_no - 1)
+
+
+## Start crossing `no` on the map: its start and goal, back at the start, fog lifted around it.
+func setup_map(no: int) -> void:
+	if map == null:
+		map = WorldMap.test_route() if default_map == "test" else WorldMap.generate(randi())
+	map.setup_crossing(no)
+	at = map.start
+	visited = [at]
+	state = State.AT_JUNCTION
+	trip = {}
+	seen[map.goal] = true
+	reveal(at)
+
+
+## Lift the fog around a stop: its neighbours, two roads out with a sharp scout (job rank 4+),
+## three from a lookout.
+func reveal(id: String) -> void:
+	var depth := 1
+	var scout := best_helper("scout")
+	if scout != "" and job_rank(scout, "scout") >= 4:
+		depth = 2
+	if map.kind_of(id) == "lookout":
+		depth = 3
+	for j in map.around(id, depth):
+		seen[j] = true
+
+
+func is_seen(id: String) -> bool:
+	return seen.has(id) or visited.has(id)
+
+
+func stop() -> Dictionary:
+	return map.stop(at)
+
+
+## The rumor at this stop: points at a stop further on and lifts the fog over it.
+func hear_rumor() -> String:
+	if rumors.has(at):
+		return rumors[at]
+	var base: Dictionary = stop()
+	if String(base.get("rumor", "")) != "":
+		rumors[at] = base["rumor"]
+		return rumors[at]
+	var r := RandomNumberGenerator.new()
+	r.seed = int(base.get("rumor_seed", 0))
+	var far: Array[String] = []
+	for j in map.around(at, 4):
+		if not is_seen(j):
+			far.append(j)
+	far.sort()
+	if far.is_empty():
+		rumors[at] = ""
+		return ""
+	var target: String = far[r.randi_range(0, far.size() - 1)]
+	seen[target] = true
+	var reg := map.region_of(target)
+	var kind := map.kind_of(target)
+	var lines := {
+		"town": "{i:settlement} A big town, %s, lies in %s.",
+		"village": "{i:settlement} Friendly folk at %s, in %s.",
+		"post": "{i:trade} Traders gather at %s, in %s.",
+		"waystation": "{i:camp} A waystation at %s, in %s.",
+		"ruins": "{i:ev_find} Old ruins at %s, in %s. Bring {k:cap_light|light}.",
+		"stilts": "{i:settlement} Stilt houses at %s, deep in %s.",
+		"lookout": "{i:job_scout} From the lookout at %s you can see half of %s.",
+	}
+	rumors[at] = String(lines.get(kind, "{i:progress} The road reaches %s, in %s.")) % [map.name_of(target), reg.get("name", "the wilds")]
+	return rumors[at]
 
 
 func daily_provisions() -> float:
@@ -223,7 +313,7 @@ func trip_distance(seg: Dictionary, pushing: bool) -> float:
 
 
 func exits() -> Array[Dictionary]:
-	return TestRoute.exits(at)
+	return map.exits(at)
 
 
 ## Travel one day along a segment. Returns a line for the log.
@@ -337,7 +427,7 @@ func step_day() -> bool:
 		return false
 	if trip_days_left > 0.0 or not pending_event.is_empty() or not pending_encounter.is_empty():
 		return true
-	if trip["to"] == TestRoute.GOAL and guardian_enabled and not guardian_faced:
+	if trip["to"] == map.goal and guardian_enabled and not guardian_faced:
 		guardian_faced = true
 		pending_encounter = {"pack": guardian_pack(), "scale": CombatData.GUARDIAN_SCALE, "guardian": true}
 		journal.append(guardian_pack()["title"] + " blocks the way!")
@@ -350,8 +440,9 @@ func _arrive() -> bool:
 	trip_days_left = 0.0
 	at = trip["to"]
 	visited.append(at)
-	journal.append("Reached %s." % TestRoute.junction_name(at))
-	state = State.ARRIVED if at == TestRoute.GOAL else State.AT_JUNCTION
+	journal.append("Reached %s." % map.name_of(at))
+	reveal(at)
+	state = State.ARRIVED if at == map.goal else State.AT_JUNCTION
 	trip = {}
 	return false
 
@@ -623,6 +714,10 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 		var wild := wild_for(terrain)
 		if not wild.is_empty():
 			pending_recruit = Species.pick_weighted(wild, life_rng)
+
+
+			pending_recruit = wild[life_rng.randi_range(0, wild.size() - 1)]
+			meet(pending_recruit)
 			d.append({"icon": "ev_wildlife", "amount": 0, "who": pending_recruit, "label": "wants to join"})
 	if fx.has("battle") and state == State.TRAVELLING:
 		var pack: Dictionary = TrailEvents.PACKS.get(String(fx["battle"]), {})
@@ -710,11 +805,34 @@ func trigger_moment(m: Dictionary) -> Dictionary:
 		var g: Array = TrailMoments.GRAVES[life_rng.randi_range(0, TrailMoments.GRAVES.size() - 1)]
 		rec["grave"] = g
 	if m["id"] == "wild_watch":
-		var wild := wild_for(terrain)
-		rec["wild"] = wild[life_rng.randi_range(0, wild.size() - 1)] if not wild.is_empty() else "thornfang"
+		var met: Array = encountered.keys().filter(func(id): return Species.DATA.has(id) and not roster.has(id) and id != "hollowstag")
+		met.sort()
+		rec["wild"] = met[life_rng.randi_range(0, met.size() - 1)] if not met.is_empty() else ""
 	moments.append(rec)
 	journal.append(String(m["text"]).replace("{who}", Species.info(who)["name"] if who != "" else "Someone"))
 	return rec
+
+
+## Mark a species as met, here on the map.
+func meet(species: String) -> void:
+	encountered[species] = true
+	if map == null:
+		return
+	var where: String = at
+	if state == State.TRAVELLING and not trip.is_empty():
+		where = String(trip["to"])
+	var rid := String(map.junctions.get(where, {}).get("region", ""))
+	if rid != "":
+		var m: Dictionary = met_in.get(rid, {})
+		m[species] = true
+		met_in[rid] = m
+
+
+## Mark every species in a pack as met.
+func meet_pack(pack: Dictionary) -> void:
+	for id in pack.get("front", []) + pack.get("back", []) + [pack.get("boss", "")]:
+		if String(id) != "":
+			meet(String(id))
 
 
 # ---------- pace, rations, settlements ----------
@@ -731,7 +849,7 @@ func set_rations(id: String) -> void:
 
 ## How many of a good are left in this stop's stall.
 func stock_left(good: String) -> int:
-	var s := Settlements.stall(at)
+	var s: Dictionary = stop()["stall"]
 	if not s.has(good):
 		return 0
 	return int(s[good]["stock"]) - int(bought.get(at, {}).get(good, 0))
@@ -740,14 +858,14 @@ func stock_left(good: String) -> int:
 func can_buy(good: String) -> bool:
 	if state != State.AT_JUNCTION or stock_left(good) <= 0:
 		return false
-	return coins >= int(Settlements.stall(at)[good]["price"])
+	return coins >= int(stop()["stall"][good]["price"])
 
 
 ## Buy one lot of a good at this stop. Returns what changed, or [] if it can't.
 func buy(good: String) -> Array:
 	if not can_buy(good):
 		return []
-	var lot: Dictionary = Settlements.stall(at)[good]
+	var lot: Dictionary = stop()["stall"][good]
 	coins -= int(lot["price"])
 	var b: Dictionary = bought.get(at, {})
 	b[good] = int(b.get(good, 0)) + 1
@@ -1028,6 +1146,7 @@ func can_fight() -> bool:
 ## Build the battle for the pending encounter from the lineup, health and fatigue.
 func make_battle(ambush := false, rng_seed := -1) -> Battle:
 	var pack: Dictionary = pending_encounter.get("pack", CombatData.PACKS[0])
+	meet_pack(pack)
 	var opts := {"ambush": ambush}
 	opts["seed"] = rng_seed if rng_seed >= 0 else battle_rng.randi()
 	opts["items"] = slotted_items()
