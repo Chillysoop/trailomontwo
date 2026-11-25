@@ -20,6 +20,10 @@ const SPECIES := {
 		"capabilities": {}},
 	"sturgebull": {"rarity": "guardian", "name": "Sturgebull", "type": "River", "size": "large", "hauling": 0,
 		"capabilities": {}},
+	"mirewyrm": {"rarity": "guardian", "name": "Mirewyrm", "type": "Swamp", "size": "large", "hauling": 0,
+		"capabilities": {}},
+	"condorgon": {"rarity": "guardian", "name": "Condorgon", "type": "Mountain", "size": "large", "hauling": 0,
+		"capabilities": {}},
 }
 
 const KITS := {
@@ -43,6 +47,12 @@ const KITS := {
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 	"sturgebull": {"role": "Boss", "hp": 1300, "atk": 38, "def": 34, "spd": 2.2,
 		"basic": "barbel_ram", "passive": "ancient_gills", "ultimate": "river_stampede",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"mirewyrm": {"role": "Boss", "hp": 1650, "atk": 42, "def": 32, "spd": 2.2,
+		"basic": "gill_spew", "passive": "rotting_slime", "ultimate": "drowning_mire",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"condorgon": {"role": "Boss", "hp": 1150, "atk": 32, "def": 32, "spd": 2.3,
+		"basic": "tusk_gale", "passive": "high_shadow", "ultimate": "skyfall_stampede",
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 }
 
@@ -75,4 +85,12 @@ const MOVES := {
 	"barbel_ram": {"name": "Barbel Ram", "slot": "basic", "pct": 95, "wash": 60, "splash": 30},
 	"ancient_gills": {"name": "Ancient Gills", "slot": "passive", "kind": "drain", "pct": 20},
 	"river_stampede": {"name": "River Stampede", "slot": "ultimate", "target": "row", "pct": 130, "wash": 100},
+	# Mirewyrm
+	"gill_spew": {"name": "Gill Spew", "slot": "basic", "pct": 90, "poison": [18, 4], "splash": 35},
+	"rotting_slime": {"name": "Rotting Slime", "slot": "passive", "kind": "bonus_vs", "vs": "poisoned", "amount": 25},
+	"drowning_mire": {"name": "Drowning Mire", "slot": "ultimate", "target": "all", "pct": 85, "poison": [24, 5], "weaken": [25, 4]},
+	# Condorgon
+	"tusk_gale": {"name": "Tusk Gale", "slot": "basic", "pct": 100, "stagger": 20, "splash": 30},
+	"high_shadow": {"name": "High Shadow", "slot": "passive", "kind": "bonus_vs", "vs": "hurt", "amount": 25},
+	"skyfall_stampede": {"name": "Skyfall Stampede", "slot": "ultimate", "target": "row", "pct": 120, "pierce": true, "stagger": 35},
 }
