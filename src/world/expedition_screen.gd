@@ -57,6 +57,16 @@ var _day_timer := 0.0
 var _companions: CompanionsScreen
 var _comp_btn: Button
 
+## Which crossing this caravan is on (1 for a new caravan), and the save slot it autosaves to
+## ("" = no saving, e.g. tests and previews).
+var crossing_no := 1
+var _slot := ""
+## The caravan (team progress) as this crossing began, so a failed crossing can be retried.
+var _start := {}
+## True while a battle is open, and whether it was an ambush, so a reload lands in the fight.
+var _in_battle := false
+var _battle_ambush := false
+
 
 func _ready() -> void:
 	_backdrop = TravelBackdrop.new()
@@ -73,8 +83,32 @@ func _ready() -> void:
 	start_new()
 
 
+## Open the save picked on the title screen, or start a brand-new caravan.
 func start_new() -> void:
-	crossing = Expedition.new_default()
+	_slot = SaveGame.current_slot
+	var loaded: Dictionary = SaveGame.pending
+	SaveGame.pending = {}
+	if loaded.is_empty():
+		_begin(Expedition.new_default(), 1)
+		return
+	crossing = loaded["expedition"]
+	crossing_no = int(loaded["crossing_no"])
+	_start = loaded["start"] if not (loaded["start"] as Dictionary).is_empty() else SaveGame.caravan(crossing)
+	_reset_view()
+	_resume(loaded["ui"])
+
+
+## Start a crossing (new, next or retried) and save it.
+func _begin(e: Expedition, no: int) -> void:
+	crossing = e
+	crossing_no = no
+	_start = SaveGame.caravan(e)
+	_continue_to = ""
+	_reset_view()
+	_show_junction()
+
+
+func _reset_view() -> void:
 	_setup_caravan()
 	_caravan.set_walking(false)
 	_backdrop.set_moving(false)
@@ -85,7 +119,91 @@ func start_new() -> void:
 		t.queue_free()
 	_map.expedition = crossing
 	_ambience.set_weather(crossing.weather)
-	_show_junction()
+
+
+## Pick up a loaded crossing where it was left.
+func _resume(ui: Dictionary) -> void:
+	match crossing.state:
+		Expedition.State.ARRIVED:
+			_show_end(true)
+			return
+		Expedition.State.FAILED:
+			_show_end(false)
+			return
+		Expedition.State.AT_JUNCTION:
+			_show_junction()
+			return
+	_panel.visible = false
+	_refresh_hud()
+	if bool(ui.get("battle", false)) and not crossing.pending_encounter.is_empty():
+		if SaveGame.is_hardcore(_slot):
+			_auto_battle(bool(ui.get("ambush", false)))
+		else:
+			_open_battle(bool(ui.get("ambush", false)))
+	elif String(ui.get("next", "")) != "" and not crossing.pending_encounter.is_empty():
+		_open_battle(String(ui["next"]) == "ambush")
+	elif not crossing.pending_event.is_empty():
+		_show_event()
+	elif not crossing.pending_encounter.is_empty():
+		_show_encounter()
+	else:
+		_ambience.set_terrain(String(crossing.trip.get("terrain", "Forest")))
+		_resume_travel()
+		_day_timer = SECONDS_PER_DAY
+
+
+## Hardcore: leaving in the middle of a fight doesn't undo it. The fight plays out with the
+## lineup and items you had, and you see how it went.
+func _auto_battle(ambush: bool) -> void:
+	var b := crossing.make_battle(ambush)
+	b.run_to_end()
+	var lines := crossing.finish_battle(b)
+	_event.visible = true
+	Rich.set_text(_event_title, "{i:risk} The fight went on without you")
+	_event_text.text = "Hardcore: leaving mid-battle doesn't stop it."
+	for c in _event_choices.get_children():
+		c.queue_free()
+	Rich.set_text(_event_result, "[color=#f0d27a]%s[/color]" % "\n".join(lines))
+	_event_result.visible = true
+	_event_continue.text = "Continue"
+	_event_continue.visible = true
+	_continue_to = ""
+	_refresh_hud()
+
+
+## Autosave to the picked slot. A failed hardcore crossing deletes the save instead.
+func _save() -> void:
+	if _slot == "" or crossing == null:
+		return
+	if SaveGame.is_hardcore(_slot) and crossing.state == Expedition.State.FAILED:
+		SaveGame.delete(_slot)
+		return
+	SaveGame.write(_slot, crossing, crossing_no, _start,
+		{"next": _continue_to, "battle": _in_battle, "ambush": _battle_ambush})
+
+
+func _to_title() -> void:
+	_save()
+	get_tree().change_scene_to_file("res://scenes/title_screen.tscn")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_save()
+
+
+## After reaching Westwatch: the same team sets out on a new crossing.
+func _next_crossing() -> void:
+	_begin(SaveGame.next_crossing(SaveGame.caravan(crossing)), crossing_no + 1)
+
+
+## After a failed crossing: try it again with the team as it was when the crossing began.
+## A failed hardcore caravan is gone, so it starts over from scratch.
+func _retry() -> void:
+	if SaveGame.is_hardcore(_slot):
+		_begin(Expedition.new_default(), 1)
+	else:
+		_begin(SaveGame.next_crossing(_start), crossing_no)
 
 
 # ---------- junction ----------
@@ -207,7 +325,7 @@ func _halt() -> void:
 	_ambience.set_moving(false)
 
 
-func _resume() -> void:
+func _resume_travel() -> void:
 	_backdrop.set_moving(true)
 	_caravan.set_walking(true)
 	_ambience.set_moving(true)
@@ -351,7 +469,7 @@ func _continue_after_event() -> void:
 		_open_battle(next == "ambush")
 		return
 	if crossing.state == Expedition.State.TRAVELLING:
-		_resume()
+		_resume_travel()
 		_day_timer = SECONDS_PER_DAY
 	else:
 		_after_trip()
@@ -423,6 +541,9 @@ func _open_battle(ambushed: bool) -> void:
 	_caravan.visible = false
 	_ambience.set_active(false)
 	_battle = BattleScreen.new()
+	_in_battle = true
+	_battle_ambush = ambushed
+	_save()
 	_battle.setup(crossing, ambushed)
 	_battle.finished.connect(_on_battle_finished)
 	add_child(_battle)
@@ -431,6 +552,7 @@ func _open_battle(ambushed: bool) -> void:
 func _on_battle_finished(lines: Array) -> void:
 	_battle.queue_free()
 	_battle = null
+	_in_battle = false
 	_ui.visible = true
 	_backdrop.visible = true
 	_caravan.visible = true
@@ -632,6 +754,7 @@ func _refresh_hud() -> void:
 	if _comp_btn != null:
 		var n := crossing.pending_count()
 		_comp_btn.text = "Companions (%d level up%s!)" % [n, "" if n == 1 else "s"] if n > 0 else "Companions"
+	_save()
 
 
 func _show_end(won: bool) -> void:
@@ -639,12 +762,21 @@ func _show_end(won: bool) -> void:
 	_end.visible = true
 	var title: Label = _end.find_child("EndTitle", true, false)
 	var body: Label = _end.find_child("EndBody", true, false)
+	var again: Button = _end.find_child("Again", true, false)
 	if won:
-		title.text = "You reached Westwatch"
-		body.text = "Day %d. %d food and %d water left.\nDelivered %d cargo worth %d. Wagon at %d%%." % [crossing.day, roundi(crossing.provisions), roundi(crossing.water), crossing.cargo.size(), crossing.cargo_value(), crossing.wagon.integrity]
+		title.text = "Crossing %d: you reached Westwatch" % crossing_no
+		body.text = "Day %d. %d food and %d water left.\nDelivered %d cargo worth %d. Wagon at %d%%.\nYour team, levels, dust and items come with you." % [crossing.day, roundi(crossing.provisions), roundi(crossing.water), crossing.cargo.size(), crossing.cargo_value(), crossing.wagon.integrity]
+		again.text = "Next crossing"
 	else:
-		title.text = "The crossing failed"
+		title.text = "Crossing %d failed" % crossing_no
 		body.text = "%s\nDay %d, %d visited stops." % [crossing.fail_reason, crossing.day, crossing.visited.size()]
+		if SaveGame.is_hardcore(_slot):
+			body.text += "\nHardcore: this caravan is gone for good."
+			again.text = "New hardcore caravan"
+		else:
+			body.text += "\nTrying again starts this crossing over, with your team as it set out."
+			again.text = "Try this crossing again"
+	_save()
 	(_end.find_child("Again", true, false) as Button).grab_focus.call_deferred()
 
 
@@ -832,10 +964,10 @@ func _build_ui() -> void:
 	ecol.add_child(eb)
 	var again := _button("Try again", 10)
 	again.name = "Again"
-	again.pressed.connect(start_new)
+	again.pressed.connect(func(): _next_crossing() if crossing.state == Expedition.State.ARRIVED else _retry())
 	ecol.add_child(again)
 	var back := _button("Back to title", 10)
-	back.pressed.connect(get_tree().change_scene_to_file.bind("res://scenes/title_screen.tscn"))
+	back.pressed.connect(_to_title)
 	ecol.add_child(back)
 	_ui.add_child(_end)
 
@@ -855,4 +987,4 @@ func _button(text: String, size: int) -> Button:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		get_tree().change_scene_to_file("res://scenes/title_screen.tscn")
+		_to_title()

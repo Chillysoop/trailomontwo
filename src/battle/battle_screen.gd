@@ -150,7 +150,7 @@ func _refresh_lineup() -> void:
 		bar.frac = float(crossing.creature_hp.get(id, 0.0)) / crossing.max_hp(id)
 		bar.queue_redraw()
 	var pack := _pack()
-	var scale := float(crossing.pending_encounter.get("scale", 1.0))
+	var scale := crossing.enemy_scale()
 	for row in [Formation.Row.FRONT, Formation.Row.BACK]:
 		var ids: Array = pack["front" if row == Formation.Row.FRONT else "back"]
 		for lane in ids.size():
@@ -289,7 +289,7 @@ func _click_lineup(p: Vector2) -> void:
 		return
 	var ecell: Variant = _cell_at(p, Formation.Side.ENEMY)
 	var pack := _pack()
-	var scale := float(crossing.pending_encounter.get("scale", 1.0))
+	var scale := crossing.enemy_scale()
 	if ecell != null:
 		var id: String = pack["front" if ecell.x == Formation.Row.FRONT else "back"][ecell.y]
 		if id != "":

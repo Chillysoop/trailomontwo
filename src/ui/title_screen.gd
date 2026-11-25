@@ -2,7 +2,7 @@ extends Node2D
 ## Title screen over the scrolling travel scenery.
 
 const SCENES := {
-	"Start expedition": "res://scenes/expedition.tscn",
+	"Start expedition": "",
 	"Travel preview": "res://scenes/travel_preview.tscn",
 	"Practice battle": "res://scenes/battle.tscn",
 }
@@ -38,7 +38,10 @@ func _ready() -> void:
 	var first: Button
 	for text in SCENES:
 		var b := _button(text)
-		b.pressed.connect(get_tree().change_scene_to_file.bind(SCENES[text]))
+		if SCENES[text] == "":
+			b.pressed.connect(func(): SaveSlots.open(ui).closed.connect(b.grab_focus))
+		else:
+			b.pressed.connect(get_tree().change_scene_to_file.bind(SCENES[text]))
 		col.add_child(b)
 		if first == null:
 			first = b
