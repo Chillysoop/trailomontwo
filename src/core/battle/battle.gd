@@ -18,6 +18,12 @@ extends RefCounted
 enum Outcome { ONGOING, VICTORY, DEFEAT, WITHDRAW, RETREAT }
 
 const TICK := 0.05
+## Every heal in battle (moves, drain, passives) is scaled by this (habitat balance knob).
+const HEAL_MULT := 0.5
+## Every shield a move or passive gives is scaled by this.
+const SHIELD_MULT := 0.8
+## Stacked poison tops out at this multiple of the strongest single dose.
+const POISON_STACK_CAP := 2.0
 const WAGON_UID := -1
 const WAGON_INTERVAL := 4.0
 const WAGON_DAMAGE := 18.0
@@ -745,7 +751,13 @@ func _poison(src: Fighter, t: Fighter, dps: float, secs: float, tag := "basic") 
 	t.poison_tag = tag
 	if t.poison_secs <= 0.0:
 		t.poison_tick = 1.0
-	t.poison_dps = maxf(t.poison_dps if t.poison_secs > 0.0 else 0.0, dps)
+	# Poison stacks: a fresh dose on a poisoned target adds half of the weaker dose, up to
+	# POISON_STACK_CAP times the stronger one.
+	if t.poison_secs > 0.0:
+		var hi := maxf(t.poison_dps, dps)
+		t.poison_dps = minf(hi * POISON_STACK_CAP, hi + 0.5 * minf(t.poison_dps, dps))
+	else:
+		t.poison_dps = dps
 	t.poison_secs = maxf(t.poison_secs, secs)
 	t.poison_from = src.uid
 	events.append({"t": "status", "src": src.uid, "dst": t.uid, "label": "Poisoned"})
@@ -759,7 +771,7 @@ func _slow(src: Fighter, t: Fighter, amount: float, secs: float) -> void:
 
 
 func _give_shield(src: Fighter, t: Fighter, amount: float) -> void:
-	amount = roundf(amount * (1.0 + src.heal_bonus))
+	amount = roundf(amount * SHIELD_MULT * (1.0 + src.heal_bonus))
 	var before := t.shield
 	t.shield = minf(t.max_hp, t.shield + amount)
 	src.shield_done += t.shield - before
@@ -769,7 +781,7 @@ func _give_shield(src: Fighter, t: Fighter, amount: float) -> void:
 func _heal(src: Fighter, t: Fighter, amount: float, _tag := "basic") -> void:
 	if t == null or not t.alive():
 		return
-	amount *= (1.0 + src.heal_bonus) * fatigue_healing() * (1.0 - t.mod_total("ruin"))
+	amount *= HEAL_MULT * (1.0 + src.heal_bonus) * fatigue_healing() * (1.0 - t.mod_total("ruin"))
 	var before := t.hp
 	t.hp = minf(t.max_hp, t.hp + roundf(amount))
 	src.heal_done += t.hp - before

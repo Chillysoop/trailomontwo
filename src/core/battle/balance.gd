@@ -150,3 +150,71 @@ static func duel(a: String, b: String, seed_value: int) -> String:
 		Battle.Outcome.VICTORY: return a
 		Battle.Outcome.DEFEAT: return b
 	return ""
+
+
+## Habitat against habitat with real teams: each side is six of one habitat's Trailomon of a
+## rarity (guards and bruisers in front), drawn fresh for every game. Returns habitat -> win
+## rate. Type matchups even out because every habitat meets every other one.
+static func habitat_league(rarity := "common", games := 20) -> Dictionary:
+	var pools := {}
+	for id in Species.DATA:
+		if Species.rarity(id) != rarity or Species.biome(id) != "":
+			continue
+		var t: String = Species.info(id)["type"]
+		pools[t] = pools.get(t, []) + [id]
+	var types := pools.keys()
+	var wins := {}
+	var played := {}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for i in types.size():
+		for j in range(i + 1, types.size()):
+			for g in games:
+				var a: String = types[i] if g % 2 == 0 else types[j]
+				var b: String = types[j] if g % 2 == 0 else types[i]
+				var ta := _team(pools[a], rng)
+				var tb := _team(pools[b], rng)
+				var cells := {}
+				for k in 6:
+					if ta[k] != "":
+						cells[Vector2i(k / 3, k % 3)] = ta[k]
+				var bt := Battle.create({"slots": cells}, {"front": tb.slice(0, 3), "back": tb.slice(3, 6)}, {"seed": g})
+				bt.run_to_end()
+				for t in [a, b]:
+					played[t] = int(played.get(t, 0)) + 1
+				if bt.outcome == Battle.Outcome.VICTORY:
+					wins[a] = float(wins.get(a, 0.0)) + 1.0
+				elif bt.outcome == Battle.Outcome.DEFEAT:
+					wins[b] = float(wins.get(b, 0.0)) + 1.0
+				else:
+					wins[a] = float(wins.get(a, 0.0)) + 0.5
+					wins[b] = float(wins.get(b, 0.0)) + 0.5
+	var out := {}
+	for t in types:
+		out[t] = float(wins.get(t, 0.0)) / maxf(1.0, float(played.get(t, 0)))
+	return out
+
+
+## Six distinct picks from a pool (repeats if it is small): front row guards and bruisers.
+static func _team(pool: Array, rng: RandomNumberGenerator) -> Array:
+	var picks := pool.duplicate()
+	for i in range(picks.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = picks[i]
+		picks[i] = picks[j]
+		picks[j] = tmp
+	while picks.size() < 6:
+		picks.append(pool[rng.randi_range(0, pool.size() - 1)])
+	picks = picks.slice(0, 6)
+	var front := picks.filter(func(id): return ["Guard", "Bruiser"].has(String(CombatData.KITS[id]["role"])))
+	var back := picks.filter(func(id): return not front.has(id))
+	var line := front.slice(0, 3)
+	for id in front.slice(3) + back:
+		line.append(id)
+	while line.size() < 6:
+		line.append("")
+	if line.slice(0, 3).all(func(id): return front.has(id)) == false and front.size() < 3:
+		# Fill the front with whoever stands first in the back.
+		var ordered := front + back
+		line = ordered.slice(0, 6)
+	return line
