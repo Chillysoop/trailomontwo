@@ -348,6 +348,21 @@ func stop(id: String) -> Dictionary:
 
 
 ## Species living in a region's habitat (for the map's region card, shown only once met).
+## The region's landmark prop (assets/props/lm_*.png), seen far off the road. Regions named
+## "<name> South" and the like share their base name's landmark. Without a region (the test
+## route), the terrain's first landmark.
+func landmark(id: String, terrain := "Forest") -> String:
+	var reg := region_of(id)
+	var t: String = reg.get("terrain", terrain)
+	var names: Array = REGION_NAMES.get(t, REGION_NAMES["Forest"])
+	var base: String = names[0]
+	var rname := String(reg.get("name", ""))
+	for n in names:
+		if rname.begins_with(String(n)):
+			base = n
+	return "lm_" + base.to_lower().replace(" ", "_")
+
+
 func region_species(region_id: String) -> Array[String]:
 	var out: Array[String] = []
 	var terrain: String = regions.get(region_id, {}).get("terrain", "")

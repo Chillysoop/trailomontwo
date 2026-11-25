@@ -14,9 +14,10 @@ const VERGE_FEET_Y := 274.0
 const ROAD_FEET_Y := 284.0
 const SCREEN := Vector2(640, 360)
 
+## Each terrain has its own painted scenery now, so the tint only nudges the mood.
 const TERRAIN_TINT := {
-	"Forest": Color(1, 1, 1), "Hills": Color(1.0, 0.98, 0.93), "River": Color(0.93, 0.97, 1.0),
-	"Swamp": Color(0.86, 0.95, 0.84), "Mountain": Color(0.92, 0.93, 0.99),
+	"Forest": Color(1, 1, 1), "Hills": Color(1, 1, 1), "River": Color(1, 1, 1),
+	"Swamp": Color(0.95, 0.98, 0.94), "Mountain": Color(0.97, 0.98, 1.0),
 }
 const WEATHER_TINT := {
 	"clear": Color(1, 1, 1), "rain": Color(0.8, 0.84, 0.92), "fog": Color(0.9, 0.9, 0.93),
@@ -25,10 +26,15 @@ const WEATHER_TINT := {
 ## Roadside props by terrain (assets/props). Graves and signposts can turn up anywhere.
 const ROADSIDE := {
 	"Forest": ["signpost", "abandoned_cart", "stump_mushroom", "grave_marker", "fern_cluster"],
-	"Hills": ["signpost", "wheel_buried", "grave_marker", "rocks_crystal", "well"],
-	"River": ["signpost", "wheel_buried", "fern_cluster", "grave_marker"],
-	"Swamp": ["stump_mushroom", "shrine_stone", "grave_marker", "fern_cluster"],
-	"Mountain": ["rocks_crystal", "shrine_stone", "signpost", "grave_marker"],
+	"Hills": ["signpost", "hills_fence", "grave_marker", "hills_rocks", "well", "hills_heather"],
+	"River": ["signpost", "river_reeds", "river_rocks", "grave_marker", "wheel_buried"],
+	"Swamp": ["swamp_shrooms", "shrine_stone", "grave_marker", "swamp_cattails", "swamp_boiler"],
+	"Mountain": ["mtn_boulder", "shrine_stone", "signpost", "grave_marker", "mtn_minecart", "mtn_shrub"],
+}
+## Buildings swapped in at a stop in one terrain (a mountain post is a log mining cabin).
+const TERRAIN_BUILDINGS := {
+	"Mountain": {"trading_post": "bld_mine_post", "bld_inn": "bld_mine_post"},
+	"Swamp": {"hut": "stilt_house"},
 }
 
 var moving := false
@@ -134,7 +140,10 @@ func show_settlement(kind: String) -> void:
 	_settlement.clear()
 	if kind == "" or not Settlements.KINDS.has(kind):
 		return
-	var props: Array = Settlements.KINDS[kind]["props"]
+	var props: Array = Settlements.KINDS[kind]["props"].duplicate()
+	var swap: Dictionary = TERRAIN_BUILDINGS.get(terrain, {})
+	for i in props.size():
+		props[i] = swap.get(props[i], props[i])
 	var xs := [44.0, 330.0, 140.0, 470.0]
 	for i in props.size():
 		var s := _sprite(String(props[i]), Vector2(xs[i % xs.size()], VERGE_FEET_Y - 2 * (i % 2)), 1.0, i % 2 == 1)

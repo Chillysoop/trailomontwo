@@ -26,6 +26,53 @@ PROPS = {
     "tent_camp": (96, "a canvas camping tent with a lantern and a bedroll beside it"),
     "shrine_stone": (80, "an ancient standing stone with a glowing teal rune and moss"),
     "well": (80, "a stone village water well with a wooden roof and a bucket"),
+
+    # ---- Terrain kits for the overworld (travel and battle scenery) ----
+    "hills_oak": (128, "a lone windswept oak tree on a grassy knoll, leaning, brass wind chimes in its branches"),
+    "hills_rocks": (96, "a cluster of mossy grey boulders with glinting copper veins and small yellow flowers"),
+    "hills_heather": (96, "a low clump of purple heather and yellow gorse bushes, wide and short"),
+    "hills_fence": (96, "a broken wooden pasture fence wrapped in climbing roses, short and wide"),
+    "river_willow": (128, "a weeping willow tree with long hanging fronds and a small brass birdhouse"),
+    "river_reeds": (96, "a dense clump of tall cattail reeds and river grass with blue flowers"),
+    "river_rocks": (96, "smooth river stones with lily pads and a rusted brass pipe poking out of the water"),
+    "river_jetty": (96, "a small wooden fishing jetty on posts with a coiled rope and a lantern"),
+    "swamp_mangrove": (128, "a gnarled dead swamp tree with twisted roots above water and hanging grey moss"),
+    "swamp_shrooms": (96, "a cluster of tall glowing teal and violet bog mushrooms on a rotting log"),
+    "swamp_cattails": (96, "a clump of swamp cattails with pink lotus flowers and broad leaves, isolated plant, empty transparent background, short and wide"),
+    "swamp_boiler": (96, "a half-sunken rusted brass boiler tank overgrown with moss and swamp vines"),
+    "mtn_pine": (128, "a tall dark pine tree with snow on its branches and a brass ring bolted around the trunk"),
+    "mtn_boulder": (96, "a big snowy granite boulder with blue ice crystals and lichen"),
+    "mtn_shrub": (96, "frosted alpine shrubs and small white mountain flowers, short and wide"),
+    "mtn_minecart": (96, "a rusted mine cart full of glowing blue ore on a short broken rail track"),
+
+    # ---- Region landmarks: one per region name, seen far off the road ----
+    "lm_the_mossdeeps": (128, "a giant moss-covered fallen brass robot head half sunk into a forest floor, ferns growing from its eyes"),
+    "lm_lanternwood": (128, "a single colossal ancient tree with glowing teal lanterns hanging from its branches, isolated object, empty transparent background, no sky"),
+    "lm_the_green_tangle": (128, "a rusted tall construction crane strangled by thick green vines and flowers"),
+    "lm_elderglade": (128, "a ring of standing elder stones around a big brass sundial overgrown with ivy"),
+    "lm_the_rolling_downs": (128, "a tall old brass windpump tower with a spinning fan on a grassy hill"),
+    "lm_copper_barrows": (128, "a grassy burial mound with a round copper door and green patina, stones on top"),
+    "lm_gorse_heights": (128, "a tall stacked stone cairn topped with a brass weathervane shaped like a bird"),
+    "lm_windmere": (128, "a giant three-bladed wind turbine made of wood and brass overgrown with flowering vines"),
+    "lm_the_silverrun": (128, "an old iron railway bridge pier overgrown with ivy, a waterfall pouring through it"),
+    "lm_reedwater_vale": (128, "a big wooden water mill with a turning waterwheel and a mossy roof"),
+    "lm_the_kettle_flats": (128, "a giant rusted brass kettle-shaped boiler lying on its side, steam rising, reeds around it"),
+    "lm_otterbend": (128, "a log dam with brass sluice gates and a little lodge on top, water spilling over"),
+    "lm_the_murkfens": (128, "a half-sunken overgrown steam locomotive in a swamp, mushrooms on its boiler"),
+    "lm_gloamwallow": (128, "a giant glowing swamp willow with bioluminescent violet fronds and fireflies"),
+    "lm_the_rotting_reach": (128, "a broken wooden ship hull stranded in a bog, masts tangled with moss"),
+    "lm_peatmoor": (128, "an old wooden peat-cutting crane with brass gears beside a stack of peat bricks"),
+    "lm_the_cogspires": (128, "a tall spire built of stacked giant rusted cogs on a rocky peak, snow on top"),
+    "lm_frostcrag_range": (128, "a lone icy rock pinnacle with a frozen waterfall over huge brass pipes, isolated object, empty transparent background, no sky"),
+    "lm_the_anvil_teeth": (128, "a huge anvil-shaped rock with a forge chimney glowing orange, snow around it"),
+    "lm_slate_wall": (128, "a towering slate cliff wall with a giant carved stone door and brass hinges"),
+
+    # ---- Stops ----
+    "bld_town_gate": (128, "a big walled town gate with stone towers, a brass clock above the arch and banners"),
+    "bld_lookout": (128, "a tall wooden lookout tower with a ladder, a brass spyglass and a flag on top"),
+    "bld_ruins": (128, "a crumbled stone archway with old brass gears embedded in it, overgrown with ivy"),
+    "bld_inn": (128, "a cozy two-storey roadside waystation inn with a hanging sign and warm windows"),
+    "bld_mine_post": (128, "a sturdy log mining cabin with a stone chimney, a pickaxe sign and snow on the roof"),
 }
 
 
