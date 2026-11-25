@@ -85,9 +85,7 @@ func refresh() -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 6)
 	_col.add_child(head)
-	var title := Rich.label("[font_size=11][b]%s reached Lv %d![/b][/font_size]\n[color=#%s]%s[/color]" % [
-		info["name"], p["level"], CreatureCard.MUTED,
-		"New move: one from each path. Your pick replaces the current move." if is_move else "Pick one upgrade. Rarer upgrades are bigger."], 8)
+	var title := Rich.label("[font_size=11][b]%s reached Lv %d![/b][/font_size]" % [info["name"], p["level"]], 8)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
 	if crossing.pending_count() > 1:
