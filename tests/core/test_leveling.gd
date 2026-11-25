@@ -95,6 +95,21 @@ func test_learning_a_move_uses_memory() -> void:
 	check_eq(e.memory_move("coilhusk", "passive"), "resin_shell")
 
 
+func test_level_up_can_replace_equipped_or_memory() -> void:
+	var e := Expedition.new_default(11)
+	e.memory["coilhusk"] = {"basic": "spine_jab"}
+	e.pending_levels = [{"id": "coilhusk", "level": 3, "options": [
+		{"kind": "move", "move": "coil_crush", "archetype": "Barkguard"}, {"kind": "move", "move": "spine_jab", "archetype": "Thornwarden"}]}]
+	e.choose_level_up(0)
+	check_eq(e.kit_move("coilhusk", "basic"), "coil_crush", "replacing equipped puts the new move in")
+	check_eq(e.memory_move("coilhusk", "basic"), "spine_jab", "a full memory slot is left alone")
+	e.pending_levels = [{"id": "coilhusk", "level": 6, "options": [
+		{"kind": "move", "move": "trunk_slam", "archetype": "Barkguard"}, {"kind": "move", "move": "spine_jab", "archetype": "Thornwarden"}]}]
+	e.choose_level_up(0, true)
+	check_eq(e.kit_move("coilhusk", "basic"), "coil_crush", "replacing memory leaves the equipped move")
+	check_eq(e.memory_move("coilhusk", "basic"), "trunk_slam", "the memory move is replaced")
+
+
 func test_battles_give_experience() -> void:
 	var e := Expedition.new_default(11)
 	e.pending_encounter = {"pack": CombatData.pack_by_id("thornfang_pack"), "scale": 1.0, "guardian": false}

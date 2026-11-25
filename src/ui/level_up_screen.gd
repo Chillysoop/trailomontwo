@@ -16,7 +16,7 @@ signal closed
 const SCREEN := Vector2(640, 360)
 const PANEL := Vector2(600, 0)
 const SIDE := 372.0
-const OPTION := Vector2(182, 112)
+const OPTION := Vector2(182, 120)
 const REPLACE_COL := "ff9a4d"
 
 var crossing: Expedition
@@ -25,8 +25,9 @@ var _picked := -1
 var _done: Array[String] = []
 ## Borrowed to build the character sheet (not added to the tree).
 var _sheets: CompanionsScreen
-var _current_tile: PanelContainer
-var _current_tag: RichTextLabel
+## The "equipped" and "memory" tiles and their labels.
+var _targets := {}
+var _target_tags := {}
 
 
 static func open(parent: Node, e: Expedition) -> LevelUpScreen:
@@ -71,8 +72,6 @@ func _exit_tree() -> void:
 func refresh() -> void:
 	for c in _col.get_children():
 		c.queue_free()
-	_current_tile = null
-	_current_tag = null
 	if crossing.pending_levels.is_empty():
 		close_screen()
 		return
@@ -104,80 +103,118 @@ func refresh() -> void:
 	left.add_theme_constant_override("separation", 2)
 	body.add_child(left)
 	left.add_child(_heading("Character sheet"))
+	# The slot the picked move goes in (options can be for different slots).
 	var slot := ""
-	if is_move:
-		slot = CombatData.move(p["options"][0]["move"])["slot"]
+	if is_move and _picked >= 0:
+		slot = CombatData.move(p["options"][_picked]["move"])["slot"]
 	left.add_child(_sheets._card(id, slot))
 
 	var right := VBoxContainer.new()
 	right.add_theme_constant_override("separation", 4)
 	right.custom_minimum_size = Vector2(SIDE, 0)
 	body.add_child(right)
-	if is_move:
-		right.add_child(_heading("Current %s" % Glossary.entry_name(slot).to_lower()))
-		right.add_child(_current(id, slot))
-		right.add_child(_heading("Pick one to replace it"))
-	else:
-		right.add_child(_heading("Pick one"))
+	right.add_child(_heading("1. Pick a new move" if is_move else "Pick one"))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	right.add_child(row)
 	for i in p["options"].size():
 		row.add_child(_option(id, p["options"][i], i))
-	if _picked >= 0:
-		right.add_child(_memory_choice(id, p["options"][_picked]))
+	if is_move and _picked >= 0:
+		right.add_child(_heading("2. Choose what it replaces"))
+		var targets := HBoxContainer.new()
+		targets.add_theme_constant_override("separation", 8)
+		right.add_child(targets)
+		_targets.clear()
+		_target_tags.clear()
+		for where in ["equipped", "memory"]:
+			targets.add_child(_target(id, slot, where))
 	if not _done.is_empty():
 		_col.add_child(Rich.label("[color=#%s]%s[/color]" % [CreatureCard.MUTED, _done[-1]], 8, PANEL.x - 16))
-	_show_replaced()
+	_style_targets()
 
 
 func _heading(text: String) -> Control:
 	return Rich.label("[color=#e8d6a8]%s[/color]" % text.to_upper(), 7)
 
 
-## The move equipped now, in its own tile. It says plainly that the pick replaces it.
-func _current(id: String, slot: String) -> Control:
-	var mid := crossing.kit_move(id, slot)
-	var t := PanelContainer.new()
-	t.custom_minimum_size = Vector2(SIDE, 0)
-	_current_tile = t
+## A tile for the equipped move or the memory slot. Once a new move is picked, click a tile
+## to put the new move there.
+func _target(id: String, slot: String, where: String) -> Control:
+	var mid := crossing.kit_move(id, slot) if where == "equipped" else crossing.memory_move(id, slot)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(OPTION.x, 74)
+	b.focus_mode = Control.FOCUS_NONE
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 6)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(margin)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 1)
-	t.add_child(col)
-	var top := HBoxContainer.new()
-	col.add_child(top)
-	var name := Rich.label(CreatureCard.move_header(mid, true), 8)
-	name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(name)
-	_current_tag = Rich.label("", 7)
-	top.add_child(_current_tag)
-	col.add_child(Rich.label("[color=#%s]%s[/color]" % [CreatureCard.SOFT,
-		CombatData.describe(mid, crossing.stat(id, "atk"), crossing.stat(id, "def"), crossing.max_hp(id))], 8, SIDE - 12))
-	var stored := crossing.memory_move(id, slot)
-	var mem := "{i:memory} Memory: " + ("empty" if stored == "" else String(CombatData.move(stored)["name"]))
-	col.add_child(Rich.label("[color=#%s]%s[/color]" % [CreatureCard.MUTED, mem], 7))
-	return t
-
-
-## Marks the current tile: who replaces it (hovered or picked option), or just a warning.
-func _show_replaced(hover := -1) -> void:
-	if _current_tile == null:
-		return
-	var which := hover if hover >= 0 else _picked
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.17, 0.12, 0.13, 0.95)
-	sb.set_corner_radius_all(3)
-	sb.set_content_margin_all(6)
-	if which >= 0:
-		var mid: String = crossing.pending_levels[0]["options"][which]["move"]
-		sb.border_color = Color(REPLACE_COL)
-		sb.set_border_width_all(2)
-		Rich.set_text(_current_tag, "[color=#%s][b]REPLACED BY %s[/b][/color]" % [REPLACE_COL, String(CombatData.move(mid)["name"]).to_upper()])
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(col)
+	var tag := Rich.label("", 7)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(tag)
+	var text := ""
+	if mid == "":
+		text = "[color=#%s]Empty[/color]" % CreatureCard.MUTED
 	else:
-		sb.border_color = Color(REPLACE_COL).darkened(0.35)
-		sb.set_border_width_all(1)
-		Rich.set_text(_current_tag, "[color=#%s]EQUIPPED NOW[/color]" % REPLACE_COL)
-	_current_tile.add_theme_stylebox_override("panel", sb)
+		text = CreatureCard.move_header(mid, true) + "\n[color=#%s]%s[/color]" % [CreatureCard.SOFT,
+			CombatData.describe(mid, crossing.stat(id, "atk"), crossing.stat(id, "def"), crossing.max_hp(id))]
+	var body := Rich.label(text, 8, OPTION.x - 12)
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(body)
+	b.pressed.connect(func():
+		if _picked >= 0:
+			_finish(_picked, where == "memory"))
+	b.mouse_entered.connect(_style_targets.bind(where))
+	b.mouse_exited.connect(_style_targets)
+	Tips.attach(b, func(): return _target_tip(id, slot, where))
+	_targets[where] = b
+	_target_tags[where] = tag
+	return b
+
+
+func _target_tip(id: String, slot: String, where: String) -> String:
+	if _picked < 0:
+		return "Pick a new move above first."
+	var new_name: String = CombatData.move(crossing.pending_levels[0]["options"][_picked]["move"])["name"]
+	var equipped: String = CombatData.move(crossing.kit_move(id, slot))["name"]
+	var stored := crossing.memory_move(id, slot)
+	if where == "memory":
+		if stored == "":
+			return "%s goes into the {i:memory} memory slot. %s stays equipped." % [new_name, equipped]
+		return "%s replaces %s in {i:memory} memory. %s is forgotten. %s stays equipped." % [new_name, CombatData.move(stored)["name"], CombatData.move(stored)["name"], equipped]
+	if stored == "":
+		return "%s is equipped. %s moves to the empty {i:memory} memory slot." % [new_name, equipped]
+	return "%s replaces %s, which is forgotten. Memory keeps %s." % [new_name, equipped, CombatData.move(stored)["name"]]
+
+
+## Borders and labels on the two tiles: what each holds, and once a move is picked,
+## which one it would replace.
+func _style_targets(hover := "") -> void:
+	var new_name := ""
+	if _picked >= 0:
+		new_name = String(CombatData.move(crossing.pending_levels[0]["options"][_picked]["move"])["name"]).to_upper()
+	for where in _targets:
+		var b: Button = _targets[where]
+		var hot: bool = _picked >= 0 and where == hover
+		var label := "EQUIPPED" if where == "equipped" else "{i:memory} MEMORY"
+		var tag := "[color=#e8d6a8][b]%s[/b][/color]" % label
+		if hot:
+			tag = "[color=#%s][b]%s -> REPLACE WITH %s[/b][/color]" % [REPLACE_COL, label, new_name]
+		elif _picked >= 0:
+			tag += "  [color=#%s]click to replace[/color]" % REPLACE_COL
+		Rich.set_text(_target_tags[where], tag)
+		for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.24, 0.15, 0.14, 0.95) if hot else (Color(0.12, 0.09, 0.14, 0.95) if where == "memory" else Color(0.17, 0.13, 0.19, 0.95))
+			sb.border_color = Color(REPLACE_COL) if _picked >= 0 else Color("e8d6a8").darkened(0.4)
+			sb.set_border_width_all(3 if hot else (2 if _picked >= 0 else 1))
+			sb.set_corner_radius_all(3)
+			b.add_theme_stylebox_override(state, sb)
 
 
 func _option(id: String, o: Dictionary, index: int) -> Control:
@@ -206,9 +243,6 @@ func _option(id: String, o: Dictionary, index: int) -> Control:
 	text.add_theme_constant_override("line_separation", 2)
 	margin.add_child(text)
 	b.pressed.connect(_pick.bind(index))
-	if o["kind"] == "move":
-		b.mouse_entered.connect(_show_replaced.bind(index))
-		b.mouse_exited.connect(_show_replaced)
 	return b
 
 
@@ -225,11 +259,12 @@ func _option_text(id: String, o: Dictionary) -> String:
 	var mid: String = o["move"]
 	var slot: String = CombatData.move(mid)["slot"]
 	var arc: Dictionary = MovePool.ARCHETYPES[id][MovePool.archetype_of(id, mid)]
-	var current: String = CombatData.move(crossing.kit_move(id, slot))["name"]
 	var text := "[color=#e8d6a8]%s[/color]  [color=#%s]%s[/color]\n" % [String(arc["name"]).to_upper(), CreatureCard.MUTED, arc["line"]]
 	text += CreatureCard.move_header(mid, true) + "\n"
-	text += "[color=#%s]%s[/color]\n" % [CreatureCard.SOFT, CombatData.describe(mid, crossing.stat(id, "atk"), crossing.stat(id, "def"), crossing.max_hp(id))]
-	text += "[color=#%s]Replaces %s[/color]" % [REPLACE_COL, current]
+	text += "[color=#%s]%s[/color]" % [CreatureCard.SOFT, CombatData.describe(mid, crossing.stat(id, "atk"), crossing.stat(id, "def"), crossing.max_hp(id))]
+	var stored := crossing.memory_move(id, slot)
+	text += "\n[color=#%s]Equipped: %s\n{i:memory} Memory: %s[/color]" % [CreatureCard.MUTED, CombatData.move(crossing.kit_move(id, slot))["name"],
+		"empty" if stored == "" else String(CombatData.move(stored)["name"])]
 	return text
 
 
@@ -240,29 +275,6 @@ func _pick(index: int) -> void:
 		return
 	_picked = index
 	refresh()
-
-
-## After picking a move: equip it now (the current one goes to memory) or keep it in memory.
-func _memory_choice(id: String, o: Dictionary) -> Control:
-	var mid: String = o["move"]
-	var new_name: String = CombatData.move(mid)["name"]
-	var slot: String = CombatData.move(mid)["slot"]
-	var current: String = CombatData.move(crossing.kit_move(id, slot))["name"]
-	var stored := crossing.memory_move(id, slot)
-	var lost := "" if stored == "" else "\n[color=#%s]%s is forgotten from memory.[/color]" % [REPLACE_COL, CombatData.move(stored)["name"]]
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	var now := Ui.button("Equip %s" % new_name, 8)
-	now.focus_mode = Control.FOCUS_NONE
-	now.pressed.connect(_finish.bind(_picked, false))
-	Tips.attach(now, func(): return "%s replaces %s. %s goes into the {i:memory} memory slot, so you can swap it back between battles.%s" % [new_name, current, current, lost])
-	row.add_child(now)
-	var keep := Ui.button("Put %s in memory" % new_name, 8)
-	keep.focus_mode = Control.FOCUS_NONE
-	keep.pressed.connect(_finish.bind(_picked, true))
-	Tips.attach(keep, func(): return "Keep %s equipped. %s waits in the {i:memory} memory slot; swap it in from the Companions screen.%s" % [current, new_name, lost])
-	row.add_child(keep)
-	return row
 
 
 func _finish(index: int, keep_in_memory: bool) -> void:

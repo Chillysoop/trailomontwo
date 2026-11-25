@@ -518,17 +518,26 @@ func choose_level_up(option: int, keep_in_memory := false) -> String:
 	k.append(mid)
 	known[id] = k
 	var mem: Dictionary = memory.get(id, {})
+	var new_name: String = CombatData.move(mid)["name"]
 	if keep_in_memory:
+		# Replaces whatever was in memory; the equipped move stays.
+		var was := memory_move(id, slot)
 		mem[slot] = mid
 		memory[id] = mem
-		return "%s learned %s and kept it in memory." % [name, CombatData.move(mid)["name"]]
+		if was != "":
+			return "%s learned %s and put it in memory, forgetting %s." % [name, new_name, CombatData.move(was)["name"]]
+		return "%s learned %s and put it in memory." % [name, new_name]
+	# Replaces the equipped move. It drops into memory only if memory is empty; otherwise it's
+	# forgotten and the memory move stays.
 	var old := kit_move(id, slot)
-	mem[slot] = old
-	memory[id] = mem
 	var kit: Dictionary = kits.get(id, {})
 	kit[slot] = mid
 	kits[id] = kit
-	return "%s learned %s. %s moved to memory." % [name, CombatData.move(mid)["name"], CombatData.move(old)["name"]]
+	if memory_move(id, slot) == "":
+		mem[slot] = old
+		memory[id] = mem
+		return "%s learned %s. %s moved to memory." % [name, new_name, CombatData.move(old)["name"]]
+	return "%s learned %s, forgetting %s." % [name, new_name, CombatData.move(old)["name"]]
 
 
 ## Swap a slot's move with the one in its memory (between battles).
