@@ -62,6 +62,9 @@ var battle_rng := RandomNumberGenerator.new()
 ## Battle items owned (id -> count) and the 3 item slots used in the next battle ("" = empty).
 var items := {}
 var item_slots: Array[String] = ["", "", ""]
+## Techniques owned: move id -> count. Each teaches its move once, to a Trailomon of the same
+## habitat as the move's species.
+var techniques := {}
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -77,6 +80,7 @@ static func new_default(rng_seed := -1) -> Expedition:
 	e.roster = ["brambleback", "coilhusk", "reedwake", "mirelamp", "rimehare", "scythelk"]
 	e.stored = ["gillhorn", "inkhoot"]
 	e.items = {"ironbark_salve": 2, "swiftwind_feather": 1, "smoke_pouch": 1, "rally_horn": 1}
+	e.techniques = {"bark_bash": 1, "drain_lance": 1}
 	e.haulers = ["brambleback", "coilhusk"]
 	e.cargo = [
 		{"name": "Medicine crates", "weight": 40.0, "value": 120},
@@ -516,10 +520,17 @@ func choose_level_up(option: int, keep_in_memory := false) -> String:
 		if o["stat"] == "hp":
 			creature_hp[id] = float(creature_hp.get(id, 0.0)) + float(o["amount"])
 		return "%s grew: %s (%s)." % [name, Leveling.boost_text(o["stat"], o["amount"]), Leveling.RARITY_NAMES[o["rarity"]]]
-	var mid: String = o["move"]
+	return _learn(id, String(o["move"]), keep_in_memory)
+
+
+## Learn a move: into its slot (the old move drops into an empty memory slot, else it's
+## forgotten) or into memory (replacing what was there).
+func _learn(id: String, mid: String, keep_in_memory: bool) -> String:
+	var name: String = Species.info(id)["name"]
 	var slot: String = CombatData.move(mid)["slot"]
 	var k: Array = known.get(id, [])
-	k.append(mid)
+	if not k.has(mid):
+		k.append(mid)
 	known[id] = k
 	var mem: Dictionary = memory.get(id, {})
 	var new_name: String = CombatData.move(mid)["name"]
@@ -732,6 +743,7 @@ const RETREAT_WEAR := 8.0
 const VICTORY_FOOD := 6.0
 const VICTORY_WATER := 4.0
 const ITEM_DROP_CHANCE := 0.5
+const TECHNIQUE_DROP_CHANCE := 0.2
 
 ## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
 func finish_battle(battle: Battle) -> Array[String]:
@@ -778,6 +790,11 @@ func finish_battle(battle: Battle) -> Array[String]:
 				found.append(BattleItems.item_name(id))
 		if not found.is_empty():
 			lines.append("Found a battle item: %s." % ", ".join(found))
+		if battle_rng.randf() < (1.0 if guardian else TECHNIQUE_DROP_CHANCE):
+			var all: Array = MovePool.MOVES.keys()
+			var mid: String = all[battle_rng.randi_range(0, all.size() - 1)]
+			techniques[mid] = int(techniques.get(mid, 0)) + 1
+			lines.append("Found a technique: %s." % CombatData.move(mid)["name"])
 	# Experience for everyone who stood in the lineup.
 	if battle != null:
 		var award := Leveling.XP_LOSS
@@ -844,6 +861,34 @@ func _spend_items(used: Array[String]) -> void:
 		var id := item_slots[i]
 		if id != "" and item_slots.slice(0, i + 1).count(id) > item_count(id):
 			item_slots[i] = ""
+
+
+# ---------- techniques ----------
+
+func technique_count(mid: String) -> int:
+	return int(techniques.get(mid, 0))
+
+
+## Can this Trailomon learn the technique? Same habitat as the move's species, and it doesn't
+## already have the move equipped or in memory.
+func can_learn_technique(id: String, mid: String) -> bool:
+	if not MovePool.has(mid) or not Species.DATA.has(id):
+		return false
+	var owner := MovePool.owner_of(mid)
+	if owner != id and Species.info(owner)["type"] != Species.info(id)["type"]:
+		return false
+	var slot: String = CombatData.move(mid)["slot"]
+	return kit_move(id, slot) != mid and memory_move(id, slot) != mid
+
+
+## Teach a technique (used up). Returns a journal line, or "" if it can't.
+func use_technique(id: String, mid: String, to_memory: bool) -> String:
+	if technique_count(mid) <= 0 or not can_learn_technique(id, mid):
+		return ""
+	techniques[mid] = technique_count(mid) - 1
+	if techniques[mid] == 0:
+		techniques.erase(mid)
+	return _learn(id, mid, to_memory)
 
 
 ## Fight the pending encounter instantly (used by travel() and tests).

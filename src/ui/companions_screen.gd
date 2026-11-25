@@ -21,6 +21,7 @@ var _cards: VBoxContainer
 var _card_nodes: Array[Control] = []
 var _stored: HBoxContainer
 var _level_btn: Button
+var _tech_btn: Button
 ## Called after a memory swap instead of refresh(), when the cards are shown somewhere else
 ## (the level-up screen borrows _card() as its character sheet).
 var on_swap: Callable
@@ -83,6 +84,12 @@ func _ready() -> void:
 		b.mouse_filter = Control.MOUSE_FILTER_PASS
 		Tips.attach(b, "g:" + dust[0])
 		head.add_child(b)
+	_tech_btn = Ui.button("", 8)
+	_tech_btn.icon = Rich.icon_tex("technique")
+	_tech_btn.focus_mode = Control.FOCUS_NONE
+	_tech_btn.pressed.connect(open_techniques)
+	Tips.attach(_tech_btn, "g:technique")
+	head.add_child(_tech_btn)
 	_level_btn = Ui.button("", 8)
 	_level_btn.icon = Rich.icon_tex("ultimate")
 	_level_btn.focus_mode = Control.FOCUS_NONE
@@ -122,6 +129,10 @@ func refresh() -> void:
 			_card_nodes.append(card)
 	for i in maxi(9, crossing.stored.size() + 1):
 		_stored.add_child(_stored_tile(crossing.stored[i] if i < crossing.stored.size() else ""))
+	var techs := 0
+	for mid in crossing.techniques:
+		techs += crossing.technique_count(mid)
+	_tech_btn.text = "Techniques (%d)" % techs
 	_level_btn.visible = crossing.pending_count() > 0
 	_level_btn.text = "Level ups (%d)" % crossing.pending_count()
 
@@ -131,6 +142,11 @@ func open_level_ups() -> void:
 		return
 	var l := LevelUpScreen.open(self, crossing)
 	l.closed.connect(refresh)
+
+
+func open_techniques() -> void:
+	var t := TechniqueScreen.open(self, crossing)
+	t.closed.connect(refresh)
 
 
 func close_screen() -> void:

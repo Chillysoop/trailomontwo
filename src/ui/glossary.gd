@@ -37,6 +37,8 @@ const ENTRIES := {
 		"text": "Coming soon: a permanent boost you can give one of your Trailomon."},
 	"dark_dust": {"name": "Dark dust", "icon": "dark_dust",
 		"text": "Coming soon: a permanent boost with a cost, for one of your Trailomon."},
+	"technique": {"name": "Technique", "icon": "technique",
+		"text": "A one-use scroll that teaches a move. Any Trailomon of the same habitat as the move's species can learn it, into its equipped slot or its memory slot. Wins sometimes drop them; the guardian always does."},
 	"battle_items": {"name": "Battle items", "icon": "item_slot",
 		"text": "Up to 3 consumables you choose before a fight. Each boosts your whole team (or hinders the foes) for that battle and is used up when it ends. Wins sometimes drop more."},
 	"memory": {"name": "Memory slot", "icon": "memory",
