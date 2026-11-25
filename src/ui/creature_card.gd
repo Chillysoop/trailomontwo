@@ -112,6 +112,13 @@ static func markup(id: String, opts := {}) -> String:
 		lines.append("[color=#%s]{k:job|Jobs}:[/color] " % MUTED + "  ".join(parts))
 	if int(info["hauling"]) > 0 and not opts.get("enemy", false):
 		lines[lines.size() - 1] += "  {i:haul}%d" % int(info["hauling"])
+	var evo := Species.evolutions(id)
+	if not evo.is_empty() and not opts.get("enemy", false):
+		var names: Array[String] = []
+		for to in evo:
+			names.append(Species.name_markup(to))
+		lines.append("[color=#%s]Evolves into[/color] %s [color=#%s]at Lv %d[/color]" % [
+			MUTED, " or ".join(names), MUTED, Species.evolve_level(id)])
 	var out := "\n".join(lines)
 	for k in keys:
 		out += Tips.SIDE + keyword_box(k)

@@ -168,6 +168,12 @@ func open_techniques() -> void:
 	t.closed.connect(refresh)
 
 
+func _evolve(id: String, to: String) -> void:
+	if crossing.evolve(id, to) != "":
+		Tips.hide_from(null)
+		refresh()
+
+
 func close_screen() -> void:
 	Tips.hide_from(null)
 	closed.emit()
@@ -245,6 +251,18 @@ func _card(id: String, highlight := "") -> Control:
 	stats.add_theme_constant_override("line_separation", 0)
 	stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(stats)
+	var evo := crossing.evolve_options(id)
+	if not evo.is_empty():
+		var evo_col := VBoxContainer.new()
+		evo_col.add_theme_constant_override("separation", 1)
+		top.add_child(evo_col)
+		for to in evo:
+			var eb := Ui.button("Evolve" if evo.size() == 1 else String(Species.info(to)["name"]), 7)
+			eb.focus_mode = Control.FOCUS_NONE
+			eb.pressed.connect(_evolve.bind(id, to))
+			Tips.attach(eb, func(): return "Evolve into %s. It keeps its level, upgrades and learned moves, and takes on the new form's stats and moves.\n\n%s" % [
+				Species.name_markup(to), CreatureCard.markup(to, {})])
+			evo_col.add_child(eb)
 
 	var rule := ColorRect.new()
 	rule.color = Color(0.91, 0.84, 0.66, 0.18)
