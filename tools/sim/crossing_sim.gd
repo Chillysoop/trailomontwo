@@ -1,7 +1,8 @@
 extends SceneTree
 ## Balance check for later crossings: the starting team, levelled to a given level, against
 ## each crossing's guardian and its toughest packs.
-##   godot --headless --path . --script res://tools/sim/crossing_sim.gd [-- packs]
+##   godot --headless --path . --script res://tools/sim/crossing_sim.gd [-- packs | from=N]
+## from=N only runs crossings N and later (the full run takes a while).
 
 
 func _team(level: int, seed_value: int) -> Expedition:
@@ -35,7 +36,11 @@ func _init() -> void:
 	if args.has("packs"):
 		_packs()
 	else:
-		_crossings()
+		var first := 1
+		for a in args:
+			if a.begins_with("from="):
+				first = int(a.substr(5))
+		_crossings(first)
 	quit()
 
 
@@ -50,9 +55,9 @@ func _packs() -> void:
 		print("%-16s Lv1 %3d%%   Lv5 %3d%%" % [pid, _rate(1, 1, p, sc), _rate(5, 1, p, sc)])
 
 
-func _crossings() -> void:
-	for n in range(1, CombatData.GUARDIANS.size() + 1):
-		for level in [1 + (n - 1) * 3, 1 + (n - 1) * 5]:
+func _crossings(first := 1) -> void:
+	for n in range(first, CombatData.GUARDIANS.size() + 1):
+		for level in [mini(1 + (n - 1) * 3, Leveling.MAX_LEVEL), mini(1 + (n - 1) * 5, Leveling.MAX_LEVEL)]:
 			var g := CombatData.guardian_for(n)
 			var line := "crossing %d, team Lv %2d: guardian %s %d%%" % [n, level, g["id"], _rate(level, n, g, CombatData.GUARDIAN_SCALE)]
 			for pid in ["emberoak_grove", "auroryx_lights", "tidewyrm_rise", "mirehydra_den", "titanox_pass", "quetzalith_sky"]:
