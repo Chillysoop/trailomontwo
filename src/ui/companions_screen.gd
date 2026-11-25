@@ -21,6 +21,11 @@ var _cards: VBoxContainer
 var _card_nodes: Array[Control] = []
 var _stored: HBoxContainer
 var _level_btn: Button
+var _tech_btn: Button
+var _dust_btns := {}
+## A stored Trailomon picked for a swap ("" if none).
+var _swap_pick := ""
+var _stored_note: RichTextLabel
 ## Called after a memory swap instead of refresh(), when the cards are shown somewhere else
 ## (the level-up screen borrows _card() as its character sheet).
 var on_swap: Callable
@@ -75,14 +80,20 @@ func _ready() -> void:
 	var title := PreviewHud.label("Companions", 11)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
-	for dust in [["light_dust", "Light dust"], ["dark_dust", "Dark dust"]]:
-		var b := Ui.button(dust[1], 8)
-		b.icon = Rich.icon_tex(dust[0])
+	for k in ["light", "dark"]:
+		var b := Ui.button("", 8)
+		b.icon = Rich.icon_tex(k + "_dust")
 		b.focus_mode = Control.FOCUS_NONE
-		b.disabled = true
-		b.mouse_filter = Control.MOUSE_FILTER_PASS
-		Tips.attach(b, "g:" + dust[0])
+		b.pressed.connect(open_dust.bind(k))
+		Tips.attach(b, "g:" + k + "_dust")
 		head.add_child(b)
+		_dust_btns[k] = b
+	_tech_btn = Ui.button("", 8)
+	_tech_btn.icon = Rich.icon_tex("technique")
+	_tech_btn.focus_mode = Control.FOCUS_NONE
+	_tech_btn.pressed.connect(open_techniques)
+	Tips.attach(_tech_btn, "g:technique")
+	head.add_child(_tech_btn)
 	_level_btn = Ui.button("", 8)
 	_level_btn.icon = Rich.icon_tex("ultimate")
 	_level_btn.focus_mode = Control.FOCUS_NONE
@@ -98,7 +109,8 @@ func _ready() -> void:
 	_cards.add_theme_constant_override("separation", 2)
 	col.add_child(_cards)
 
-	col.add_child(_heading("Stored", "kept back at camp, not travelling with you"))
+	_stored_note = _heading("Stored", "") as RichTextLabel
+	col.add_child(_stored_note)
 	_stored = HBoxContainer.new()
 	_stored.add_theme_constant_override("separation", 3)
 	col.add_child(_stored)
@@ -117,11 +129,24 @@ func refresh() -> void:
 		line.add_theme_constant_override("separation", 4)
 		_cards.add_child(line)
 		for lane in 3:
-			var card := _card(crossing.lineup.get(Vector2i(row, lane), ""))
+			var cid: String = crossing.lineup.get(Vector2i(row, lane), "")
+			var card := _card(cid)
+			if _swap_pick != "" and cid != "":
+				_swap_target(card, cid)
 			line.add_child(card)
 			_card_nodes.append(card)
 	for i in maxi(9, crossing.stored.size() + 1):
 		_stored.add_child(_stored_tile(crossing.stored[i] if i < crossing.stored.size() else ""))
+	var note := "kept back at camp. Click one, then a team card, to swap them."
+	if _swap_pick != "":
+		note = "[color=#ffe3a3]Now click a team card to swap with %s (click it again to cancel).[/color]" % Species.info(_swap_pick)["name"]
+	Rich.set_text(_stored_note, "[color=#e8d6a8]STORED[/color]   [color=#%s]%s[/color]" % [CreatureCard.MUTED, note])
+	var techs := 0
+	for mid in crossing.techniques:
+		techs += crossing.technique_count(mid)
+	_tech_btn.text = "Techniques (%d)" % techs
+	for k in _dust_btns:
+		(_dust_btns[k] as Button).text = "%s (%d)" % ["Light" if k == "light" else "Dark", crossing.dust_count(k)]
 	_level_btn.visible = crossing.pending_count() > 0
 	_level_btn.text = "Level ups (%d)" % crossing.pending_count()
 
@@ -131,6 +156,16 @@ func open_level_ups() -> void:
 		return
 	var l := LevelUpScreen.open(self, crossing)
 	l.closed.connect(refresh)
+
+
+func open_dust(k: String) -> void:
+	var d := DustScreen.open(self, crossing, k)
+	d.closed.connect(refresh)
+
+
+func open_techniques() -> void:
+	var t := TechniqueScreen.open(self, crossing)
+	t.closed.connect(refresh)
 
 
 func close_screen() -> void:
@@ -355,5 +390,33 @@ func _stored_tile(id: String) -> Control:
 	hab.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	hab.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	row.add_child(hab)
-	Tips.attach(p, func(): return CreatureCard.markup(id, {"enemy": false}))
+	Tips.attach(p, func(): return CreatureCard.markup(id, CreatureCard.team_opts(crossing, id)) + "\n[color=#ffe3a3]Click, then click a team card, to swap them.[/color]")
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	if id == _swap_pick:
+		var hb: StyleBoxFlat = (p.get_theme_stylebox("panel") as StyleBoxFlat).duplicate()
+		hb.border_color = Color("ffe3a3")
+		hb.set_border_width_all(2)
+		p.add_theme_stylebox_override("panel", hb)
+	p.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			_swap_pick = "" if _swap_pick == id else id
+			Tips.hide_from(null)
+			refresh.call_deferred())
 	return p
+
+
+## While a stored Trailomon is picked, team cards glow and swap on click.
+func _swap_target(card: Control, team_id: String) -> void:
+	var hb: StyleBoxFlat = (card.get_theme_stylebox("panel") as StyleBoxFlat).duplicate()
+	hb.border_color = Color("ffe3a3")
+	hb.set_border_width_all(2)
+	card.add_theme_stylebox_override("panel", hb)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	card.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			crossing.swap_stored(_swap_pick, team_id)
+			_swap_pick = ""
+			Tips.hide_from(null)
+			refresh.call_deferred())

@@ -59,6 +59,18 @@ var memory := {}
 var lineup := {}
 ## Separate dice for battles, so adding battles doesn't change which trail events roll.
 var battle_rng := RandomNumberGenerator.new()
+## Battle items owned (id -> count) and the 3 item slots used in the next battle ("" = empty).
+var items := {}
+var item_slots: Array[String] = ["", "", ""]
+## Techniques owned: move id -> count. Each teaches its move once, to a Trailomon of the same
+## habitat as the move's species.
+var techniques := {}
+## Dust: permanent boosts (see Dust). How much dust each Trailomon has taken so far.
+var light_dust := 0
+var dark_dust := 0
+var dust_used := {}
+## A wild creature that offered to join after the last win ("" if none).
+var pending_recruit := ""
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -73,13 +85,17 @@ static func new_default(rng_seed := -1) -> Expedition:
 		e.level_rng.randomize()
 	e.roster = ["brambleback", "coilhusk", "reedwake", "mirelamp", "rimehare", "scythelk"]
 	e.stored = ["gillhorn", "inkhoot"]
+	e.items = {"ironbark_salve": 2, "swiftwind_feather": 1, "smoke_pouch": 1, "rally_horn": 1}
+	e.techniques = {"bark_bash": 1, "drain_lance": 1}
+	e.light_dust = 2
+	e.dark_dust = 1
 	e.haulers = ["brambleback", "coilhusk"]
 	e.cargo = [
 		{"name": "Medicine crates", "weight": 40.0, "value": 120},
 		{"name": "Tool chests", "weight": 60.0, "value": 150},
 		{"name": "Seed stock", "weight": 40.0, "value": 90},
 	]
-	for id in e.roster:
+	for id in e.roster + e.stored:
 		e.fatigue[id] = 0.0
 		e.creature_hp[id] = e.max_hp(id)
 	e.tidy_lineup()
@@ -459,7 +475,9 @@ func max_hp(id: String) -> float:
 func stat(id: String, key: String) -> float:
 	var base := float(CombatData.stats(id)[key])
 	var b := float(boosts.get(id, {}).get(key, 0.0))
-	return maxf(0.6, base - b) if key == "spd" else base + b
+	if key == "spd":
+		return maxf(0.6, base - b)
+	return maxf(1.0 if key == "atk" else 0.0, base + b)
 
 
 ## The move in use for "basic", "passive" or "ultimate".
@@ -512,23 +530,39 @@ func choose_level_up(option: int, keep_in_memory := false) -> String:
 		if o["stat"] == "hp":
 			creature_hp[id] = float(creature_hp.get(id, 0.0)) + float(o["amount"])
 		return "%s grew: %s (%s)." % [name, Leveling.boost_text(o["stat"], o["amount"]), Leveling.RARITY_NAMES[o["rarity"]]]
-	var mid: String = o["move"]
+	return _learn(id, String(o["move"]), keep_in_memory)
+
+
+## Learn a move: into its slot (the old move drops into an empty memory slot, else it's
+## forgotten) or into memory (replacing what was there).
+func _learn(id: String, mid: String, keep_in_memory: bool) -> String:
+	var name: String = Species.info(id)["name"]
 	var slot: String = CombatData.move(mid)["slot"]
 	var k: Array = known.get(id, [])
-	k.append(mid)
+	if not k.has(mid):
+		k.append(mid)
 	known[id] = k
 	var mem: Dictionary = memory.get(id, {})
+	var new_name: String = CombatData.move(mid)["name"]
 	if keep_in_memory:
+		# Replaces whatever was in memory; the equipped move stays.
+		var was := memory_move(id, slot)
 		mem[slot] = mid
 		memory[id] = mem
-		return "%s learned %s and kept it in memory." % [name, CombatData.move(mid)["name"]]
+		if was != "":
+			return "%s learned %s and put it in memory, forgetting %s." % [name, new_name, CombatData.move(was)["name"]]
+		return "%s learned %s and put it in memory." % [name, new_name]
+	# Replaces the equipped move. It drops into memory only if memory is empty; otherwise it's
+	# forgotten and the memory move stays.
 	var old := kit_move(id, slot)
-	mem[slot] = old
-	memory[id] = mem
 	var kit: Dictionary = kits.get(id, {})
 	kit[slot] = mid
 	kits[id] = kit
-	return "%s learned %s. %s moved to memory." % [name, CombatData.move(mid)["name"], CombatData.move(old)["name"]]
+	if memory_move(id, slot) == "":
+		mem[slot] = old
+		memory[id] = mem
+		return "%s learned %s. %s moved to memory." % [name, new_name, CombatData.move(old)["name"]]
+	return "%s learned %s, forgetting %s." % [name, new_name, CombatData.move(old)["name"]]
 
 
 ## Swap a slot's move with the one in its memory (between battles).
@@ -703,6 +737,7 @@ func make_battle(ambush := false, rng_seed := -1) -> Battle:
 	var pack: Dictionary = pending_encounter.get("pack", CombatData.PACKS[0])
 	var opts := {"ambush": ambush}
 	opts["seed"] = rng_seed if rng_seed >= 0 else battle_rng.randi()
+	opts["items"] = slotted_items()
 	return Battle.create(
 		{"slots": lineup.duplicate(), "hp": creature_hp.duplicate(), "fatigue": fatigue.duplicate(),
 			"kits": kits.duplicate(true), "boosts": boosts.duplicate(true)},
@@ -717,6 +752,10 @@ const RETREAT_FOOD := 5.0
 const RETREAT_WEAR := 8.0
 const VICTORY_FOOD := 6.0
 const VICTORY_WATER := 4.0
+const ITEM_DROP_CHANCE := 0.5
+const TECHNIQUE_DROP_CHANCE := 0.2
+const RECRUIT_CHANCE := 0.35
+const STORAGE_MAX := 9
 
 ## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
 func finish_battle(battle: Battle) -> Array[String]:
@@ -727,7 +766,10 @@ func finish_battle(battle: Battle) -> Array[String]:
 		for id in hp:
 			creature_hp[id] = float(hp[id])
 	var guardian := bool(pending_encounter.get("guardian", false))
+	var battle_scale := float(pending_encounter.get("scale", 1.0))
+	var pack: Dictionary = pending_encounter.get("pack", {})
 	pending_encounter = {}
+	pending_recruit = ""
 	match outcome:
 		Battle.Outcome.VICTORY:
 			provisions += VICTORY_FOOD
@@ -747,6 +789,36 @@ func finish_battle(battle: Battle) -> Array[String]:
 			wagon.integrity = maxi(0, wagon.integrity - BREACH_INTEGRITY)
 			lines.append("Defeat. They break through to the wagon.")
 			lines.append("The wagon takes a beating (-%d%% integrity) and they make off with %d food and %d water." % [BREACH_INTEGRITY, food, drink])
+	# Battle items in the slots are used up; loot after a win.
+	if battle != null and not battle.items_used.is_empty():
+		var used: Array[String] = []
+		for id in battle.items_used:
+			used.append(BattleItems.item_name(id))
+		_spend_items(battle.items_used)
+		lines.append("Used up: %s." % ", ".join(used))
+	if outcome == Battle.Outcome.VICTORY:
+		var found: Array[String] = []
+		for i in (2 if guardian else 1):
+			if battle_rng.randf() < (1.0 if guardian else ITEM_DROP_CHANCE):
+				var id: String = BattleItems.ITEMS.keys()[battle_rng.randi_range(0, BattleItems.ITEMS.size() - 1)]
+				items[id] = int(items.get(id, 0)) + 1
+				found.append(BattleItems.item_name(id))
+		if not found.is_empty():
+			lines.append("Found a battle item: %s." % ", ".join(found))
+		var wild: Array[String] = recruit_candidates(pack)
+		if not wild.is_empty() and battle_rng.randf() < RECRUIT_CHANCE:
+			pending_recruit = wild[battle_rng.randi_range(0, wild.size() - 1)]
+			lines.append("A wild %s lingers after the fight. It could join you." % Species.info(pending_recruit)["name"])
+		var light := Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT
+		var dark := Dust.GUARDIAN_DARK if guardian else (1 if battle_scale >= Dust.STRONG_SCALE else 0)
+		light_dust += light
+		dark_dust += dark
+		lines.append("Gathered dust: +%d {i:light_dust} Light%s." % [light, "" if dark == 0 else ", +%d {i:dark_dust} Dark" % dark])
+		if battle_rng.randf() < (1.0 if guardian else TECHNIQUE_DROP_CHANCE):
+			var all: Array = MovePool.MOVES.keys()
+			var mid: String = all[battle_rng.randi_range(0, all.size() - 1)]
+			techniques[mid] = int(techniques.get(mid, 0)) + 1
+			lines.append("Found a technique: %s." % CombatData.move(mid)["name"])
 	# Experience for everyone who stood in the lineup.
 	if battle != null:
 		var award := Leveling.XP_LOSS
@@ -772,6 +844,154 @@ func finish_battle(battle: Battle) -> Array[String]:
 		state = State.FAILED
 		fail_reason = "The wagon was torn apart in battle."
 	return lines
+
+
+# ---------- battle items ----------
+
+func item_count(id: String) -> int:
+	return int(items.get(id, 0))
+
+
+## How many of an item are left after the ones already in slots.
+func item_free(id: String) -> int:
+	return item_count(id) - item_slots.count(id)
+
+
+## Put an item in a slot ("" clears it). Returns false if none are free.
+func set_item_slot(slot: int, id: String) -> bool:
+	if slot < 0 or slot >= BattleItems.SLOTS:
+		return false
+	if id != "" and (not BattleItems.has(id) or (item_slots[slot] != id and item_free(id) <= 0)):
+		return false
+	item_slots[slot] = id
+	return true
+
+
+func slotted_items() -> Array[String]:
+	var out: Array[String] = []
+	for id in item_slots:
+		if id != "" and item_count(id) > 0:
+			out.append(id)
+	return out
+
+
+## Take used items out of the bag. A slot keeps its item while there are more of it.
+func _spend_items(used: Array[String]) -> void:
+	for id in used:
+		items[id] = maxi(0, item_count(id) - 1)
+		if items[id] == 0:
+			items.erase(id)
+	for i in item_slots.size():
+		var id := item_slots[i]
+		if id != "" and item_slots.slice(0, i + 1).count(id) > item_count(id):
+			item_slots[i] = ""
+
+
+# ---------- techniques ----------
+
+func technique_count(mid: String) -> int:
+	return int(techniques.get(mid, 0))
+
+
+## Can this Trailomon learn the technique? Same habitat as the move's species, and it doesn't
+## already have the move equipped or in memory.
+func can_learn_technique(id: String, mid: String) -> bool:
+	if not MovePool.has(mid) or not Species.DATA.has(id):
+		return false
+	var owner := MovePool.owner_of(mid)
+	if owner != id and Species.info(owner)["type"] != Species.info(id)["type"]:
+		return false
+	var slot: String = CombatData.move(mid)["slot"]
+	return kit_move(id, slot) != mid and memory_move(id, slot) != mid
+
+
+## Teach a technique (used up). Returns a journal line, or "" if it can't.
+func use_technique(id: String, mid: String, to_memory: bool) -> String:
+	if technique_count(mid) <= 0 or not can_learn_technique(id, mid):
+		return ""
+	techniques[mid] = technique_count(mid) - 1
+	if techniques[mid] == 0:
+		techniques.erase(mid)
+	return _learn(id, mid, to_memory)
+
+
+# ---------- recruiting and storage ----------
+
+## Species from a beaten pack that could join: not the boss, not one you already have.
+func recruit_candidates(pack: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	if stored.size() >= STORAGE_MAX:
+		return out
+	for id in pack.get("front", []) + pack.get("back", []):
+		var sid := String(id)
+		if sid != "" and Species.DATA.has(sid) and not roster.has(sid) and not stored.has(sid) and not out.has(sid):
+			out.append(sid)
+	return out
+
+
+## Take in the creature that offered to join. It goes to storage, rested and healthy.
+func recruit() -> String:
+	if pending_recruit == "" or stored.size() >= STORAGE_MAX:
+		return ""
+	var id := pending_recruit
+	pending_recruit = ""
+	stored.append(id)
+	fatigue[id] = 0.0
+	creature_hp[id] = max_hp(id)
+	var line := "%s joined you. It waits in storage until you swap it into the team." % Species.info(id)["name"]
+	journal.append(line)
+	return line
+
+
+## Swap a stored creature with one travelling in the team. The stored one takes its place in
+## the team and the lineup; the other goes to storage.
+func swap_stored(stored_id: String, team_id: String) -> bool:
+	var si := stored.find(stored_id)
+	var ri := roster.find(team_id)
+	if si < 0 or ri < 0:
+		return false
+	stored[si] = team_id
+	roster[ri] = stored_id
+	var cell: Variant = lineup_cell(team_id)
+	if cell != null:
+		lineup[cell] = stored_id
+	haulers.erase(team_id)
+	if not fatigue.has(stored_id):
+		fatigue[stored_id] = 0.0
+	if not creature_hp.has(stored_id):
+		creature_hp[stored_id] = max_hp(stored_id)
+	return true
+
+
+# ---------- dust ----------
+
+func dust_left(id: String) -> int:
+	return Dust.CAP - int(dust_used.get(id, 0))
+
+
+func dust_count(kind: String) -> int:
+	return dark_dust if kind == "dark" else light_dust
+
+
+## Use one Light or Dark dust on a stat. Returns a journal line, or "" if it can't.
+func use_dust(id: String, kind: String, stat: String) -> String:
+	if dust_count(kind) <= 0 or dust_left(id) <= 0 or not Leveling.STATS.has(stat):
+		return ""
+	var o := Dust.offer(kind, stat)
+	var b: Dictionary = boosts.get(id, {})
+	b[stat] = float(b.get(stat, 0.0)) + float(o["amount"])
+	if float(o["cost"]) > 0.0:
+		b[o["cost_stat"]] = float(b.get(o["cost_stat"], 0.0)) - float(o["cost"])
+	boosts[id] = b
+	if stat == "hp":
+		creature_hp[id] = float(creature_hp.get(id, 0.0)) + float(o["amount"])
+	creature_hp[id] = minf(float(creature_hp.get(id, 0.0)), max_hp(id))
+	if kind == "dark":
+		dark_dust -= 1
+	else:
+		light_dust -= 1
+	dust_used[id] = int(dust_used.get(id, 0)) + 1
+	return "%s took %s dust: %s." % [Species.info(id)["name"], "Dark" if kind == "dark" else "Light", Dust.offer_text(o)]
 
 
 ## Fight the pending encounter instantly (used by travel() and tests).

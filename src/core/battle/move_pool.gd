@@ -140,6 +140,15 @@ static func has(id: String) -> bool:
 
 
 ## The archetype (0 or 1) a learnable move belongs to for a species, or -1.
+## The species whose archetypes hold this move ("" if none).
+static func owner_of(move_id: String) -> String:
+	for species in ARCHETYPES:
+		for arc in ARCHETYPES[species]:
+			if arc["moves"].has(move_id):
+				return species
+	return ""
+
+
 static func archetype_of(species: String, move_id: String) -> int:
 	var arcs: Array = ARCHETYPES.get(species, [])
 	for i in arcs.size():

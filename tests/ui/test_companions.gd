@@ -73,19 +73,22 @@ func test_level_up_screen_shows_sheet_and_current_move() -> void:
 	var s := LevelUpScreen.new()
 	s.crossing = e
 	s._ready()
-	check(s._current_tile != null, "a move level-up shows the current move in its own tile")
 	var text := ""
 	for l in s.find_children("*", "RichTextLabel", true, false):
 		text += (l as RichTextLabel).text + "\n"
-	var current: String = CombatData.move(e.kit_move("coilhusk", "passive"))["name"]
-	check(text.contains("EQUIPPED NOW"), "current tile is marked as equipped")
-	check(text.contains("Replaces " + current), "each option says what it replaces")
+	check(text.contains("Equipped: "), "options say what is equipped")
+	check(text.contains("Memory: empty"), "options say what is in memory")
 	check(text.contains("Trunk Slam"), "the character sheet lists the other moves")
 	s._pick(0)
 	var picked := ""
 	for l in s.find_children("*", "RichTextLabel", true, false):
-		picked += (l as RichTextLabel).text + "\n"
-	check(picked.contains("REPLACED BY"), "picking marks the current move as replaced")
+		if not l.is_queued_for_deletion():
+			picked += (l as RichTextLabel).text + "\n"
+	check(s._targets.has("equipped") and s._targets.has("memory"), "picking shows equipped and memory tiles")
+	check(picked.contains("EQUIPPED") and picked.contains("MEMORY"), "tiles are labelled")
+	check(picked.contains("click to replace"), "after picking, the tiles ask to be clicked")
+	(s._targets["memory"] as Button).pressed.emit()
+	check_eq(e.memory_move("coilhusk", "passive") != "", true, "clicking memory puts the move there")
 	s._sheets.free()
 	s._sheets = null
 	s.free()

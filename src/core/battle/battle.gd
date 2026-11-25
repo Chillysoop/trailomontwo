@@ -42,12 +42,15 @@ var wagon_damage := 0.0
 var _acc := 0.0
 var _wagon_timer := WAGON_INTERVAL * 0.6
 var _next_uid := 0
+## Battle items in use: names for the screen, and Mending Moss style heals [pct, every, timer].
+var items_used: Array[String] = []
+var _regen: Array = []
 
 
 ## player: {"slots": {Vector2i(row, lane): species}, "hp": {species: hp}, "fatigue": {species: 0-100},
 ##          "kits": {species: {"basic", "passive", "ultimate"}}, "boosts": {species: {"hp", "atk", "def", "spd"}}}
 ## enemy: {"front": [3 ids], "back": [3 ids], "boss": id or "", "scale": float}
-## opts: {"seed": int, "ambush": bool}
+## opts: {"seed": int, "ambush": bool, "items": [battle item ids]}
 static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 	var b := Battle.new()
 	if opts.has("seed"):
@@ -72,8 +75,8 @@ static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 		var boost: Dictionary = player.get("boosts", {}).get(id, {})
 		f.max_hp += float(boost.get("hp", 0.0))
 		f.hp = f.max_hp
-		f.atk += float(boost.get("atk", 0.0))
-		f.def += float(boost.get("def", 0.0))
+		f.atk = maxf(1.0, f.atk + float(boost.get("atk", 0.0)))
+		f.def = maxf(0.0, f.def + float(boost.get("def", 0.0)))
 		f.spd = maxf(0.6, f.spd - float(boost.get("spd", 0.0)))
 		if hp.has(id):
 			f.hp = clampf(float(hp[id]), 0.0, f.max_hp)
@@ -99,7 +102,50 @@ static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 		var caught := ambush and f.side == Formation.Side.PLAYER
 		f.attack_bar = 0.0 if caught else b.rng.randf_range(0.2, 0.6)
 		f.ult = 0.0 if caught else (30.0 if ambush else 0.0)
+	for id in opts.get("items", []):
+		b._use_item(String(id))
 	return b
+
+
+## A battle item's effect at the start of the fight.
+func _use_item(id: String) -> void:
+	if not BattleItems.has(id):
+		return
+	var it: Dictionary = BattleItems.ITEMS[id]
+	items_used.append(id)
+	events.append({"t": "status", "src": WAGON_UID, "dst": WAGON_UID, "label": BattleItems.item_name(id) + "!"})
+	for f in side_fighters(Formation.Side.PLAYER):
+		if it.has("shield_maxhp"):
+			f.shield = minf(f.max_hp, f.shield + f.max_hp * float(it["shield_maxhp"]) / 100.0)
+		if it.has("atk_pct"):
+			f.atk *= 1.0 + float(it["atk_pct"]) / 100.0
+		if it.has("def_pct"):
+			f.def *= 1.0 + float(it["def_pct"]) / 100.0
+		if it.has("haste"):
+			f.add_mod("haste", float(it["haste"][0]) / 100.0, float(it["haste"][1]))
+		if it.has("ult_pct"):
+			f.ult = minf(CombatData.ULT_MAX, f.ult + CombatData.ULT_MAX * float(it["ult_pct"]) / 100.0)
+	for f in side_fighters(Formation.Side.ENEMY):
+		if it.has("foe_slow"):
+			f.add_mod("slow", float(it["foe_slow"][0]) / 100.0, float(it["foe_slow"][1]))
+		if it.has("foe_weaken"):
+			f.add_mod("weaken", float(it["foe_weaken"][0]) / 100.0, float(it["foe_weaken"][1]))
+	if it.has("regen"):
+		_regen.append([float(it["regen"][0]), float(it["regen"][1]), float(it["regen"][1])])
+
+
+func _tick_items() -> void:
+	for r in _regen:
+		r[2] -= TICK
+		if r[2] > 0.0:
+			continue
+		r[2] = r[1]
+		for f in side_fighters(Formation.Side.PLAYER):
+			if f.alive():
+				var before := f.hp
+				f.hp = minf(f.max_hp, f.hp + roundf(f.max_hp * r[0] / 100.0 * fatigue_healing()))
+				if f.hp > before:
+					events.append({"t": "heal", "src": f.uid, "dst": f.uid, "amount": f.hp - before})
 
 
 func _make(id: String, side: int, row: int, lane: int, scale: float) -> Fighter:
@@ -175,6 +221,7 @@ func step() -> void:
 		if retreat_left <= 0.0:
 			_finish(Outcome.RETREAT)
 			return
+	_tick_items()
 	for f in fighters:
 		if f.alive():
 			_tick_fighter(f)

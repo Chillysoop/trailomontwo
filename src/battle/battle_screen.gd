@@ -50,6 +50,8 @@ var _syn_theirs: RichTextLabel
 var _fight: Button
 var _bench_btn: Button
 var _foe_btn: Button
+var _item_slots: ItemSlots
+var _items_used: RichTextLabel
 var _combat_bar: PanelContainer
 var _stats_panel: PanelContainer
 var _stats: StatsWindow
@@ -178,6 +180,9 @@ func _refresh_lineup() -> void:
 	_fight.disabled = mine.is_empty()
 	_fight.text = "Fight!" if not mine.is_empty() else "Nobody can fight"
 	_foe_btn.visible = practice
+	if _item_slots.crossing == null:
+		_item_slots.crossing = crossing
+	_item_slots.refresh()
 	_bench_btn.visible = _selected != "" and crossing.lineup_cell(_selected) != null
 	_show_info()
 	_grid.queue_redraw()
@@ -324,6 +329,10 @@ func _start_combat() -> void:
 	if not crossing.can_fight():
 		return
 	battle = crossing.make_battle(ambush)
+	var used := ""
+	for id in battle.items_used:
+		used += "{%s:%s}" % ["ik" if battle.items_used.size() == 1 else "i", id]
+	Rich.set_text(_items_used, used)
 	phase = Phase.COMBAT
 	_selected = ""
 	_grid.visible = false
@@ -613,6 +622,21 @@ func _end_combat() -> void:
 		var cont := Ui.button("Continue", 10)
 		cont.pressed.connect(func(): finished.emit(_result_lines))
 		_after_buttons.add_child(cont)
+		if crossing.pending_recruit != "":
+			var rid := crossing.pending_recruit
+			var take := Ui.button("Take in %s" % Species.info(rid)["name"], 10)
+			take.icon = CompanionsScreen.portrait(rid)
+			take.expand_icon = false
+			take.add_theme_constant_override("icon_max_width", 16)
+			take.pressed.connect(func():
+				var line := crossing.recruit()
+				if line != "":
+					_result_lines.append(line)
+					Rich.set_text(_after_body, "\n".join(_result_lines))
+				take.disabled = true
+				take.text = "%s joined" % Species.info(rid)["name"])
+			Tips.attach(take, func(): return CreatureCard.markup(rid, {"enemy": false}) + "\n[color=#ffe3a3]It goes to storage. Swap it into your team from the Companions screen.[/color]")
+			_after_buttons.add_child(take)
 		if crossing.pending_count() > 0:
 			var lv := Ui.button("Level ups (%d)" % crossing.pending_count(), 10)
 			lv.pressed.connect(func():
@@ -679,6 +703,8 @@ func _build_ui() -> void:
 	_syn_theirs = Rich.label("", 8, 134)
 	syn.add_child(_syn_theirs)
 	col.add_child(syn)
+	_item_slots = ItemSlots.new()
+	col.add_child(_item_slots)
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 4)
 	_fight = Ui.button("Fight!", 10)
@@ -727,6 +753,9 @@ func _build_ui() -> void:
 	_retreat_btn.pressed.connect(_retreat)
 	Tips.attach(_retreat_btn, func(): return str(_retreat_btn.get_meta("tip", "")))
 	row.add_child(_retreat_btn)
+	_items_used = Rich.label("", 9)
+	_items_used.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_items_used)
 	_ui.add_child(_combat_bar)
 
 	_stats_panel = PanelContainer.new()
@@ -766,7 +795,7 @@ func _build_ui() -> void:
 	_ui.add_child(_log)
 
 	_after = PanelContainer.new()
-	_after.position = Vector2(110, 132)
+	_after.position = Vector2(110, 96)
 	_after.custom_minimum_size = Vector2(340, 0)
 	_after.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.94)))
 	var acol := VBoxContainer.new()

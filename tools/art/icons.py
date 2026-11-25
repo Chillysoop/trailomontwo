@@ -60,6 +60,17 @@ ICONS = {
     "dark_dust": "a small cloth pouch spilling glowing deep violet dust with dark sparkles",
     # empty memory slot
     "memory": "a small empty glass jar with a faint teal glow inside and a cork stopper",
+    "technique": "a rolled parchment scroll tied with a green ribbon and a small glowing rune",
+    # battle items (consumables)
+    "item_slot": "an empty small leather belt pouch with a brass buckle",
+    "ironbark_salve": "a small round tin of salve with a bark textured lid and a blue shield glow",
+    "ember_draught": "a small corked potion bottle with glowing orange ember liquid",
+    "stoneskin_tea": "a small clay teacup with grey stone flakes and steam",
+    "swiftwind_feather": "a single bright green feather with yellow speed streaks",
+    "rally_horn": "a curved brass horn with a red cord, sound waves",
+    "mending_moss": "a clump of bright green moss with a teal healing sparkle",
+    "smoke_pouch": "a small grey pouch puffing a blue grey smoke cloud",
+    "bitter_ash": "a small dark jar of black ash with a cracked lid and purple wisps",
     # trail resources
     "day": "a bright orange sun over a horizon line",
     "food": "a round loaf of bread with a sprig of wheat",
