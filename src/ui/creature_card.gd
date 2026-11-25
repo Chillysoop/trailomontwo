@@ -107,8 +107,8 @@ static func markup(id: String, opts := {}) -> String:
 	if not caps.is_empty() and not opts.get("enemy", false):
 		var parts: Array[String] = []
 		for c in caps:
-			parts.append("{k:cap_%s} %d" % [c, caps[c]])
-		lines.append("[color=#%s]Trail:[/color] " % MUTED + ", ".join(parts))
+			parts.append("{i:cap_%s}%d" % [c, caps[c]])
+		lines.append("[color=#%s]{k:job|Jobs}:[/color] " % MUTED + "  ".join(parts))
 	if int(info["hauling"]) > 0 and not opts.get("enemy", false):
 		lines[lines.size() - 1] += "  {i:haul}%d" % int(info["hauling"])
 	var out := "\n".join(lines)

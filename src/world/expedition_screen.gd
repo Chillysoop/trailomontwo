@@ -2,7 +2,7 @@ extends Node2D
 ## The playable crossing: pick a route at each junction, watch the caravan travel day by day,
 ## and manage food, water and hauling until you reach Westwatch or the crossing fails.
 
-const SECONDS_PER_DAY := 1.2
+const SECONDS_PER_DAY := 2.0
 const PANEL_POS := Vector2(338, 30)
 const PANEL_SIZE := Vector2(296, 324)
 
@@ -14,7 +14,7 @@ var _hud: RichTextLabel
 var _hud_health: RichTextLabel
 var _hover: HoverZones
 var _panel: PanelContainer
-var _title: Label
+var _title: RichTextLabel
 var _map: RouteMapView
 var _route_page: VBoxContainer
 var _wagon_page: VBoxContainer
@@ -31,10 +31,20 @@ var _go: Button
 var _log: Label
 var _end: PanelContainer
 var _event: PanelContainer
-var _event_title: Label
+var _event_title: RichTextLabel
 var _event_text: Label
 var _event_choices: VBoxContainer
-var _event_result: Label
+var _event_result: RichTextLabel
+var _ambience: TrailAmbience
+var _toasts: VBoxContainer
+var _moment_seen := 0
+var _pace_btn: Button
+var _ration_btn: Button
+var _tab_trade: Button
+var _trade_page: VBoxContainer
+var _trade_list: GridContainer
+var _rumor: RichTextLabel
+var _coins_label: RichTextLabel
 var _event_continue: Button
 var _team_status: VBoxContainer
 var _battle: BattleScreen
@@ -52,6 +62,8 @@ func _ready() -> void:
 	_backdrop = TravelBackdrop.new()
 	_backdrop.moving = false
 	add_child(_backdrop)
+	_ambience = TrailAmbience.new()
+	add_child(_ambience)
 	_caravan = Caravan.new()
 	add_child(_caravan)
 	_backdrop.add_foreground(self)
@@ -68,7 +80,11 @@ func start_new() -> void:
 	_backdrop.set_moving(false)
 	_end.visible = false
 	_event.visible = false
+	_moment_seen = 0
+	for t in _toasts.get_children():
+		t.queue_free()
 	_map.expedition = crossing
+	_ambience.set_weather(crossing.weather)
 	_show_junction()
 
 
@@ -76,7 +92,11 @@ func start_new() -> void:
 
 func _show_junction() -> void:
 	_panel.visible = true
-	_title.text = "At %s" % TestRoute.junction_name(crossing.at)
+	var kind := Settlements.kind(crossing.at)
+	Rich.set_text(_title, "{i:settlement} [b]%s[/b]  [color=#c8bca8]%s[/color]" % [TestRoute.junction_name(crossing.at), kind["name"]])
+	_ambience.set_moving(false)
+	_ambience.show_settlement(Settlements.stop(crossing.at)["kind"])
+	_refresh_trade()
 	for c in _routes.get_children():
 		c.queue_free()
 	var exits := crossing.exits()
@@ -102,7 +122,8 @@ func _pick(seg: Dictionary) -> void:
 	var f := crossing.forecast(seg)
 	var lines: Array[String] = []
 	lines.append("[b]%s[/b]  {ik:%s}  {k:risk|Risk} %s" % [TestRoute.junction_name(seg["to"]), Glossary.habitat_id(seg["terrain"]), "{i:risk}".repeat(seg["risk"])])
-	lines.append("{i:day} %d day%s%s" % [f["days"], "" if f["days"] == 1 else "s", "  ({k:push|pushing}, slower)" if f["hauling"] == Hauling.Result.PUSH else ""])
+	lines.append("{i:day} %d day%s at {i:%s}%s     {k:weather|Weather} %s" % [f["days"], "" if f["days"] == 1 else "s", TrailLife.pace(crossing.pace)["icon"],
+		"  ({k:push|pushing})" if f["hauling"] == Hauling.Result.PUSH else "", _forecast_icons(seg["terrain"])])
 	var bad := "[color=#ff8a7a]%s[/color]"
 	lines.append("{i:food} uses %d of %d%s     {i:water} uses %d of %d%s" % [
 		roundi(f["provisions"]), roundi(crossing.provisions), "" if f["enough_food"] else " " + bad % "NOT ENOUGH",
@@ -131,12 +152,25 @@ func _pick(seg: Dictionary) -> void:
 		_go.text = "Too heavy to travel this way"
 
 
+## The three likeliest weathers on a terrain, as icons.
+func _forecast_icons(terrain: String) -> String:
+	var table: Dictionary = TrailLife.WEATHER_TABLE.get(terrain, {})
+	var ids := table.keys()
+	ids.sort_custom(func(a, b): return int(table[a]) > int(table[b]))
+	var out := ""
+	for w in ids.slice(0, 3):
+		out += "{i:%s}" % TrailLife.weather(w)["icon"]
+	return out
+
+
 func _set_off() -> void:
 	if _picked.is_empty() or not crossing.start_trip(_picked):
 		return
 	_panel.visible = false
 	_backdrop.set_moving(true)
 	_caravan.set_walking(true)
+	_ambience.set_terrain(_picked["terrain"])
+	_ambience.set_moving(true)
 	_log.text = "Travelling to %s..." % TestRoute.junction_name(_picked["to"])
 	_day_timer = SECONDS_PER_DAY
 
@@ -150,16 +184,16 @@ func _process(delta: float) -> void:
 	_day_timer = SECONDS_PER_DAY
 	var before := crossing.journal.size()
 	var more := crossing.step_day()
-	_log.text = "   ".join(crossing.journal.slice(before))
+	_log.text = crossing.journal[before] if crossing.journal.size() > before else ""
+	_ambience.set_weather(crossing.weather)
+	_show_new_moments()
 	_refresh_hud()
 	if not crossing.pending_event.is_empty():
-		_backdrop.set_moving(false)
-		_caravan.set_walking(false)
+		_halt()
 		_show_event()
 		return
 	if not crossing.pending_encounter.is_empty():
-		_backdrop.set_moving(false)
-		_caravan.set_walking(false)
+		_halt()
 		_show_encounter()
 		return
 	if more:
@@ -167,9 +201,59 @@ func _process(delta: float) -> void:
 	_after_trip()
 
 
-func _after_trip() -> void:
+func _halt() -> void:
 	_backdrop.set_moving(false)
 	_caravan.set_walking(false)
+	_ambience.set_moving(false)
+
+
+func _resume() -> void:
+	_backdrop.set_moving(true)
+	_caravan.set_walking(true)
+	_ambience.set_moving(true)
+
+
+## Trail moments since the last look: a toast each, and whatever they mention comes into view.
+func _show_new_moments() -> void:
+	while _moment_seen < crossing.moments.size():
+		var m: Dictionary = crossing.moments[_moment_seen]
+		_moment_seen += 1
+		_toast(m)
+		if String(m.get("sight", "")) != "":
+			_ambience.spawn_sight(m["sight"], {"species": m.get("wild", "")})
+
+
+func _toast(m: Dictionary) -> void:
+	var text := "{i:%s} %s" % [m["icon"], m["text"]]
+	var who := String(m.get("who", ""))
+	if who != "" and not String(m["text"]).contains("{c:"):
+		text = TrailFx.portrait(who) + " " + text
+	if not m["deltas"].is_empty():
+		text += "  " + TrailFx.chips(m["deltas"].filter(func(d): return d["icon"] != "xp")) 
+		for d in m["deltas"]:
+			if d["icon"] == "xp":
+				text += "  [color=#%s]{i:xp}+%d[/color]" % [TrailFx.GOOD, int(d["amount"])]
+	if m.has("grave"):
+		text += "\n[i][color=#c8bca8]%s. %s[/color][/i]" % [m["grave"][0], m["grave"][1]]
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.82)))
+	box.add_child(Rich.label(text, 8))
+	box.modulate = Color(1, 1, 1, 0)
+	_toasts.add_child(box)
+	_toasts.move_child(box, 0)
+	while _toasts.get_child_count() > 3:
+		var old := _toasts.get_child(_toasts.get_child_count() - 1)
+		_toasts.remove_child(old)
+		old.queue_free()
+	var t := box.create_tween()
+	t.tween_property(box, "modulate:a", 1.0, 0.25)
+	t.tween_interval(5.0)
+	t.tween_property(box, "modulate:a", 0.0, 0.8)
+	t.tween_callback(box.queue_free)
+
+
+func _after_trip() -> void:
+	_halt()
 	match crossing.state:
 		Expedition.State.AT_JUNCTION: _show_junction()
 		Expedition.State.ARRIVED: _show_end(true)
@@ -181,7 +265,7 @@ func _after_trip() -> void:
 func _show_event() -> void:
 	var ev := crossing.pending_event
 	_event.visible = true
-	_event_title.text = ev["title"]
+	Rich.set_text(_event_title, "{i:%s} %s" % [TrailEvents.kind_icon(ev), ev["title"]])
 	_event_text.text = ev["text"]
 	_event_result.visible = false
 	_event_continue.visible = false
@@ -190,52 +274,84 @@ func _show_event() -> void:
 		c.queue_free()
 	var views := crossing.event_choices(ev)
 	for i in views.size():
-		var v: Dictionary = views[i]
-		var line: String = v["label"]
-		if not v["safe"]:
-			var odds: Dictionary = v["odds"]
-			var who: String = Species.info(v["helper"])["name"] + " helps" if v["helper"] != "" else "nobody can help"
-			line += "\n    %s:  %d%% success, %d%% mixed, %d%% bad" % [who, odds["success"], odds["mixed"], odds["failure"]]
-		var b := _button(line, 8)
-		_helper_icon(b, v)
-		b.pressed.connect(_choose_event.bind(i))
-		_event_choices.add_child(b)
+		var row := ClickRow.make(_choice_markup(views[i]), 8, 316)
+		row.disabled = not views[i]["affordable"]
+		row.pressed.connect(_choose_event.bind(i))
+		_event_choices.add_child(row)
 	_event_choices.get_child(0).grab_focus.call_deferred()
 
 
-## Shows the helping creature's portrait on a choice, with its card on hover.
-func _helper_icon(b: Button, v: Dictionary) -> void:
-	var helper: String = v.get("helper", "")
-	if v.get("safe", true) or helper == "":
-		return
-	b.icon = load("res://assets/creatures/%s.png" % helper)
-	b.add_theme_constant_override("icon_max_width", 16)
-	Tips.attach(b, _creature_tip.bind(helper, false))
+## A choice as one line: label, then its cost, then who helps and the odds (or what it gives).
+func _choice_markup(v: Dictionary) -> String:
+	var parts: Array[String] = ["[b]%s[/b]" % v["label"]]
+	if not v["cost"].is_empty():
+		parts.append(TrailFx.cost(v["cost"]))
+	if v["rolled"]:
+		var job := "{i:cap_%s}" % v["cap"]
+		if v["helper"] != "":
+			var bonus := ("[color=#%s]+%d[/color]" % [TrailFx.GOOD, v["bonus"]]) if int(v["bonus"]) > 0 else ""
+			parts.append("%s%s%s %s" % [job, TrailFx.portrait(v["helper"]), bonus, TrailFx.odds(v["odds"])])
+		else:
+			parts.append("%s[color=#%s]nobody[/color] %s" % [job, TrailFx.BAD, TrailFx.odds(v["odds"])])
+		var reward := TrailFx.preview(v["reward"])
+		if reward != "":
+			parts.append(reward)
+	else:
+		var gives := TrailFx.preview(v["reward"])
+		if gives != "":
+			parts.append(gives)
+	return "   ".join(parts)
 
 
 func _choose_event(i: int) -> void:
 	var r := crossing.resolve_event(i)
+	if r.is_empty():
+		return
 	for c in _event_choices.get_children():
 		c.queue_free()
-	var head: String = {"success": "It went well.", "mixed": "It went partly well.", "failure": "It went badly."}[r["outcome"]]
-	_event_result.text = "%s %s" % [head, r["text"]]
-	_event_result.add_theme_color_override("font_color", {"success": Color("9fe0a0"), "mixed": Color("f0d27a"), "failure": Color("ff8a7a")}[r["outcome"]])
+	_show_result(r["outcome"], r["text"], r["deltas"])
+	if r["recruit"] != "":
+		_offer_recruit(r["recruit"])
+	_continue_to = "battle" if r["fight"] else ""
+	_event_continue.text = "To battle!" if r["fight"] else "Continue"
+	_refresh_hud()
+
+
+func _show_result(outcome: String, text: String, deltas: Array) -> void:
+	var head: String = {"success": "[color=#9fe0a0]Success.[/color]", "mixed": "[color=#f0d27a]Partly.[/color]", "failure": "[color=#ff8a7a]Bad luck.[/color]"}[outcome]
+	var line := "%s %s" % [head, text]
+	var shown := deltas.filter(func(d): return not (d["icon"] == "risk" and d.get("label", "") == "fight"))
+	if not shown.is_empty():
+		line += "\n" + TrailFx.chips(shown)
+	Rich.set_text(_event_result, line)
 	_event_result.visible = true
 	_event_continue.visible = true
 	_event_continue.grab_focus.call_deferred()
-	_refresh_hud()
+
+
+## A wild Trailomon wants to join: take it in (to storage) or let it go.
+func _offer_recruit(id: String) -> void:
+	var take := ClickRow.make("%s Take in {c:%s}  {i:ev_wildlife}" % [TrailFx.portrait(id, 16), id], 9, 316)
+	take.pressed.connect(func():
+		var line := crossing.recruit()
+		for c in _event_choices.get_children():
+			c.queue_free()
+		if line != "":
+			_event_result.text += "\n" + Rich.bb("[color=#9fe0a0]{i:ev_wildlife} {c:%s} joined you (in storage).[/color]" % id)
+		_refresh_hud())
+	_event_choices.add_child(take)
 
 
 func _continue_after_event() -> void:
 	_event.visible = false
+	crossing.pending_recruit = ""
 	var next := _continue_to
 	_continue_to = ""
 	if next != "" and crossing.state == Expedition.State.TRAVELLING:
 		_open_battle(next == "ambush")
 		return
 	if crossing.state == Expedition.State.TRAVELLING:
-		_backdrop.set_moving(true)
-		_caravan.set_walking(true)
+		_resume()
 		_day_timer = SECONDS_PER_DAY
 	else:
 		_after_trip()
@@ -247,24 +363,27 @@ func _show_encounter() -> void:
 	var enc := crossing.pending_encounter
 	var pack: Dictionary = enc["pack"]
 	_event.visible = true
-	_event_title.text = pack["title"]
+	Rich.set_text(_event_title, "{i:risk} %s" % pack["title"])
 	_event_text.text = pack["text"]
 	_event_result.visible = false
 	_event_continue.visible = false
 	for c in _event_choices.get_children():
 		c.queue_free()
 	for v in crossing.encounter_choices():
-		var line: String = v["label"]
+		var line := "[b]%s[/b]" % v["label"]
 		if v["id"] == "fight":
-			line += "  (set your lineup first)" if crossing.can_fight() else "  (nobody can fight: they'll reach the wagon)"
+			line = "[b]Fight[/b]   " + ("{i:role_guard} set your lineup" if crossing.can_fight() else "[color=#%s]{i:ko} nobody can fight[/color]" % TrailFx.BAD)
+		elif v["id"] == "bribe":
+			line = "[b]Throw them food[/b]   " + TrailFx.cost({"food": -Expedition.BRIBE_FOOD})
 		elif not v["safe"]:
-			var odds: Dictionary = v["odds"]
-			var who: String = Species.info(v["helper"])["name"] + " scouts" if v["helper"] != "" else "nobody can scout"
-			line += "\n    %s:  %d%% clean, %d%% tiring detour, %d%% ambushed" % [who, odds["success"], odds["mixed"], odds["failure"]]
-		var b := _button(line, 8)
-		_helper_icon(b, v)
-		b.pressed.connect(_choose_encounter.bind(v["id"]))
-		_event_choices.add_child(b)
+			line = "[b]Slip past[/b]   {i:cap_scout}"
+			if v["helper"] != "":
+				line += TrailFx.portrait(v["helper"]) + " " + TrailFx.odds(v["odds"])
+			else:
+				line += "[color=#%s]nobody[/color] %s" % [TrailFx.BAD, TrailFx.odds(v["odds"])]
+		var row := ClickRow.make(line, 8, 316)
+		row.pressed.connect(_choose_encounter.bind(v["id"]))
+		_event_choices.add_child(row)
 	_event_choices.get_child(0).grab_focus.call_deferred()
 
 
@@ -276,13 +395,12 @@ func _choose_encounter(id: String) -> void:
 	var r := crossing.resolve_encounter(id)
 	for c in _event_choices.get_children():
 		c.queue_free()
-	_event_result.text = r["text"]
-	_event_result.add_theme_color_override("font_color", {"success": Color("9fe0a0"), "mixed": Color("f0d27a"), "failure": Color("ff8a7a")}[r["outcome"]])
-	_event_result.visible = true
-	_event_continue.visible = true
+	var deltas: Array = []
+	if id == "bribe":
+		deltas.append({"icon": "food", "amount": -Expedition.BRIBE_FOOD})
+	_show_result(r["outcome"], r["text"], deltas)
 	_event_continue.text = "To battle!" if r["fight"] else "Continue"
 	_continue_to = "ambush" if r["fight"] else ""
-	_event_continue.grab_focus.call_deferred()
 	_refresh_hud()
 
 
@@ -290,12 +408,11 @@ func _open_battle(ambushed: bool) -> void:
 	if not crossing.can_fight():
 		var lines := crossing.finish_battle(null)
 		_event.visible = true
-		_event_title.text = "The wagon is overrun"
+		Rich.set_text(_event_title, "{i:risk} The wagon is overrun")
 		_event_text.text = ""
 		for c in _event_choices.get_children():
 			c.queue_free()
-		_event_result.text = "\n".join(lines)
-		_event_result.add_theme_color_override("font_color", Color("ff8a7a"))
+		Rich.set_text(_event_result, "[color=#ff8a7a]%s[/color]" % "\n".join(lines))
 		_event_result.visible = true
 		_event_continue.text = "Continue"
 		_event_continue.visible = true
@@ -304,6 +421,7 @@ func _open_battle(ambushed: bool) -> void:
 	_ui.visible = false
 	_backdrop.visible = false
 	_caravan.visible = false
+	_ambience.set_active(false)
 	_battle = BattleScreen.new()
 	_battle.setup(crossing, ambushed)
 	_battle.finished.connect(_on_battle_finished)
@@ -316,7 +434,8 @@ func _on_battle_finished(lines: Array) -> void:
 	_ui.visible = true
 	_backdrop.visible = true
 	_caravan.visible = true
-	_log.text = "   ".join(lines.slice(0, 2))
+	_ambience.set_active(true)
+	_log.text = lines[0] if lines.size() > 0 else ""
 	_refresh_hud()
 	_event_continue.text = "Continue"
 	_continue_after_event()
@@ -324,15 +443,58 @@ func _on_battle_finished(lines: Array) -> void:
 
 # ---------- wagon & cargo ----------
 
-func _show_tab(wagon: bool) -> void:
-	_route_page.visible = not wagon
-	_wagon_page.visible = wagon
-	_tab_route.disabled = not wagon
-	_tab_wagon.disabled = wagon
-	if wagon:
-		_tab_route.grab_focus.call_deferred()
-	elif _routes.get_child_count() > 0:
+## page: false/"route", true/"wagon" or "trade".
+func _show_tab(page: Variant) -> void:
+	var p := "wagon" if page is bool and page else ("route" if page is bool else String(page))
+	_route_page.visible = p == "route"
+	_wagon_page.visible = p == "wagon"
+	_trade_page.visible = p == "trade"
+	_tab_route.disabled = p == "route"
+	_tab_wagon.disabled = p == "wagon"
+	_tab_trade.disabled = p == "trade"
+	if p == "route" and _routes.get_child_count() > 0:
 		_routes.get_child(0).grab_focus.call_deferred()
+
+
+# ---------- trade ----------
+
+func _refresh_trade() -> void:
+	if _trade_list == null:
+		return
+	var stop := Settlements.stop(crossing.at)
+	Rich.set_text(_rumor, ("{i:ev_travelers} [color=#e8dcc0]%s[/color]" % stop["rumor"]) if String(stop["rumor"]) != "" else "")
+	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  {i:repair_kit}%d  {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d" % [
+		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), crossing.repair_kits, _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust])
+	for c in _trade_list.get_children():
+		c.queue_free()
+	var stall := Settlements.stall(crossing.at)
+	if stall.is_empty():
+		_trade_list.add_child(Rich.label("Nothing for sale here.", 8))
+	for good in stall:
+		var left := crossing.stock_left(good)
+		var row := ClickRow.make("{i:%s} %s   [color=#ffe3a3]{i:coins}%d[/color]   [color=#c8bca8]x%d[/color]" % [
+			Settlements.good_icon(good), Settlements.good_name(good), int(stall[good]["price"]), left], 8, 128)
+		row.disabled = not crossing.can_buy(good)
+		row.pressed.connect(_buy.bind(good))
+		Tips.attach(row, "g:" + Settlements.good_icon(good) if Glossary.has(Settlements.good_icon(good)) else "g:trade")
+		_trade_list.add_child(row)
+
+
+static func _count(d: Dictionary) -> int:
+	var n := 0
+	for k in d:
+		n += int(d[k])
+	return n
+
+
+func _buy(good: String) -> void:
+	var d := crossing.buy(good)
+	if d.is_empty():
+		return
+	_toast({"icon": "trade", "text": "Bought", "who": "", "deltas": d})
+	_refresh_trade()
+	_refresh_hud()
+	_pick(_picked)
 
 
 func _wagon_summary() -> String:
@@ -457,10 +619,16 @@ func _do_repair() -> void:
 # ---------- HUD and end ----------
 
 func _refresh_hud() -> void:
-	Rich.set_text(_hud, "{i:day}Day %d    {i:food}%d [color=#c8bca8](%.1fd)[/color]    {i:water}%d [color=#c8bca8](%.1fd)[/color]    {i:cargo}%d    {i:haul}%d    {i:wagon}%d%%" % [
-		crossing.day, roundi(crossing.provisions), crossing.days_of(crossing.provisions, crossing.daily_provisions()),
-		roundi(crossing.water), crossing.days_of(crossing.water, crossing.daily_water()), roundi(crossing.cargo_weight()), roundi(crossing.hauling_available()), crossing.wagon.integrity])
-	Rich.set_text(_hud_health, ("{i:health}[color=#ff8a7a]%d[/color]" if crossing.health < 50 else "{i:health}%d") % crossing.health)
+	var w := TrailLife.weather(crossing.weather)
+	Rich.set_text(_hud, "{i:%s} {i:day}%d   {i:food}%d[color=#c8bca8]/%.0fd[/color]   {i:water}%d[color=#c8bca8]/%.0fd[/color]   {i:coins}%d   {i:cargo}%d   {i:haul}%d   {i:wagon}%d%%" % [
+		w["icon"], crossing.day, roundi(crossing.provisions), floorf(crossing.days_of(crossing.provisions, crossing.daily_provisions())),
+		roundi(crossing.water), floorf(crossing.days_of(crossing.water, crossing.daily_water())), crossing.coins, roundi(crossing.cargo_weight()), roundi(crossing.hauling_available()), crossing.wagon.integrity])
+	var hp := ("{i:health}[color=#ff8a7a]%d[/color]" if crossing.health < 50 else "{i:health}%d") % crossing.health
+	if crossing.fever_days > 0:
+		hp = "{i:fever}" + hp
+	Rich.set_text(_hud_health, hp)
+	_pace_btn.icon = Rich.icon_tex(TrailLife.pace(crossing.pace)["icon"])
+	_ration_btn.icon = Rich.icon_tex(TrailLife.ration(crossing.rations)["icon"])
 	if _comp_btn != null:
 		var n := crossing.pending_count()
 		_comp_btn.text = "Companions (%d level up%s!)" % [n, "" if n == 1 else "s"] if n > 0 else "Companions"
@@ -496,6 +664,24 @@ func _build_ui() -> void:
 	row.add_child(_hud)
 	_hud_health = Rich.label("", 9)
 	row.add_child(_hud_health)
+	_pace_btn = _button("", 8)
+	_pace_btn.focus_mode = Control.FOCUS_NONE
+	_pace_btn.pressed.connect(func():
+		crossing.set_pace(TrailLife.next_in(TrailLife.PACE_ORDER, crossing.pace))
+		_refresh_hud()
+		if _panel.visible and not _picked.is_empty():
+			_pick(_picked))
+	Tips.attach(_pace_btn, func(): return TrailLife.pace_tip(crossing.pace) + Tips.SIDE + "{ik:pace}\n" + Glossary.text("pace"))
+	row.add_child(_pace_btn)
+	_ration_btn = _button("", 8)
+	_ration_btn.focus_mode = Control.FOCUS_NONE
+	_ration_btn.pressed.connect(func():
+		crossing.set_rations(TrailLife.next_in(TrailLife.RATIONS_ORDER, crossing.rations))
+		_refresh_hud()
+		if _panel.visible and not _picked.is_empty():
+			_pick(_picked))
+	Tips.attach(_ration_btn, func(): return TrailLife.ration_tip(crossing.rations) + Tips.SIDE + "{ik:rations}\n" + Glossary.text("rations"))
+	row.add_child(_ration_btn)
 	# Always reachable, at a junction or on the road (travel pauses while it's open).
 	var comp := _button("Companions", 8)
 	comp.focus_mode = Control.FOCUS_NONE
@@ -514,15 +700,23 @@ func _build_ui() -> void:
 	_panel.add_child(col)
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 4)
-	_title = PreviewHud.label("", 10)
+	_title = Rich.label("", 9)
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.add_child(_title)
-	_tab_route = _button("Route", 9)
-	_tab_route.pressed.connect(_show_tab.bind(false))
+	_tab_route = _button("", 9)
+	_tab_route.icon = Rich.icon_tex("progress")
+	_tab_route.pressed.connect(_show_tab.bind("route"))
+	Tips.attach(_tab_route, func(): return "{i:progress} [b]Route[/b]: pick the next road.")
 	tabs.add_child(_tab_route)
-	_tab_wagon = _button("Wagon & cargo", 9)
+	_tab_trade = _button("", 9)
+	_tab_trade.icon = Rich.icon_tex("trade")
+	_tab_trade.pressed.connect(_show_tab.bind("trade"))
+	Tips.attach(_tab_trade, func(): return "{i:trade} [b]Trade[/b]: this stop's stall and the local rumor.")
+	tabs.add_child(_tab_trade)
+	_tab_wagon = _button("", 9)
 	_tab_wagon.icon = Rich.icon_tex("wagon")
-	_tab_wagon.pressed.connect(_show_tab.bind(true))
+	_tab_wagon.pressed.connect(_show_tab.bind("wagon"))
+	Tips.attach(_tab_wagon, func(): return "{i:wagon} [b]Wagon & cargo[/b]: haulers, cargo, rest and repairs.")
 	tabs.add_child(_tab_wagon)
 	col.add_child(tabs)
 
@@ -542,6 +736,20 @@ func _build_ui() -> void:
 	_go = _button("Set off", 10)
 	_go.pressed.connect(_set_off)
 	_route_page.add_child(_go)
+
+	_trade_page = VBoxContainer.new()
+	_trade_page.add_theme_constant_override("separation", 4)
+	_trade_page.visible = false
+	col.add_child(_trade_page)
+	_rumor = Rich.label("", 8, 284)
+	_trade_page.add_child(_rumor)
+	_coins_label = Rich.label("", 8)
+	_trade_page.add_child(_coins_label)
+	_trade_list = GridContainer.new()
+	_trade_list.columns = 2
+	_trade_list.add_theme_constant_override("h_separation", 3)
+	_trade_list.add_theme_constant_override("v_separation", 3)
+	_trade_page.add_child(_trade_list)
 
 	_wagon_page = VBoxContainer.new()
 	_wagon_page.add_theme_constant_override("separation", 3)
@@ -586,7 +794,7 @@ func _build_ui() -> void:
 	var vcol := VBoxContainer.new()
 	vcol.add_theme_constant_override("separation", 5)
 	_event.add_child(vcol)
-	_event_title = PreviewHud.label("", 14)
+	_event_title = Rich.label("", 13)
 	vcol.add_child(_event_title)
 	_event_text = PreviewHud.label("", 9)
 	_event_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -595,15 +803,19 @@ func _build_ui() -> void:
 	_event_choices = VBoxContainer.new()
 	_event_choices.add_theme_constant_override("separation", 3)
 	vcol.add_child(_event_choices)
-	_event_result = PreviewHud.label("", 9)
-	_event_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_event_result.custom_minimum_size = Vector2(328, 0)
+	_event_result = Rich.label("", 9, 328)
 	vcol.add_child(_event_result)
 	_event_continue = _button("Continue", 10)
 	_event_continue.pressed.connect(_continue_after_event)
 	vcol.add_child(_event_continue)
 	_event.visible = false
 	_ui.add_child(_event)
+
+	_toasts = VBoxContainer.new()
+	_toasts.position = Vector2(6, 28)
+	_toasts.add_theme_constant_override("separation", 2)
+	_toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui.add_child(_toasts)
 
 	_end = PanelContainer.new()
 	_end.position = Vector2(170, 110)

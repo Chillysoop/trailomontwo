@@ -71,6 +71,21 @@ var dark_dust := 0
 var dust_used := {}
 ## A wild creature that offered to join after the last win ("" if none).
 var pending_recruit := ""
+## Trail life (see TrailLife and docs/trail-life.md): coins, today's weather, pace, rations, fever.
+var coins := 30
+var weather := "clear"
+var pace := "steady"
+var rations := "normal"
+## Days of trail fever left (crew loses health each day).
+var fever_days := 0
+## Dice for weather and trail moments, so they don't change which events and battles roll.
+var life_rng := RandomNumberGenerator.new()
+## Every trail moment so far: {"id", "icon", "text", "who", "fx", "deltas", "sight"}. The screen shows new ones.
+var moments: Array = []
+## Trip progress carried past the last stop by a fast pace (in days, under 1).
+var carry := 0.0
+## Shop purchases at each stop: junction -> {good: count bought}.
+var bought := {}
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -79,10 +94,12 @@ static func new_default(rng_seed := -1) -> Expedition:
 		e.rng.seed = rng_seed
 		e.battle_rng.seed = rng_seed + 7919
 		e.level_rng.seed = rng_seed + 104729
+		e.life_rng.seed = rng_seed + 31337
 	else:
 		e.rng.randomize()
 		e.battle_rng.randomize()
 		e.level_rng.randomize()
+		e.life_rng.randomize()
 	e.roster = ["brambleback", "coilhusk", "reedwake", "mirelamp", "rimehare", "scythelk"]
 	e.stored = ["gillhorn", "inkhoot"]
 	e.items = {"ironbark_salve": 2, "swiftwind_feather": 1, "smoke_pouch": 1, "rally_horn": 1}
@@ -107,7 +124,7 @@ func daily_provisions() -> float:
 	var total := HUMAN_PROVISIONS * humans
 	for id in roster:
 		total += Species.upkeep(id)
-	return total
+	return total * float(TrailLife.ration(rations)["food"])
 
 
 func daily_water() -> float:
@@ -157,11 +174,10 @@ func forecast(seg: Dictionary) -> Dictionary:
 	var demand := Hauling.demand(Wagon.EMPTY_MASS, cargo_weight(), float(seg["terrain_factor"]))
 	var available := hauling_available()
 	var result := Hauling.evaluate(demand, available)
-	var days: int = seg["days"]
 	var pushing := result == Hauling.Result.PUSH
-	if pushing:
-		days = ceili(days * PUSH_SLOWDOWN)
-	var wear_added := Wagon.wear_per_day(float(seg["terrain_factor"]), cargo_weight(), pushing) * days
+	var distance := trip_distance(seg, pushing)
+	var days := maxi(1, ceili((distance - carry) / float(TrailLife.pace(pace)["speed"]) - 0.0001))
+	var wear_added := Wagon.wear_per_day(float(seg["terrain_factor"]), cargo_weight(), pushing) * float(TrailLife.pace(pace)["wear"]) * days
 	return {
 		"wear": wear_added,
 		"wear_after": wagon.wear + wear_added,
@@ -178,16 +194,27 @@ func forecast(seg: Dictionary) -> Dictionary:
 	}
 
 
+## How far a segment is, in normal travel days (pushing makes it longer).
+func trip_distance(seg: Dictionary, pushing: bool) -> float:
+	return float(seg["days"]) * (PUSH_SLOWDOWN if pushing else 1.0)
+
+
 func exits() -> Array[Dictionary]:
 	return TestRoute.exits(at)
 
 
 ## Travel one day along a segment. Returns a line for the log.
-func spend_day() -> String:
+func spend_day(travelling := false) -> String:
 	day += 1
 	var notes: Array[String] = []
-	var need_food := daily_provisions()
-	var need_water := daily_water()
+	var need_food := daily_provisions() * TrailLife.weather_value(weather, "food_mult", 1.0)
+	var need_water := daily_water() * TrailLife.weather_value(weather, "water_mult", 1.0)
+	water += TrailLife.weather_value(weather, "water_gain")
+	health = mini(100, health + int(TrailLife.ration(rations)["health"]) + (int(TrailLife.pace(pace)["health"]) if travelling else 0))
+	if fever_days > 0:
+		fever_days -= 1
+		health -= TrailLife.FEVER_DAMAGE
+		notes.append("fever")
 	if provisions >= need_food:
 		provisions -= need_food
 	else:
@@ -203,12 +230,14 @@ func spend_day() -> String:
 	if health <= 0:
 		health = 0
 		state = State.FAILED
-		fail_reason = "Your traveller ran out of food and water."
+		fail_reason = "Your traveller ran out of food and water." if notes.has("not enough food") or notes.has("not enough water") else "Your traveller couldn't go on."
 	return "Day %d%s" % [day, (": " + ", ".join(notes)) if notes.size() > 0 else ""]
 
 
 var trip := {}
-var trip_days_left := 0
+## Trip distance still to cover, in normal travel days. Pace covers more or less each day.
+var trip_days_left := 0.0
+var _trip_events := 0
 ## The event waiting for the player's choice (empty when none). Travel pauses until resolve_event().
 var pending_event := {}
 var _trip_had_event := false
@@ -235,7 +264,9 @@ func start_trip(seg: Dictionary) -> bool:
 		return false
 	trip = seg
 	trip["pushing"] = f["hauling"] == Hauling.Result.PUSH
-	trip_days_left = f["days"]
+	trip_days_left = trip_distance(seg, trip["pushing"]) - carry
+	carry = 0.0
+	_trip_events = 0
 	_trip_had_event = false
 	_trip_had_battle = false
 	state = State.TRAVELLING
@@ -248,32 +279,40 @@ func step_day() -> bool:
 		return false
 	if not pending_event.is_empty() or not pending_encounter.is_empty():
 		return true
-	if trip_days_left <= 0:
+	if trip_days_left <= 0.0:
 		return _arrive()
-	journal.append(spend_day())
+	if events_enabled:
+		weather = TrailLife.roll_weather(String(trip["terrain"]), life_rng)
+	journal.append(spend_day(true))
 	if state == State.FAILED:
 		return false
 	_wear_day(float(trip["terrain_factor"]), trip["pushing"])
 	if state == State.FAILED:
 		return false
-	if events_enabled and not _trip_had_event and rng.randf() < TrailEvents.daily_chance(int(trip["risk"])):
-		var options := TrailEvents.for_segment(trip)
+	if events_enabled and _trip_events < TrailEvents.PER_TRIP and rng.randf() < TrailEvents.daily_chance(int(trip["risk"])):
+		var options := TrailEvents.for_segment(trip, weather)
 		if not options.is_empty():
 			pending_event = options[rng.randi_range(0, options.size() - 1)]
 			_trip_had_event = true
+			_trip_events += 1
 			journal.append(pending_event["title"] + "!")
-	if pending_event.is_empty() and events_enabled and not _trip_had_battle and battle_rng.randf() < BATTLE_CHANCE + BATTLE_RISK_CHANCE * int(trip["risk"]):
+	if pending_event.is_empty() and events_enabled and not _trip_had_battle and battle_rng.randf() < BATTLE_CHANCE + BATTLE_RISK_CHANCE * int(trip["risk"]) + TrailLife.weather_value(weather, "ambush"):
 		var packs := CombatData.packs_for(trip)
 		if not packs.is_empty():
 			var pack: Dictionary = packs[battle_rng.randi_range(0, packs.size() - 1)]
 			pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip["risk"]), 1.0)), "guardian": false}
 			_trip_had_battle = true
 			journal.append(pack["title"] + "!")
+	if pending_event.is_empty() and pending_encounter.is_empty() and events_enabled and life_rng.randf() < TrailMoments.DAILY_CHANCE:
+		_roll_moment()
+	var heal := TRAVEL_HEAL * float(TrailLife.pace(pace)["heal"]) + float(TrailLife.ration(rations)["heal"])
 	for id in roster:
 		if conscious(id):
-			creature_hp[id] = minf(max_hp(id), float(creature_hp[id]) + max_hp(id) * TRAVEL_HEAL)
-	trip_days_left -= 1
-	if trip_days_left > 0 or not pending_event.is_empty() or not pending_encounter.is_empty():
+			creature_hp[id] = clampf(float(creature_hp[id]) + max_hp(id) * heal, 1.0, max_hp(id))
+	trip_days_left -= float(TrailLife.pace(pace)["speed"])
+	if state == State.FAILED:
+		return false
+	if trip_days_left > 0.0 or not pending_event.is_empty() or not pending_encounter.is_empty():
 		return true
 	if trip["to"] == TestRoute.GOAL and guardian_enabled and not guardian_faced:
 		guardian_faced = true
@@ -284,6 +323,8 @@ func step_day() -> bool:
 
 
 func _arrive() -> bool:
+	carry = clampf(-trip_days_left, 0.0, TrailLife.MAX_CARRY)
+	trip_days_left = 0.0
 	at = trip["to"]
 	visited.append(at)
 	journal.append("Reached %s." % TestRoute.junction_name(at))
@@ -308,17 +349,23 @@ func travel(seg: Dictionary) -> bool:
 func safe_choice(event: Dictionary) -> int:
 	var choices: Array = event["choices"]
 	for i in choices.size():
-		if not choices[i].has("cap"):
+		if is_safe(choices[i]):
 			return i
 	return 0
 
 
+## A safe choice has no roll, no cost and no fight.
+static func is_safe(choice: Dictionary) -> bool:
+	return not choice.has("cap") and not choice.has("cost") and not choice.has("deal") and not choice["success"].has("battle")
+
+
 ## Wagon wear, hauler fatigue and a possible breakdown for one travel day.
 func _wear_day(terrain_factor: float, pushing: bool) -> void:
+	var p := TrailLife.pace(pace)
 	for id in haulers:
-		fatigue[id] = minf(100.0, float(fatigue.get(id, 0.0)) + HAUL_FATIGUE * (2.0 if pushing else 1.0))
+		fatigue[id] = minf(100.0, float(fatigue.get(id, 0.0)) + HAUL_FATIGUE * (2.0 if pushing else 1.0) * float(p["fatigue"]) + TrailLife.weather_value(weather, "fatigue"))
 	var chance := Wagon.breakdown_chance(wagon.wear)
-	wagon.wear = minf(100.0, wagon.wear + Wagon.wear_per_day(terrain_factor, cargo_weight(), pushing))
+	wagon.wear = minf(100.0, wagon.wear + Wagon.wear_per_day(terrain_factor, cargo_weight(), pushing) * float(p["wear"]) + TrailLife.weather_value(weather, "wear"))
 	if wagon.broken == Wagon.Part.NONE and rng.randf() < chance:
 		var parts := [Wagon.Part.RUNNING_GEAR, Wagon.Part.HARNESS, Wagon.Part.CANOPY]
 		wagon.break_part(parts[rng.randi_range(0, parts.size() - 1)])
@@ -338,6 +385,7 @@ func rest() -> void:
 	if state != State.AT_JUNCTION:
 		return
 	journal.append(spend_day())
+	fever_days = 0
 	for id in fatigue:
 		fatigue[id] = maxf(0.0, float(fatigue[id]) - REST_RECOVERY)
 	var woke := 0
@@ -386,83 +434,305 @@ func toggle_hauler(id: String) -> void:
 
 # ---------- events ----------
 
-## The best creature in the roster for a capability, or "" if none has it.
+## Home ground and weather bonuses: +1 rank each for a Trailomon on its own habitat's terrain,
+## and when today's weather favours its habitat. Only counts if it has the job at all.
+func job_bonus(id: String) -> int:
+	var t: String = Species.info(id)["type"]
+	var bonus := 0
+	if not trip.is_empty() and TrailLife.TERRAIN_HABITAT.get(String(trip.get("terrain", "")), "") == t:
+		bonus += 1
+	if TrailLife.weather(weather)["favours"] == t:
+		bonus += 1
+	return bonus
+
+
+## A Trailomon's job rank including bonuses (0 if it doesn't have the job).
+func job_rank(id: String, cap: String) -> int:
+	var r := Species.capability(id, cap)
+	return r + job_bonus(id) if r > 0 else 0
+
+
+## The best creature in the roster for a job, or "" if none has it.
 func best_helper(cap: String) -> String:
 	var best := ""
 	var best_rank := 0
 	for id in roster:
 		if not conscious(id):
 			continue
-		var r := Species.capability(id, cap)
+		var r := job_rank(id, cap)
 		if r > best_rank:
 			best_rank = r
 			best = id
 	return best
 
 
-## What each choice of an event looks like: helper, odds (or safe).
+## Can the crew pay this cost right now? (Costs are negative deltas.)
+func can_afford(cost: Dictionary) -> bool:
+	return coins + int(cost.get("coins", 0)) >= 0 and provisions + float(cost.get("food", 0)) >= 0.0 \
+		and water + float(cost.get("water", 0)) >= 0.0 and repair_kits + int(cost.get("repair_kits", 0)) >= 0
+
+
+## What each choice of an event looks like: helper, odds (or safe), cost, whether it's affordable.
 func event_choices(event: Dictionary) -> Array:
 	var out: Array = []
 	for c in event["choices"]:
-		var view := {"label": c["label"], "safe": not c.has("cap"), "helper": "", "odds": {}}
+		var cost: Dictionary = c.get("cost", {})
+		var view := {"label": c["label"], "safe": is_safe(c), "helper": "", "odds": {}, "cost": cost,
+			"affordable": can_afford(cost), "rolled": c.has("cap"), "cap": c.get("cap", ""), "bonus": 0,
+			"reward": c["success"], "fight": c["success"].has("battle")}
 		if c.has("cap"):
 			var helper := best_helper(c["cap"])
-			var score := Species.capability(helper, c["cap"]) * TrailEvents.RANK_SCORE if helper != "" else 0
+			var score := job_rank(helper, c["cap"]) * TrailEvents.RANK_SCORE if helper != "" else 0
 			view["helper"] = helper
+			view["bonus"] = job_bonus(helper) if helper != "" else 0
 			view["odds"] = CheckOdds.for_scores(score, int(c["difficulty"]))
 		out.append(view)
 	return out
 
 
 ## Resolve the pending event with a choice. roll is 0-99 (random if negative).
-## Returns {"outcome": "success"|"mixed"|"failure", "text": String}.
+## Returns {"outcome": "success"|"mixed"|"failure", "text", "deltas", "helper", "fight", "recruit"}.
 func resolve_event(choice: int, roll := -1) -> Dictionary:
 	if pending_event.is_empty():
 		return {}
 	var c: Dictionary = pending_event["choices"][choice]
+	var view: Dictionary = event_choices(pending_event)[choice]
+	if not view["affordable"]:
+		return {}
 	var outcome := "success"
 	if c.has("cap"):
-		var odds: Dictionary = event_choices(pending_event)[choice]["odds"]
+		var odds: Dictionary = view["odds"]
 		if roll < 0:
 			roll = rng.randi_range(0, 99)
 		if roll >= odds["success"] + odds["mixed"]:
 			outcome = "failure"
 		elif roll >= odds["success"]:
 			outcome = "mixed"
-	var fx: Dictionary = c[outcome]
+	var fx: Dictionary = c.get(outcome, c["success"])
+	var helper: String = view["helper"]
+	var terrain := String(trip.get("terrain", "Forest"))
 	pending_event = {}
 	var text: String = fx["text"]
 	journal.append(text)
-	_apply_effects(fx)
-	return {"outcome": outcome, "text": text}
+	var deltas: Array = []
+	if c.has("cost"):
+		deltas.append_array(apply_fx(c["cost"], "", terrain))
+	if helper != "" and int(TrailEvents.JOB_XP[outcome]) > 0:
+		deltas.append_array(apply_fx({"job_xp": TrailEvents.JOB_XP[outcome]}, helper, terrain))
+	deltas.append_array(apply_fx(fx, helper, terrain))
+	return {"outcome": outcome, "text": text, "deltas": deltas, "helper": helper,
+		"fight": not pending_encounter.is_empty(), "recruit": pending_recruit}
 
 
-func _apply_effects(fx: Dictionary) -> void:
-	provisions = maxf(0.0, provisions - float(fx.get("provisions", 0)))
-	water = maxf(0.0, water - float(fx.get("water", 0)))
-	wagon.wear = minf(100.0, wagon.wear + float(fx.get("wear", 0)))
-	wagon.integrity = maxi(0, wagon.integrity - int(fx.get("integrity", 0)))
-	for id in haulers:
-		fatigue[id] = minf(100.0, float(fatigue.get(id, 0.0)) + float(fx.get("fatigue", 0)))
+## Apply effects in the TrailEffects delta convention. helper earns "job_xp"; "xp" goes to the
+## whole team. Returns what changed as [{"icon", "amount", "who"?}] for the screen.
+func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
+	var d: Array = []
+	if fx.has("food"):
+		var was := provisions
+		provisions = maxf(0.0, provisions + float(fx["food"]))
+		d.append({"icon": "food", "amount": roundi(provisions - was)})
+	if fx.has("water"):
+		var was := water
+		water = maxf(0.0, water + float(fx["water"]))
+		d.append({"icon": "water", "amount": roundi(water - was)})
+	if fx.has("coins"):
+		coins = maxi(0, coins + int(fx["coins"]))
+		d.append({"icon": "coins", "amount": int(fx["coins"])})
+	if fx.has("repair_kits"):
+		repair_kits = maxi(0, repair_kits + int(fx["repair_kits"]))
+		d.append({"icon": "repair_kit", "amount": int(fx["repair_kits"])})
+	if fx.has("wear"):
+		wagon.wear = clampf(wagon.wear + float(fx["wear"]), 0.0, 100.0)
+		d.append({"icon": "wagon", "amount": int(fx["wear"]), "bad_up": true, "label": "wear"})
+	if fx.has("integrity"):
+		wagon.integrity = clampi(wagon.integrity + int(fx["integrity"]), 0, 100)
+		d.append({"icon": "wagon", "amount": int(fx["integrity"]), "suffix": "%"})
+	if fx.has("fatigue"):
+		for id in haulers:
+			fatigue[id] = clampf(float(fatigue.get(id, 0.0)) + float(fx["fatigue"]), 0.0, 100.0)
+		d.append({"icon": "tired", "amount": int(fx["fatigue"]), "bad_up": true})
+	if fx.has("heal_team"):
+		for id in roster:
+			creature_hp[id] = minf(max_hp(id), float(creature_hp.get(id, 0.0)) + max_hp(id) * float(fx["heal_team"]))
+		d.append({"icon": "hp", "amount": roundi(float(fx["heal_team"]) * 100.0), "suffix": "%"})
+	if fx.has("light_dust"):
+		light_dust += int(fx["light_dust"])
+		d.append({"icon": "light_dust", "amount": int(fx["light_dust"])})
+	if fx.has("dark_dust"):
+		dark_dust += int(fx["dark_dust"])
+		d.append({"icon": "dark_dust", "amount": int(fx["dark_dust"])})
+	if fx.has("item"):
+		var iid := String(fx["item"])
+		if iid == "random" or not BattleItems.has(iid):
+			iid = BattleItems.ITEMS.keys()[life_rng.randi_range(0, BattleItems.ITEMS.size() - 1)]
+		items[iid] = item_count(iid) + 1
+		d.append({"icon": iid, "amount": 1})
+	for i in int(fx.get("technique", 0)):
+		var all: Array = MovePool.MOVES.keys()
+		var mid: String = all[life_rng.randi_range(0, all.size() - 1)]
+		techniques[mid] = technique_count(mid) + 1
+		d.append({"icon": "technique", "amount": 1, "label": CombatData.move(mid)["name"]})
+	if fx.has("job_xp") and helper != "":
+		gain_xp(helper, int(fx["job_xp"]))
+		d.append({"icon": "xp", "amount": int(fx["job_xp"]), "who": helper})
+	if fx.has("xp"):
+		for id in roster:
+			if conscious(id):
+				gain_xp(id, int(fx["xp"]))
+		d.append({"icon": "xp", "amount": int(fx["xp"]), "label": "team"})
+	if fx.has("progress") and state == State.TRAVELLING:
+		trip_days_left = maxf(0.05, trip_days_left - float(fx["progress"]))
+		d.append({"icon": "progress", "amount": roundi(float(fx["progress"]) * 10.0) / 10.0, "label": "day"})
+	if int(fx.get("fever", 0)) > 0:
+		fever_days = maxi(fever_days, int(fx["fever"]))
+		d.append({"icon": "fever", "amount": int(fx["fever"]), "bad_up": true, "label": "days"})
+	if fx.has("cure") and fever_days > 0:
+		fever_days = 0
+		d.append({"icon": "fever", "amount": 0, "label": "cured"})
 	for i in int(fx.get("lose_cargo", 0)):
 		if cargo.is_empty():
 			break
 		var lost: Dictionary = cargo.pop_at(rng.randi_range(0, cargo.size() - 1))
 		journal.append("Lost the %s." % String(lost["name"]).to_lower())
-	health -= int(fx.get("health", 0))
+		d.append({"icon": "cargo", "amount": -1, "label": String(lost["name"])})
+	if fx.has("recruit"):
+		var wild := wild_for(terrain)
+		if not wild.is_empty():
+			pending_recruit = wild[life_rng.randi_range(0, wild.size() - 1)]
+			d.append({"icon": "ev_wildlife", "amount": 0, "who": pending_recruit, "label": "wants to join"})
+	if fx.has("battle") and state == State.TRAVELLING:
+		var pack: Dictionary = TrailEvents.PACKS.get(String(fx["battle"]), {})
+		if pack.is_empty():
+			pack = CombatData.pack_by_id(String(fx["battle"]))
+		pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip.get("risk", 1)), 1.0)), "guardian": false,
+			"bounty": int(fx.get("bounty", 0)), "from_event": true}
+		d.append({"icon": "risk", "amount": 0, "label": "fight"})
+	if fx.has("health"):
+		health = mini(100, health + int(fx["health"]))
+		d.append({"icon": "health", "amount": int(fx["health"])})
 	if health <= 0:
 		health = 0
 		state = State.FAILED
 		fail_reason = "Your traveller couldn't go on."
-		return
+		return d
 	if wagon.integrity <= 0:
 		state = State.FAILED
 		fail_reason = "The wagon fell apart on the trail."
-		return
+		return d
+	if int(fx.get("days", 0)) > 0:
+		d.append({"icon": "day", "amount": int(fx["days"]), "bad_up": true})
 	for i in int(fx.get("days", 0)):
 		journal.append(spend_day())
 		if state == State.FAILED:
-			return
+			return d
+	return d
+
+
+## Wild species that live in this terrain's habitat (or anywhere, on Hills) and aren't owned yet.
+func wild_for(terrain: String) -> Array[String]:
+	var out: Array[String] = []
+	if stored.size() >= STORAGE_MAX:
+		return out
+	var habitat: String = TrailLife.TERRAIN_HABITAT.get(terrain, "")
+	for id in Species.DATA:
+		if id == "hollowstag" or roster.has(id) or stored.has(id):
+			continue
+		if habitat == "" or Species.info(id)["type"] == habitat:
+			out.append(id)
+	if out.is_empty():
+		for id in Species.DATA:
+			if id != "hollowstag" and not roster.has(id) and not stored.has(id):
+				out.append(id)
+	return out
+
+
+# ---------- trail moments ----------
+
+func _roll_moment() -> void:
+	var pool := TrailMoments.for_day(String(trip.get("terrain", "Forest")), weather)
+	var weighted: Array = []
+	for m in pool:
+		if m.has("cap") and best_helper(m["cap"]) == "":
+			continue
+		if m.has("hauler") and haulers.is_empty():
+			continue
+		if m.has("need") and not can_afford({"coins": -int(m["need"].get("coins", 0))}):
+			continue
+		if m["id"] == "fever" and (fever_days > 0 or rations == "full"):
+			continue
+		for i in int(m["w"]):
+			weighted.append(m)
+	if weighted.is_empty():
+		return
+	var m: Dictionary = weighted[life_rng.randi_range(0, weighted.size() - 1)]
+	trigger_moment(m)
+
+
+## Make a moment happen now. Returns the record added to `moments`.
+func trigger_moment(m: Dictionary) -> Dictionary:
+	var who := ""
+	if m.has("cap"):
+		who = best_helper(m["cap"])
+	elif m.has("hauler") and not haulers.is_empty():
+		who = haulers[life_rng.randi_range(0, haulers.size() - 1)]
+	var terrain := String(trip.get("terrain", "Forest"))
+	var deltas := apply_fx(m["fx"], who, terrain)
+	if m.has("cap") and who != "":
+		gain_xp(who, TrailMoments.JOB_XP)
+		deltas.append({"icon": "xp", "amount": TrailMoments.JOB_XP, "who": who})
+	var rec := {"id": m["id"], "icon": m["icon"], "who": who, "deltas": deltas, "sight": m.get("sight", ""),
+		"text": String(m["text"]).replace("{who}", "{c:%s}" % who if who != "" else "")}
+	if m["id"] == "grave":
+		var g: Array = TrailMoments.GRAVES[life_rng.randi_range(0, TrailMoments.GRAVES.size() - 1)]
+		rec["grave"] = g
+	if m["id"] == "wild_watch":
+		var wild := wild_for(terrain)
+		rec["wild"] = wild[life_rng.randi_range(0, wild.size() - 1)] if not wild.is_empty() else "thornfang"
+	moments.append(rec)
+	journal.append(String(m["text"]).replace("{who}", Species.info(who)["name"] if who != "" else "Someone"))
+	return rec
+
+
+# ---------- pace, rations, settlements ----------
+
+func set_pace(id: String) -> void:
+	if TrailLife.PACES.has(id):
+		pace = id
+
+
+func set_rations(id: String) -> void:
+	if TrailLife.RATIONS.has(id):
+		rations = id
+
+
+## How many of a good are left in this stop's stall.
+func stock_left(good: String) -> int:
+	var s := Settlements.stall(at)
+	if not s.has(good):
+		return 0
+	return int(s[good]["stock"]) - int(bought.get(at, {}).get(good, 0))
+
+
+func can_buy(good: String) -> bool:
+	if state != State.AT_JUNCTION or stock_left(good) <= 0:
+		return false
+	return coins >= int(Settlements.stall(at)[good]["price"])
+
+
+## Buy one lot of a good at this stop. Returns what changed, or [] if it can't.
+func buy(good: String) -> Array:
+	if not can_buy(good):
+		return []
+	var lot: Dictionary = Settlements.stall(at)[good]
+	coins -= int(lot["price"])
+	var b: Dictionary = bought.get(at, {})
+	b[good] = int(b.get(good, 0)) + 1
+	bought[at] = b
+	var d: Array = [{"icon": "coins", "amount": -int(lot["price"])}]
+	d.append_array(apply_fx(Settlements.goods_fx(good)))
+	journal.append("Bought %s." % Settlements.good_name(good))
+	return d
 
 
 # ---------- creatures and battle lineup ----------
@@ -752,6 +1022,7 @@ const RETREAT_FOOD := 5.0
 const RETREAT_WEAR := 8.0
 const VICTORY_FOOD := 6.0
 const VICTORY_WATER := 4.0
+const VICTORY_COINS := 5
 const ITEM_DROP_CHANCE := 0.5
 const TECHNIQUE_DROP_CHANCE := 0.2
 const RECRUIT_CHANCE := 0.35
@@ -768,6 +1039,9 @@ func finish_battle(battle: Battle) -> Array[String]:
 	var guardian := bool(pending_encounter.get("guardian", false))
 	var battle_scale := float(pending_encounter.get("scale", 1.0))
 	var pack: Dictionary = pending_encounter.get("pack", {})
+	var bounty := int(pending_encounter.get("bounty", 0))
+	var from_event := bool(pending_encounter.get("from_event", false))
+	var spar := String(pack.get("id", "")) == "trainer_spar"
 	pending_encounter = {}
 	pending_recruit = ""
 	match outcome:
@@ -776,11 +1050,15 @@ func finish_battle(battle: Battle) -> Array[String]:
 			water += VICTORY_WATER
 			lines.append("Victory! %s" % ("The Hollow Stag's pack scatters and the road to Westwatch is clear." if guardian else "The pack scatters."))
 			lines.append("You gather what they left behind: +%d food, +%d water." % [VICTORY_FOOD, VICTORY_WATER])
+			coins += VICTORY_COINS + bounty
+			lines.append("+%d {i:coins} coins." % (VICTORY_COINS + bounty))
 		Battle.Outcome.RETREAT, Battle.Outcome.WITHDRAW:
 			provisions = maxf(0.0, provisions - RETREAT_FOOD)
 			wagon.wear = minf(100.0, wagon.wear + RETREAT_WEAR)
 			lines.append("Both sides are exhausted and pull back." if outcome == Battle.Outcome.WITHDRAW else "You pull the team back and the wagon rattles away.")
 			lines.append("The scramble costs %d food and %d wagon wear." % [RETREAT_FOOD, RETREAT_WEAR])
+		_ when spar:
+			lines.append("The trainer wins this one. She tips her hat and moves on.")
 		_:
 			var food := roundf(provisions * BREACH_SUPPLY_SHARE)
 			var drink := roundf(water * BREACH_SUPPLY_SHARE)
@@ -806,7 +1084,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 		if not found.is_empty():
 			lines.append("Found a battle item: %s." % ", ".join(found))
 		var wild: Array[String] = recruit_candidates(pack)
-		if not wild.is_empty() and battle_rng.randf() < RECRUIT_CHANCE:
+		if not wild.is_empty() and not from_event and battle_rng.randf() < RECRUIT_CHANCE:
 			pending_recruit = wild[battle_rng.randi_range(0, wild.size() - 1)]
 			lines.append("A wild %s lingers after the fight. It could join you." % Species.info(pending_recruit)["name"])
 		var light := Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT
