@@ -232,9 +232,9 @@ const SYNERGIES := {
 	"Forest": {"name": "Deep Roots", "need": [2, 4], "desc": "Forest allies +%d Defense", "values": [12, 24]},
 	"River": {"name": "Flowing", "need": [2, 4], "desc": "River heals and shields +%d%%", "values": [25, 50]},
 	"Swamp": {"name": "Murk", "need": [2, 4], "desc": "Swamp poisons last +%d%% longer", "values": [50, 100]},
-	"Mountain": {"name": "Bedrock", "need": [2, 4], "desc": "Mountain allies +%d%% Attack", "values": [15, 30]},
-	"Snow": {"name": "Flurry", "need": [2, 4], "desc": "Snow allies attack +%d%% faster", "values": [15, 30]},
-	"Jungle": {"name": "Canopy", "need": [2, 4], "desc": "Jungle +%d%% vs second row", "values": [20, 40]},
+	"Mountain": {"name": "Bedrock", "need": [2, 4], "desc": "Mountain allies +%d%% Attack", "values": [20, 40]},
+	"Snow": {"name": "Flurry", "need": [2, 4], "desc": "Snow allies attack +%d%% faster", "values": [20, 40]},
+	"Jungle": {"name": "Canopy", "need": [2, 4], "desc": "Jungle +%d%% vs second row", "values": [30, 60]},
 }
 
 ## Wild packs. front/back: three lanes each, top to bottom ("" = empty).
@@ -370,7 +370,7 @@ const GUARDIANS := [
 ## Enemy strength by segment risk (health and power multiplier).
 const RISK_SCALE := {1: 1.2, 2: 1.35, 3: 1.45}
 ## The guardian pack always fights at this strength.
-const GUARDIAN_SCALE := 1.25
+const GUARDIAN_SCALE := 1.1
 
 
 static func stats(id: String) -> Dictionary:

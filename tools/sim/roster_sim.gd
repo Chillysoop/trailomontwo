@@ -3,11 +3,22 @@ extends SceneTree
 ## three of a kind against three of a kind, from both sides, over a few seeds. Prints each
 ## one's win rate and flags any outside the healthy band (Balance.WIN_BAND), then a line per
 ## habitat. Also prints power-budget scores.
-##   godot --headless --path . --script res://tools/sim/roster_sim.gd [-- <rarity>]
+##   godot --headless --path . --script res://tools/sim/roster_sim.gd [-- <rarity> | habitats]
+## "habitats" plays six-strong habitat teams against each other instead (Balance.habitat_league).
 
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
+	if not args.is_empty() and args[0] == "habitats":
+		for r in ["common", "rare"]:
+			var league := Balance.habitat_league(r, 24)
+			var ts := league.keys()
+			ts.sort_custom(func(a, b): return league[a] > league[b])
+			print("---- habitat league, %s teams ----" % r)
+			for t in ts:
+				print("%-9s %3d%%" % [t, roundi(league[t] * 100.0)])
+		quit()
+		return
 	var rarities := ["common", "rare", "legendary"]
 	if not args.is_empty():
 		rarities = [args[0]]
