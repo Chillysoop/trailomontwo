@@ -258,7 +258,7 @@ func _option_text(id: String, o: Dictionary) -> String:
 			CreatureCard.MUTED, fmt % before, fmt % after]
 	var mid: String = o["move"]
 	var slot: String = CombatData.move(mid)["slot"]
-	var arc: Dictionary = MovePool.ARCHETYPES[id][MovePool.archetype_of(id, mid)]
+	var arc: Dictionary = MovePool.archetypes(id)[MovePool.archetype_of(id, mid)]
 	var text := "[color=#e8d6a8]%s[/color]  [color=#%s]%s[/color]\n" % [String(arc["name"]).to_upper(), CreatureCard.MUTED, arc["line"]]
 	text += CreatureCard.move_header(mid, true) + "\n"
 	text += "[color=#%s]%s[/color]" % [CreatureCard.SOFT, CombatData.describe(mid, crossing.stat(id, "atk"), crossing.stat(id, "def"), crossing.max_hp(id))]

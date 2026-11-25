@@ -59,11 +59,19 @@ const ARCHETYPES := {
 		{"name": "Plaguebearer", "line": "Gores and poisons.", "moves": ["bog_gore", "stagnant", "swamp_surge"]},
 		{"name": "Rotter", "line": "Rots armor, then crushes it.", "moves": ["rot_horn", "fester", "mire_crush"]},
 	],
+	"lianetail": [
+		{"name": "Canopy", "line": "Strikes the second row from the treetops.", "moves": ["high_vine", "treetop", "vine_rain"]},
+		{"name": "Skirmisher", "line": "Darts in, hits hard and dodges away.", "moves": ["dart_strike", "first_strike", "flurry_dash"]},
+	],
 	"inkhoot": [
 		{"name": "Riptide", "line": "Strips shields and drains life.", "moves": ["soaking_ink", "ink_drain", "maelstrom"]},
 		{"name": "Mender", "line": "Patches up the team between strikes.", "moves": ["healing_ink", "ink_salve", "tidal_mend"]},
 	],
 }
+
+## Species without their own archetypes learn from their habitat's pair.
+const HABITAT_ARCHETYPES := {"Forest": "brambleback", "River": "reedwake", "Swamp": "mirelamp",
+	"Mountain": "scythelk", "Snow": "rimehare", "Jungle": "lianetail"}
 
 const MOVES := {
 	# ----- Brambleback -----
@@ -122,6 +130,69 @@ const MOVES := {
 	"healing_ink": {"name": "Healing Ink", "slot": "basic", "pct": 60, "ally": {"heal_atk": 60}},
 	"ink_salve": {"name": "Ink Salve", "slot": "passive", "kind": "every", "n": 3, "ally_heal_atk": 80},
 	"tidal_mend": {"name": "Tidal Mend", "slot": "ultimate", "target": "none", "team": {"heal_maxhp": 12, "cleanse": true}},
+	# ----- Jungle archetypes (Canopy / Skirmisher) -----
+	"high_vine": {"name": "High Vine", "slot": "basic", "pct": 75, "reach": true},
+	"treetop": {"name": "Treetop", "slot": "passive", "kind": "every", "n": 3, "extra_pct": 50},
+	"vine_rain": {"name": "Vine Rain", "slot": "ultimate", "target": "all", "pct": 90},
+	"dart_strike": {"name": "Dart Strike", "slot": "basic", "pct": 85, "self": {"dodge": true}},
+	"first_strike": {"name": "First Strike", "slot": "passive", "kind": "bonus_vs", "vs": "healthy", "amount": 25},
+	"flurry_dash": {"name": "Flurry Dash", "slot": "ultimate", "target": "weakest", "pct": 210, "self": {"dodge": true}},
+	# ----- Kits of the species added with varied crossings -----
+	"moss_burrow": {"name": "Moss Burrow", "slot": "basic", "pct": 70, "self": {"shield_def": 40}},
+	"mossy_hide": {"name": "Mossy Hide", "slot": "passive", "kind": "thorns", "pct": 30},
+	"dig_in": {"name": "Dig In", "slot": "ultimate", "target": "none", "self": {"shield_def": 220}, "taunt": 3.0},
+	"burl_maul": {"name": "Burl Maul", "slot": "basic", "pct": 100, "bonus": {"vs": "shielded", "amount": 25}},
+	"burl_bark": {"name": "Burl Bark", "slot": "passive", "kind": "every", "n": 3, "shield_def": 90},
+	"timber_crash": {"name": "Timber Crash", "slot": "ultimate", "target": "adjacent", "pct": 150, "self": {"shield_def": 60}},
+	"pebble_toss": {"name": "Pebble Toss", "slot": "basic", "pct": 60, "ally": {"heal_atk": 50}},
+	"otter_care": {"name": "Otter Care", "slot": "passive", "kind": "drain", "pct": 20, "to_ally": true},
+	"brook_song": {"name": "Brook Song", "slot": "ultimate", "target": "none", "team": {"heal_maxhp": 12, "cleanse": true}},
+	"glow_sting": {"name": "Glow Sting", "slot": "basic", "pct": 80, "wash": 50},
+	"deep_glow": {"name": "Deep Glow", "slot": "passive", "kind": "drain", "pct": 30},
+	"lantern_dive": {"name": "Lantern Dive", "slot": "ultimate", "target": "weakest", "pct": 200, "wash": 100},
+	"spore_puff": {"name": "Spore Puff", "slot": "basic", "pct": 60, "poison": [15, 4]},
+	"toxic_skin": {"name": "Toxic Skin", "slot": "passive", "kind": "bonus_vs", "vs": "poisoned", "amount": 20},
+	"spore_storm": {"name": "Spore Storm", "slot": "ultimate", "target": "all", "poison": [20, 5]},
+	"bog_bite": {"name": "Bog Bite", "slot": "basic", "pct": 95, "weaken": [15, 3]},
+	"murk_jaws": {"name": "Murk Jaws", "slot": "passive", "kind": "bonus_vs", "vs": "weakened", "amount": 25},
+	"death_roll": {"name": "Death Roll", "slot": "ultimate", "pct": 200, "poison": [30, 4], "weaken": [25, 4]},
+	"slate_peck": {"name": "Slate Peck", "slot": "basic", "pct": 90, "bonus": {"vs": "hurt", "amount": 40}},
+	"carrion_eye": {"name": "Carrion Eye", "slot": "passive", "kind": "bonus_vs", "vs": "hurt", "amount": 20},
+	"rock_dive": {"name": "Rock Dive", "slot": "ultimate", "target": "weakest", "pct": 180, "pierce": true},
+	"tusk_shove": {"name": "Tusk Shove", "slot": "basic", "pct": 80, "stagger": 25},
+	"quarry_hide": {"name": "Quarry Hide", "slot": "passive", "kind": "armor_low", "amount": 25},
+	"quarry_quake": {"name": "Quarry Quake", "slot": "ultimate", "target": "row", "pct": 120, "stagger": 40},
+	"snow_nip": {"name": "Snow Nip", "slot": "basic", "pct": 75, "slow": [20, 2]},
+	"pack_flurry": {"name": "Pack Flurry", "slot": "passive", "kind": "every", "n": 3, "team_haste": [20, 3]},
+	"blizzard_howl": {"name": "Blizzard Howl", "slot": "ultimate", "target": "none", "team": {"haste": [30, 5]}},
+	"frost_wing": {"name": "Frost Wing", "slot": "basic", "pct": 50, "hits": 2, "slow": [15, 2]},
+	"cold_edge": {"name": "Cold Edge", "slot": "passive", "kind": "bonus_vs", "vs": "slowed", "amount": 25},
+	"rime_dive": {"name": "Rime Dive", "slot": "ultimate", "target": "adjacent", "pct": 120, "slow": [40, 4]},
+	"vine_flick": {"name": "Vine Flick", "slot": "basic", "pct": 80, "reach": true},
+	"sticky_feet": {"name": "Sticky Feet", "slot": "passive", "kind": "every", "n": 3, "extra_pct": 40},
+	"canopy_drop": {"name": "Canopy Drop", "slot": "ultimate", "target": "weakest", "pct": 170},
+	"leaf_pounce": {"name": "Leaf Pounce", "slot": "basic", "pct": 90, "self": {"dodge": true}},
+	"dapple": {"name": "Dapple", "slot": "passive", "kind": "every", "n": 2, "extra_pct": 35},
+	"canopy_strike": {"name": "Canopy Strike", "slot": "ultimate", "target": "weakest", "pct": 230},
+	"ember_bough": {"name": "Ember Bough", "slot": "basic", "pct": 80, "def_pct": 40, "self": {"shield_def": 30}},
+	"ember_bark": {"name": "Ember Bark", "slot": "passive", "kind": "thorns", "pct": 35},
+	"heartfire": {"name": "Heartfire", "slot": "ultimate", "target": "none", "team": {"shield_def": 70, "shield_flat": 40}, "taunt": 4.0},
+	"tide_lash": {"name": "Tide Lash", "slot": "basic", "pct": 80, "ally": {"heal_atk": 40}},
+	"tidal_heart": {"name": "Tidal Heart", "slot": "passive", "kind": "drain", "pct": 20, "to_ally": true},
+	"great_wave": {"name": "Great Wave", "slot": "ultimate", "target": "all", "pct": 70, "team": {"heal_maxhp": 8}},
+	"aurora_horn": {"name": "Aurora Horn", "slot": "basic", "pct": 45, "hits": 2, "slow": [15, 2]},
+	"aurora_mane": {"name": "Aurora Mane", "slot": "passive", "kind": "every", "n": 4, "team_haste": [20, 3]},
+	"polar_light": {"name": "Polar Light", "slot": "ultimate", "target": "all", "pct": 80, "slow": [30, 3]},
+	# ----- Guardians -----
+	"brood_spit": {"name": "Brood Spit", "slot": "basic", "pct": 95, "poison": [18, 4], "splash": 40},
+	"mother_brood": {"name": "Mother's Brood", "slot": "passive", "kind": "every", "n": 3, "poison_all": [15, 4]},
+	"fen_flood": {"name": "Fen Flood", "slot": "ultimate", "target": "all", "pct": 95, "poison": [28, 5]},
+	"gear_tusk": {"name": "Gear Tusk", "slot": "basic", "pct": 100, "stagger": 15, "splash": 25},
+	"iron_hide": {"name": "Iron Hide", "slot": "passive", "kind": "armor_low", "amount": 20},
+	"piston_stomp": {"name": "Piston Stomp", "slot": "ultimate", "target": "row", "pct": 110, "pierce": true, "stagger": 30},
+	"rime_fang": {"name": "Rime Fang", "slot": "basic", "pct": 50, "hits": 2, "slow": [20, 2]},
+	"frozen_heart": {"name": "Frozen Heart", "slot": "passive", "kind": "bonus_vs", "vs": "slowed", "amount": 20},
+	"glacier_breath": {"name": "Glacier Breath", "slot": "ultimate", "target": "all", "pct": 75, "slow": [35, 3]},
 }
 
 const COND_TEXT := {"slowed": "{k:slow|slowed} enemies", "poisoned": "{k:poison|poisoned} enemies",
@@ -141,6 +212,26 @@ static func has(id: String) -> bool:
 
 ## The archetype (0 or 1) a learnable move belongs to for a species, or -1.
 ## The species whose archetypes hold this move ("" if none).
+## A species' two archetypes: its own, or its habitat's pair.
+static func archetypes(species: String) -> Array:
+	if ARCHETYPES.has(species):
+		return ARCHETYPES[species]
+	if not Species.DATA.has(species) or Species.is_boss(species):
+		return []
+	return ARCHETYPES.get(HABITAT_ARCHETYPES.get(Species.info(species)["type"], ""), [])
+
+
+## Moves that can turn up as technique scrolls: every archetype move.
+static func technique_ids() -> Array:
+	var out: Array = []
+	for species in ARCHETYPES:
+		for arc in ARCHETYPES[species]:
+			for mid in arc["moves"]:
+				if not out.has(mid):
+					out.append(mid)
+	return out
+
+
 static func owner_of(move_id: String) -> String:
 	for species in ARCHETYPES:
 		for arc in ARCHETYPES[species]:
@@ -150,7 +241,7 @@ static func owner_of(move_id: String) -> String:
 
 
 static func archetype_of(species: String, move_id: String) -> int:
-	var arcs: Array = ARCHETYPES.get(species, [])
+	var arcs: Array = archetypes(species)
 	for i in arcs.size():
 		if arcs[i]["moves"].has(move_id):
 			return i

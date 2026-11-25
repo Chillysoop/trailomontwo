@@ -160,7 +160,7 @@ func test_every_kit_is_complete() -> void:
 		var moves := CombatData.kit_moves(id)
 		check_eq(moves.size(), 3)
 		for i in 3:
-			check(CombatData.MOVES.has(moves[i]), "%s: unknown move %s" % [id, moves[i]])
+			check(CombatData.has_move(moves[i]), "%s: unknown move %s" % [id, moves[i]])
 			check_eq(CombatData.move(moves[i])["slot"], ["basic", "passive", "ultimate"][i], "%s slot" % moves[i])
 
 

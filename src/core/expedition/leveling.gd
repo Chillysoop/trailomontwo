@@ -9,8 +9,8 @@ extends RefCounted
 ##   archetypes (MovePool), no rarity. The new move can go straight into its slot (the old
 ##   one moves to the slot's memory) or be kept in memory.
 
-const MAX_LEVEL := 10
-const ABILITY_LEVELS := [3, 6, 9]
+const MAX_LEVEL := 30
+const ABILITY_LEVELS := [3, 6, 9, 12, 15, 18]
 
 ## Experience for a battle, given to every creature that stood in the lineup.
 const XP_WIN := 35
@@ -69,7 +69,7 @@ static func stat_options(rng: RandomNumberGenerator) -> Array:
 ## One unlearned move from each archetype (empty if an archetype has nothing left).
 static func ability_options(species: String, known: Array, rng: RandomNumberGenerator) -> Array:
 	var out: Array = []
-	for arc in MovePool.ARCHETYPES.get(species, []):
+	for arc in MovePool.archetypes(species):
 		var left: Array = []
 		for mid in arc["moves"]:
 			if not known.has(mid):
