@@ -68,6 +68,7 @@ static func label(text := "", size := 8, width := 0.0) -> RichTextLabel:
 	l.mouse_filter = Control.MOUSE_FILTER_PASS
 	l.add_theme_font_size_override("normal_font_size", size)
 	l.add_theme_font_size_override("bold_font_size", size + 1)
+	l.add_theme_font_size_override("italics_font_size", size)
 	l.add_theme_color_override("default_color", PreviewHud.INK)
 	l.add_theme_constant_override("line_separation", 1)
 	if width > 0.0:

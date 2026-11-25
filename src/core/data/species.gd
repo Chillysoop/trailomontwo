@@ -4,7 +4,8 @@ extends RefCounted
 ##
 ## size sets daily upkeep (provisions per day): small 0.5, medium 1, large 2.
 ## hauling is pulling strength in hauling units (0 = cannot haul).
-## Capabilities are ranks 1-3 used by event checks.
+## Capabilities (trail jobs) are ranks 1-3 used by event checks and trail moments:
+## clear, strength, float, light, scout, steady, guard, cold, heal, forage.
 
 const UPKEEP := {"small": 0.5, "medium": 1.0, "large": 2.0}
 
@@ -14,24 +15,24 @@ const DATA := {
 	"coilhusk": {"name": "Coilhusk", "type": "Forest", "size": "large", "hauling": 130,
 		"capabilities": {"strength": 2, "steady": 3}},
 	"reedwake": {"name": "Reedwake", "type": "River", "size": "medium", "hauling": 0,
-		"capabilities": {"float": 3, "scout": 1}},
+		"capabilities": {"float": 3, "scout": 1, "forage": 1}},
 	"mirelamp": {"name": "Mirelamp", "type": "Swamp", "size": "small", "hauling": 0,
-		"capabilities": {"light": 3, "heal": 2, "scout": 1}},
+		"capabilities": {"light": 3, "heal": 2, "scout": 1, "forage": 2}},
 	"rimehare": {"name": "Rimehare", "type": "Snow", "size": "small", "hauling": 0,
-		"capabilities": {"scout": 3, "cold": 2}},
+		"capabilities": {"scout": 3, "cold": 2, "forage": 2}},
 	"scythelk": {"name": "Scythelk", "type": "Mountain", "size": "large", "hauling": 90,
 		"capabilities": {"clear": 3, "strength": 2}},
 	"gillhorn": {"name": "Gillhorn", "type": "Swamp", "size": "medium", "hauling": 60,
-		"capabilities": {"float": 2, "strength": 2}},
+		"capabilities": {"float": 2, "strength": 2, "forage": 1}},
 	"inkhoot": {"name": "Inkhoot", "type": "River", "size": "small", "hauling": 0,
 		"capabilities": {"scout": 3, "float": 1}},
 	# Wild creatures met in battle (not in the starting roster).
 	"thornfang": {"name": "Thornfang", "type": "Forest", "size": "medium", "hauling": 0,
-		"capabilities": {"scout": 2, "guard": 1}},
+		"capabilities": {"scout": 2, "guard": 1, "forage": 2}},
 	"cairnram": {"name": "Cairnram", "type": "Mountain", "size": "large", "hauling": 120,
 		"capabilities": {"clear": 2, "strength": 3}},
 	"lianetail": {"name": "Lianetail", "type": "Jungle", "size": "small", "hauling": 0,
-		"capabilities": {"scout": 3, "clear": 1}},
+		"capabilities": {"scout": 3, "clear": 1, "forage": 3}},
 	"frostsnip": {"name": "Frostsnip", "type": "Snow", "size": "small", "hauling": 0,
 		"capabilities": {"cold": 3, "float": 1}},
 	"plateflit": {"name": "Plateflit", "type": "Jungle", "size": "medium", "hauling": 0,
