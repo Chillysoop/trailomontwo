@@ -107,24 +107,30 @@ func test_tables_follow_the_terrain() -> void:
 	check(weighted.count("mossmole") > weighted.count("pebblotter"), "home species outnumber strays")
 	check(not forest.has("vinegecko"), "no Jungle strays in the Forest")
 	check(Encounters.pool("Hills", 1).has("vinegecko"), "Hills mix every habitat")
-	check(Encounters.pool("Blight", 3).is_empty(), "no Blight Trailomon yet")
+	check(Encounters.pool("Blight", 3).has("thornrat"), "Blight Trailomon in the Blight")
+	check(not Encounters.pool("Forest", 3).has("thornrat"), "and nowhere else")
 
 
 func test_dust_biome_species_stay_in_their_biome() -> void:
-	Species.DATA["test_blightling"] = {"rarity": "common", "name": "Blightling", "type": "Forest", "size": "small",
-		"hauling": 0, "capabilities": {}, "biome": "Blight"}
-	CombatData.KITS["test_blightling"] = CombatData.KITS["mossmole"]
-	check(Encounters.pool("Blight", 3).has("test_blightling"), "lives in the Blight")
-	check(not Encounters.pool("Forest", 3).has("test_blightling"), "not in the Forest")
-	check(not Encounters.pool("Blight", 3).has("mossmole"), "only biome species in the Blight")
-	check(not Encounters.pool("Glow", 3).has("test_blightling"), "not in the Glow")
+	var blight := Encounters.pool("Blight", 3)
+	check(blight.has("thornrat") and blight.has("murkotter"), "lives in the Blight")
+	check(not Encounters.pool("Forest", 3).has("thornrat"), "not in the Forest")
+	check(not Encounters.pool("Hills", 3).has("thornrat"), "not in the Hills")
+	check(not blight.has("mossmole"), "only biome species in the Blight")
+	check(not Encounters.pool("Glow", 3).has("thornrat"), "not in the Glow")
+	for id in blight:
+		check_eq(Species.biome(id), "Blight")
+	var habitats := {}
+	for id in Species.DATA:
+		if Species.biome(id) == "Blight":
+			habitats[Species.info(id)["type"]] = int(habitats.get(Species.info(id)["type"], 0)) + 1
+	check_eq(habitats, {"Forest": 5, "River": 5, "Swamp": 5, "Mountain": 5, "Snow": 5, "Jungle": 5})
 	var packs := CombatData.packs_for({"terrain": "Blight", "risk": 2}, 3)
 	check(packs.any(func(p): return p.get("table", false)), "Blight roads use the Blight table")
 	var e := Expedition.new_default(3)
 	e.set_crossing(3)
-	check_eq(e.wild_for("Blight"), ["test_blightling"] as Array[String])
-	Species.DATA.erase("test_blightling")
-	CombatData.KITS.erase("test_blightling")
+	check(e.wild_for("Blight").has("thornrat"), "wild Blight Trailomon to catch")
+	check(not e.wild_for("Blight").has("mossmole"), "no ordinary ones")
 
 
 func test_evolved_forms_turn_up_later() -> void:

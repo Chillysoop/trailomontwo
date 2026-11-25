@@ -12,6 +12,8 @@ const SPECIES := {
 		"capabilities": {}},
 	"rimewyrm": {"rarity": "guardian", "name": "Rimewyrm", "type": "Snow", "size": "large", "hauling": 0,
 		"capabilities": {}},
+	"duskmaw": {"rarity": "guardian", "name": "Duskmaw", "type": "Jungle", "size": "large", "hauling": 0,
+		"capabilities": {}},
 }
 
 const KITS := {
@@ -23,6 +25,9 @@ const KITS := {
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 	"rimewyrm": {"role": "Boss", "hp": 950, "atk": 33, "def": 32, "spd": 2.0,
 		"basic": "rime_fang", "passive": "frozen_heart", "ultimate": "glacier_breath",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"duskmaw": {"role": "Boss", "hp": 950, "atk": 33, "def": 28, "spd": 2.0,
+		"basic": "dusk_rake", "passive": "shadow_pelt", "ultimate": "nightfall_pounce",
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 }
 
@@ -39,4 +44,8 @@ const MOVES := {
 	"rime_fang": {"name": "Rime Fang", "slot": "basic", "pct": 50, "hits": 2, "slow": [20, 2]},
 	"frozen_heart": {"name": "Frozen Heart", "slot": "passive", "kind": "bonus_vs", "vs": "slowed", "amount": 20},
 	"glacier_breath": {"name": "Glacier Breath", "slot": "ultimate", "target": "all", "pct": 75, "slow": [35, 3]},
+	# Duskmaw
+	"dusk_rake": {"name": "Dusk Rake", "slot": "basic", "pct": 95, "reach": true, "splash": 30},
+	"shadow_pelt": {"name": "Shadow Pelt", "slot": "passive", "kind": "every", "n": 3, "extra_pct": 50},
+	"nightfall_pounce": {"name": "Nightfall Pounce", "slot": "ultimate", "target": "all", "pct": 90, "reach": true, "self": {"dodge": true}},
 }
