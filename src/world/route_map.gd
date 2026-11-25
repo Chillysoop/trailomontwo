@@ -45,7 +45,8 @@ func fit() -> void:
 			var path := "res://assets/creatures/%s.png" % sp
 			if ResourceLoader.exists(path):
 				_tex[sp] = load(path)
-	zoom = minf(size.x / WorldMap.SIZE.x, size.y / WorldMap.SIZE.y) * 0.98 if full else 0.33
+	# Leave room at the edges so the names of the edge towns are not cut off.
+	zoom = minf(size.x / WorldMap.SIZE.x, size.y / WorldMap.SIZE.y) * 0.88 if full else 0.33
 	center = WorldMap.SIZE / 2.0 if full else _wagon_pos()
 
 

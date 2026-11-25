@@ -63,6 +63,19 @@ func test_next_crossing_carries_team_not_supplies() -> void:
 	check_eq(n.lineup_cell("reedwake"), Vector2i(0, 0), "lineup carries")
 
 
+func test_next_crossing_sets_out_with_a_purse() -> void:
+	var keep := Expedition.default_map
+	Expedition.default_map = "world"
+	var e := _played()
+	e.coins = 3
+	var n := SaveGame.next_crossing(SaveGame.caravan(e), 2)
+	check_eq(n.coins, Expedition.WORLD_START_COINS, "a broke caravan still gets the starting purse")
+	e.coins = 200
+	n = SaveGame.next_crossing(SaveGame.caravan(e), 2)
+	check_eq(n.coins, 200, "savings carry over")
+	Expedition.default_map = keep
+
+
 func test_slots_are_separate_and_deletable() -> void:
 	_fresh_dir()
 	var a := _played()

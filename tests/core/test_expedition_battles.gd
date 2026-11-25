@@ -59,6 +59,28 @@ func test_guardian_waits_on_the_last_stretch_to_westwatch() -> void:
 	check_eq(e.state, Expedition.State.ARRIVED)
 
 
+func test_a_fight_on_the_last_day_does_not_skip_the_guardian() -> void:
+	var e := _fresh()
+	e.at = "thornmarsh"
+	check(e.start_trip(_seg("thornmarsh", "westwatch")), "can set off")
+	# A wild pack jumps the wagon on the very last day of the final road.
+	e.trip_days_left = 0.0
+	e.pending_encounter = {"pack": CombatData.pack_by_id("thornfang_pack"), "scale": 1.0, "guardian": false}
+	e.auto_fight()
+	e.step_day()
+	check(bool(e.pending_encounter.get("guardian", false)), "the guardian should still block the way")
+	check_eq(e.state, Expedition.State.TRAVELLING, "not arrived before the guardian")
+
+
+func test_guardian_victory_names_this_crossings_guardian_and_goal() -> void:
+	var e := _fresh()
+	e.set_crossing(2)
+	e.pending_encounter = {"pack": e.guardian_pack(), "scale": 0.3, "guardian": true}
+	var lines := e.auto_fight()
+	check(lines[0].contains(String(e.guardian_pack()["title"])), "names the guardian: " + lines[0])
+	check(not lines[0].contains("Hollow Stag"), "not the first crossing's guardian")
+
+
 func test_victory_brings_supplies() -> void:
 	var e := _fresh()
 	e.pending_encounter = {"pack": CombatData.pack_by_id("thornfang_pack"), "scale": 1.0, "guardian": false}

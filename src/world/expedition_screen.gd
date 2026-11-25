@@ -8,6 +8,9 @@ const PANEL_SIZE := Vector2(296, 324)
 
 var crossing: Expedition
 var _backdrop: TravelBackdrop
+## The travel foreground (plants in front of the road). It sits above everything, so it is
+## hidden while a battle is open or it would cover the bottom lane of both teams.
+var _foreground: Node2D
 var _caravan: Caravan
 var _ui: CanvasLayer
 var _hud: RichTextLabel
@@ -80,7 +83,7 @@ func _ready() -> void:
 	add_child(_ambience)
 	_caravan = Caravan.new()
 	add_child(_caravan)
-	_backdrop.add_foreground(self)
+	_foreground = _backdrop.add_foreground(self)
 	_hover = HoverZones.new()
 	add_child(_hover)
 	_build_ui()
@@ -556,6 +559,7 @@ func _open_battle(ambushed: bool) -> void:
 		return
 	_ui.visible = false
 	_backdrop.visible = false
+	_foreground.visible = false
 	_caravan.visible = false
 	_ambience.set_active(false)
 	_battle = BattleScreen.new()
@@ -573,6 +577,7 @@ func _on_battle_finished(lines: Array) -> void:
 	_in_battle = false
 	_ui.visible = true
 	_backdrop.visible = true
+	_foreground.visible = true
 	_caravan.visible = true
 	_ambience.set_active(true)
 	_log.text = lines[0] if lines.size() > 0 else ""
@@ -700,13 +705,26 @@ func _refresh_wagon_page() -> void:
 
 
 func _setup_caravan() -> void:
-	_caravan.setup(crossing.haulers, "rimehare")
+	var buddy := _companion()
+	_caravan.setup(crossing.haulers, buddy)
 	_hover.clear()
 	_hover.add(Rect2(Caravan.WAGON_FEET + Vector2(-80, -170), Vector2(160, 172)), _wagon_tip)
 	var shown := crossing.haulers.slice(0, Caravan.HAULER_SLOTS.size())
 	for i in shown.size():
 		_hover.add(HoverZones.creature_rect(Caravan.HAULER_SLOTS[i]), _creature_tip.bind(shown[i], true))
-	_hover.add(HoverZones.creature_rect(Caravan.COMPANION_FEET), _creature_tip.bind("rimehare", false))
+	if buddy != "":
+		_hover.add(HoverZones.creature_rect(Caravan.COMPANION_FEET), _creature_tip.bind(buddy, false))
+
+
+## The Trailomon that walks beside the wagon: Rimehare while it travels with you, otherwise
+## the first team member who isn't in harness.
+func _companion() -> String:
+	if crossing.roster.has("rimehare") and not crossing.haulers.has("rimehare"):
+		return "rimehare"
+	for id in crossing.roster:
+		if not crossing.haulers.has(id):
+			return id
+	return ""
 
 
 func _creature_tip(id: String, hauling: bool) -> String:

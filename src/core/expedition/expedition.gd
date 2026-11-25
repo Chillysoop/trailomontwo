@@ -409,6 +409,9 @@ func step_day() -> bool:
 	if not pending_event.is_empty() or not pending_encounter.is_empty():
 		return true
 	if trip_days_left <= 0.0:
+		# An event or a fight on the last day of the final road must not skip the guardian.
+		if _guardian_blocks():
+			return true
 		return _arrive()
 	if events_enabled:
 		weather = TrailLife.roll_weather(String(trip["terrain"]), life_rng)
@@ -445,12 +448,19 @@ func step_day() -> bool:
 		return false
 	if trip_days_left > 0.0 or not pending_event.is_empty() or not pending_encounter.is_empty():
 		return true
-	if trip["to"] == map.goal and guardian_enabled and not guardian_faced:
-		guardian_faced = true
-		pending_encounter = {"pack": guardian_pack(), "scale": CombatData.GUARDIAN_SCALE, "guardian": true}
-		journal.append(guardian_pack()["title"] + " blocks the way!")
+	if _guardian_blocks():
 		return true
 	return _arrive()
+
+
+## On the last stretch to the goal, the crossing's guardian steps out (once per crossing).
+func _guardian_blocks() -> bool:
+	if trip["to"] != map.goal or not guardian_enabled or guardian_faced:
+		return false
+	guardian_faced = true
+	pending_encounter = {"pack": guardian_pack(), "scale": CombatData.GUARDIAN_SCALE, "guardian": true}
+	journal.append(guardian_pack()["title"] + " blocks the way!")
+	return true
 
 
 func _arrive() -> bool:
@@ -1276,7 +1286,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 		Battle.Outcome.VICTORY:
 			provisions += VICTORY_FOOD
 			water += VICTORY_WATER
-			lines.append("Victory! %s" % ("The Hollow Stag's pack scatters and the road to Westwatch is clear." if guardian else "The pack scatters."))
+			lines.append("Victory! %s" % (("%s falls back and the road to %s is clear." % [String(pack.get("title", "The guardian")), map.name_of(map.goal)]) if guardian else "The pack scatters."))
 			lines.append("You gather what they left behind: +%d food, +%d water." % [VICTORY_FOOD, VICTORY_WATER])
 			coins += VICTORY_COINS + bounty
 			lines.append("+%d {i:coins} coins." % (VICTORY_COINS + bounty))

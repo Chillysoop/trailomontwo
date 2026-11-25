@@ -132,6 +132,10 @@ static func next_crossing(caravan_data: Dictionary, rng_seed := -1, crossing_no 
 			e.haulers.append(id)
 	e.pending_recruit = ""
 	e.tidy_lineup()
+	# Every crossing sets out with at least the starting purse: coins carry over, but a
+	# caravan that spent everything last time would otherwise starve before the first stall.
+	if Expedition.default_map != "test":
+		e.coins = maxi(e.coins, Expedition.WORLD_START_COINS)
 	# Same overworld, the fog you lifted stays lifted, and the next crossing runs the other way.
 	e.setup_map(crossing_no)
 	return e
