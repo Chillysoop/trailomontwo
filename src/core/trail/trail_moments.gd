@@ -64,6 +64,17 @@ const MOMENTS := [
 		"text": "Fireflies light the road", "fx": {}},
 	{"id": "campfire", "icon": "camp", "terrains": [], "w": 2, "sight": "campfire",
 		"text": "Smoke from another camp", "fx": {}},
+	# Dust biomes.
+	{"id": "dust_drift", "icon": "dark_dust", "cap": "scout", "terrains": ["Blight"], "w": 3,
+		"text": "{who} sniffs out a drift of Dark dust", "fx": {"dark_dust": 1}},
+	{"id": "ash_cough", "icon": "w_ashfall", "terrains": ["Blight"], "w": 3,
+		"text": "Ash gets into everyone's lungs", "fx": {"health": -4}},
+	{"id": "dead_lantern", "icon": "biome_blight", "terrains": ["Blight"], "w": 2, "sight": "grave",
+		"text": "A warden's lantern, long dark", "fx": {}},
+	{"id": "light_motes", "icon": "light_dust", "cap": "light", "terrains": ["Glow"], "w": 3,
+		"text": "{who} gathers drifting Light dust", "fx": {"light_dust": 1}},
+	{"id": "glow_bloom", "icon": "biome_glow", "terrains": ["Glow"], "w": 3,
+		"text": "Glowing flowers ease the haulers", "fx": {"fatigue": -8}},
 ]
 
 ## Names and lines on the graves along the road.

@@ -14,7 +14,16 @@ const LAYERS := 14
 const LAYER_GAP := 180.0
 const HEIGHT := 1000.0
 const SIZE := Vector2(LAYER_GAP * (LAYERS - 1) + 160.0, HEIGHT)
-const TERRAIN_FACTOR := {"Forest": 1.0, "Hills": 1.2, "River": 1.1, "Swamp": 1.2, "Mountain": 1.45}
+const TERRAIN_FACTOR := {"Forest": 1.0, "Hills": 1.2, "River": 1.1, "Swamp": 1.2, "Mountain": 1.45, "Blight": 1.3, "Glow": 1.0}
+
+## Dust biomes: from crossing 3 Dark dust (the Blight) and Light dust (the Glow) spread over
+## regions of the overworld, more of them on later crossings. Their roads are riskier, their
+## stops change, and their Trailomon (Species "biome" key) live nowhere else.
+const BLIGHT := "Blight"
+const GLOW := "Glow"
+const BIOMES := [BLIGHT, GLOW]
+## Crossing -> regions of each biome (the highest key not above the crossing wins).
+const BIOME_SPREAD := {1: 0, 3: 1, 5: 2, 7: 3}
 
 ## Stop kinds by terrain (weights). "lookout" stops reveal more of the map.
 const KIND_WEIGHTS := {
@@ -23,6 +32,8 @@ const KIND_WEIGHTS := {
 	"River": {"post": 3, "village": 3, "waystation": 2},
 	"Swamp": {"stilts": 4, "ruins": 2, "waystation": 1},
 	"Mountain": {"lookout": 2, "ruins": 1, "waystation": 3, "post": 1},
+	"Blight": {"warden": 3, "ruins": 3, "lookout": 1},
+	"Glow": {"sanctum": 3, "village": 1, "lookout": 1},
 }
 
 ## Stall templates per stop kind: good -> [price, stock].
@@ -34,6 +45,8 @@ const STALLS := {
 	"ruins": {"dark_dust": [16, 1], "BATTLE": [9, 2]},
 	"stilts": {"water": [1, 6], "food": [3, 4], "medicine": [7, 2], "light_dust": [18, 1]},
 	"lookout": {"water": [2, 3], "food": [4, 2]},
+	"warden": {"light_dust": [10, 2], "medicine": [6, 2], "food": [4, 4], "water": [2, 4], "repair_kit": [12, 1]},
+	"sanctum": {"light_dust": [12, 1], "medicine": [5, 2], "food": [3, 4], "water": [1, 6]},
 }
 
 const NAME_PARTS := {
@@ -49,6 +62,8 @@ const REGION_NAMES := {
 	"River": ["The Silverrun", "Reedwater Vale", "The Kettle Flats", "Otterbend"],
 	"Swamp": ["The Murkfens", "Gloamwallow", "The Rotting Reach", "Peatmoor"],
 	"Mountain": ["The Cogspires", "Frostcrag Range", "The Anvil Teeth", "Slate Wall"],
+	"Blight": ["The Ashen Hollow", "Duskmire Scar", "The Withering"],
+	"Glow": ["Lumen Meadows", "The Shining Steppe", "Halo Glade"],
 }
 
 var seed := 0
@@ -256,6 +271,90 @@ func setup_crossing(no: int) -> void:
 	else:
 		start = w
 		goal = e
+	spread_biomes(no)
+
+
+## How many regions of each dust biome there are on crossing `no`.
+static func biome_count(no: int) -> int:
+	var n := 0
+	for k in BIOME_SPREAD:
+		if no >= int(k):
+			n = int(BIOME_SPREAD[k])
+	return n
+
+
+func is_biome(terrain: String) -> bool:
+	return BIOMES.has(terrain)
+
+
+## Turn regions into Blight and Glow until crossing `no` has its share. Always the same regions
+## for a map (in the same order), never the edge columns with the big towns, and never undone.
+func spread_biomes(no: int) -> void:
+	if is_test:
+		return
+	var want := biome_count(no)
+	var order := _biome_order()
+	var i := 0
+	for rid in order:
+		if i >= want * 2:
+			break
+		var biome: String = BIOMES[i % 2]
+		if String(regions[rid].get("biome", "")) == "":
+			_convert(rid, biome, i / 2)
+		i += 1
+
+
+func _biome_order() -> Array:
+	var ids: Array = []
+	for rid in regions:
+		var col := int(String(rid).split("_")[0].substr(1))
+		if col >= 1 and col <= 5:
+			ids.append(rid)
+	ids.sort()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + 4243
+	for k in range(ids.size() - 1, 0, -1):
+		var j := rng.randi_range(0, k)
+		var tmp = ids[k]
+		ids[k] = ids[j]
+		ids[j] = tmp
+	return ids
+
+
+func _convert(rid: String, biome: String, nth: int) -> void:
+	var reg: Dictionary = regions[rid]
+	reg["base_terrain"] = reg["terrain"]
+	reg["base_name"] = reg["name"]
+	reg["terrain"] = biome
+	reg["biome"] = biome
+	var names: Array = REGION_NAMES[biome]
+	reg["name"] = names[nth % names.size()] if nth < names.size() else "%s %s" % [names[nth % names.size()], ["II", "Far", "Deep"][(nth / names.size() - 1) % 3]]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + hash(rid)
+	var battle_items: Array = BattleItems.ITEMS.keys()
+	for id in junctions:
+		if junctions[id]["region"] != rid or junctions[id]["kind"] == "town":
+			continue
+		junctions[id]["kind"] = _weighted(KIND_WEIGHTS[biome], rng)
+		var stall := {}
+		var tpl: Dictionary = STALLS.get(junctions[id]["kind"], {})
+		for good in tpl:
+			var g: String = good
+			if g == "BATTLE":
+				g = battle_items[rng.randi_range(0, battle_items.size() - 1)]
+			stall[g] = {"price": int(tpl[good][0]), "stock": int(tpl[good][1])}
+		# Dark dust is cheap where it seeps from the ground.
+		if biome == BLIGHT:
+			stall["dark_dust"] = {"price": 8, "stock": 3}
+		stops[id]["stall"] = stall
+	for s in segments:
+		var ra := String(junctions[s["a"]]["region"])
+		var rb := String(junctions[s["b"]]["region"])
+		if (ra == rid or rb == rid) and not is_biome(String(s["terrain"])):
+			s["base_terrain"] = s["terrain"]
+			s["terrain"] = biome
+			s["terrain_factor"] = TERRAIN_FACTOR[biome]
+			s["risk"] = mini(3, int(s["risk"]) + 1)
 
 
 # ---------- queries ----------
@@ -371,6 +470,10 @@ func region_species(region_id: String) -> Array[String]:
 		var info: Dictionary = Species.DATA[id]
 		if String(info.get("rarity", "")) == "guardian" or id == "hollowstag":
 			continue
-		if habitat == "" or info["type"] == habitat:
+		var biome := String(info.get("biome", ""))
+		if is_biome(terrain):
+			if biome == terrain:
+				out.append(id)
+		elif biome == "" and (habitat == "" or info["type"] == habitat):
 			out.append(id)
 	return out

@@ -1,11 +1,14 @@
 extends SceneTree
 ## Plays many crossings of generated overworld maps: shortest-ish road with a random fork,
 ## buys food and water when low, safe choice on every event.
-## Usage: godot --headless --path . --script res://tools/sim/world_sim.gd
+## Usage: godot --headless --path . --script res://tools/sim/world_sim.gd [-- crossing N]
 
 
 func _init() -> void:
 	Expedition.default_map = "world"
+	# "-- crossing 5" plays a later crossing (dust biomes spread from crossing 3).
+	var args := OS.get_cmdline_user_args()
+	var crossing := int(args[args.find("crossing") + 1]) if args.has("crossing") else 1
 	for pace in ["steady", "hard", "easy"]:
 		var arrived := 0
 		var days := 0
@@ -17,6 +20,8 @@ func _init() -> void:
 		var runs := 120
 		for s in runs:
 			var e := Expedition.new_default(s)
+			if crossing > 1:
+				e.setup_map(crossing)
 			e.set_pace(pace)
 			var pick := RandomNumberGenerator.new()
 			pick.seed = s
