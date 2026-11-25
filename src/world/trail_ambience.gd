@@ -32,6 +32,8 @@ const ROADSIDE := {
 }
 
 var moving := false
+## Species the player has met. Only these graze in the distance (Conner: nothing unmet shows).
+var encountered := {}
 var terrain := "Forest"
 var weather := "clear"
 ## Draws above the scene: rain, snow, fog, lightning. Created in _ready.
@@ -212,10 +214,11 @@ func _spawn_wild(x: float, species := "") -> void:
 		var pool: Array[String] = []
 		var habitat: String = TrailLife.TERRAIN_HABITAT.get(terrain, "")
 		for id in Species.DATA:
-			if id != "hollowstag" and (habitat == "" or Species.info(id)["type"] == habitat):
+			if encountered.has(id) and id != "hollowstag" and String(Species.info(id).get("rarity", "")) != "guardian" \
+					and (habitat == "" or Species.info(id)["type"] == habitat):
 				pool.append(id)
 		if pool.is_empty():
-			pool = ["thornfang", "cairnram"]
+			return
 		species = pool[_rng.randi_range(0, pool.size() - 1)]
 	var face_left := _rng.randf() < 0.5
 	var s := Stand.sprite(load("res://assets/creatures/%s.png" % species), Vector2(0, 0), face_left)

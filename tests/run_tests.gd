@@ -5,6 +5,7 @@ extends SceneTree
 
 
 func _init() -> void:
+	Expedition.default_map = "test"
 	var files: Array[String] = []
 	_collect("res://tests", files)
 	files.sort()

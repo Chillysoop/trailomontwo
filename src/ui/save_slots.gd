@@ -96,10 +96,10 @@ func _row(slot: String) -> Button:
 	var s := SaveGame.summary(slot) if SaveGame.exists(slot) else {}
 	var used := not s.is_empty() and not s.has("error")
 	if used:
-		var where := "At %s" % TestRoute.junction_name(s["at"])
+		var where := "At %s" % _place(s)
 		match int(s["state"]):
-			Expedition.State.TRAVELLING: where = "On the road from %s" % TestRoute.junction_name(s["at"])
-			Expedition.State.ARRIVED: where = "Reached Westwatch"
+			Expedition.State.TRAVELLING: where = "On the road from %s" % _place(s)
+			Expedition.State.ARRIVED: where = "Reached %s" % _place(s)
 			Expedition.State.FAILED: where = "Crossing failed"
 		info.add_child(PreviewHud.label("Crossing %d   Day %d   %s" % [s["crossing_no"], s["day"], where], 8))
 		info.add_child(_team(s["roster"], s["levels"]))
@@ -201,3 +201,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		close()
+
+
+## Where a saved crossing is, by name (save summaries carry "at_name" once the map exists).
+static func _place(s: Dictionary) -> String:
+	if s.has("at_name"):
+		return String(s["at_name"])
+	return TestRoute.junction_name(s["at"]) if TestRoute.JUNCTIONS.has(s["at"]) else "the wilds"
