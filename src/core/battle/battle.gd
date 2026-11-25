@@ -75,8 +75,8 @@ static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 		var boost: Dictionary = player.get("boosts", {}).get(id, {})
 		f.max_hp += float(boost.get("hp", 0.0))
 		f.hp = f.max_hp
-		f.atk += float(boost.get("atk", 0.0))
-		f.def += float(boost.get("def", 0.0))
+		f.atk = maxf(1.0, f.atk + float(boost.get("atk", 0.0)))
+		f.def = maxf(0.0, f.def + float(boost.get("def", 0.0)))
 		f.spd = maxf(0.6, f.spd - float(boost.get("spd", 0.0)))
 		if hp.has(id):
 			f.hp = clampf(float(hp[id]), 0.0, f.max_hp)

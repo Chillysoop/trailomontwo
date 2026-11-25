@@ -65,6 +65,10 @@ var item_slots: Array[String] = ["", "", ""]
 ## Techniques owned: move id -> count. Each teaches its move once, to a Trailomon of the same
 ## habitat as the move's species.
 var techniques := {}
+## Dust: permanent boosts (see Dust). How much dust each Trailomon has taken so far.
+var light_dust := 0
+var dark_dust := 0
+var dust_used := {}
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -81,6 +85,8 @@ static func new_default(rng_seed := -1) -> Expedition:
 	e.stored = ["gillhorn", "inkhoot"]
 	e.items = {"ironbark_salve": 2, "swiftwind_feather": 1, "smoke_pouch": 1, "rally_horn": 1}
 	e.techniques = {"bark_bash": 1, "drain_lance": 1}
+	e.light_dust = 2
+	e.dark_dust = 1
 	e.haulers = ["brambleback", "coilhusk"]
 	e.cargo = [
 		{"name": "Medicine crates", "weight": 40.0, "value": 120},
@@ -467,7 +473,9 @@ func max_hp(id: String) -> float:
 func stat(id: String, key: String) -> float:
 	var base := float(CombatData.stats(id)[key])
 	var b := float(boosts.get(id, {}).get(key, 0.0))
-	return maxf(0.6, base - b) if key == "spd" else base + b
+	if key == "spd":
+		return maxf(0.6, base - b)
+	return maxf(1.0 if key == "atk" else 0.0, base + b)
 
 
 ## The move in use for "basic", "passive" or "ultimate".
@@ -754,6 +762,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 		for id in hp:
 			creature_hp[id] = float(hp[id])
 	var guardian := bool(pending_encounter.get("guardian", false))
+	var battle_scale := float(pending_encounter.get("scale", 1.0))
 	pending_encounter = {}
 	match outcome:
 		Battle.Outcome.VICTORY:
@@ -790,6 +799,11 @@ func finish_battle(battle: Battle) -> Array[String]:
 				found.append(BattleItems.item_name(id))
 		if not found.is_empty():
 			lines.append("Found a battle item: %s." % ", ".join(found))
+		var light := Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT
+		var dark := Dust.GUARDIAN_DARK if guardian else (1 if battle_scale >= Dust.STRONG_SCALE else 0)
+		light_dust += light
+		dark_dust += dark
+		lines.append("Gathered dust: +%d {i:light_dust} Light%s." % [light, "" if dark == 0 else ", +%d {i:dark_dust} Dark" % dark])
 		if battle_rng.randf() < (1.0 if guardian else TECHNIQUE_DROP_CHANCE):
 			var all: Array = MovePool.MOVES.keys()
 			var mid: String = all[battle_rng.randi_range(0, all.size() - 1)]
@@ -889,6 +903,37 @@ func use_technique(id: String, mid: String, to_memory: bool) -> String:
 	if techniques[mid] == 0:
 		techniques.erase(mid)
 	return _learn(id, mid, to_memory)
+
+
+# ---------- dust ----------
+
+func dust_left(id: String) -> int:
+	return Dust.CAP - int(dust_used.get(id, 0))
+
+
+func dust_count(kind: String) -> int:
+	return dark_dust if kind == "dark" else light_dust
+
+
+## Use one Light or Dark dust on a stat. Returns a journal line, or "" if it can't.
+func use_dust(id: String, kind: String, stat: String) -> String:
+	if dust_count(kind) <= 0 or dust_left(id) <= 0 or not Leveling.STATS.has(stat):
+		return ""
+	var o := Dust.offer(kind, stat)
+	var b: Dictionary = boosts.get(id, {})
+	b[stat] = float(b.get(stat, 0.0)) + float(o["amount"])
+	if float(o["cost"]) > 0.0:
+		b[o["cost_stat"]] = float(b.get(o["cost_stat"], 0.0)) - float(o["cost"])
+	boosts[id] = b
+	if stat == "hp":
+		creature_hp[id] = float(creature_hp.get(id, 0.0)) + float(o["amount"])
+	creature_hp[id] = minf(float(creature_hp.get(id, 0.0)), max_hp(id))
+	if kind == "dark":
+		dark_dust -= 1
+	else:
+		light_dust -= 1
+	dust_used[id] = int(dust_used.get(id, 0)) + 1
+	return "%s took %s dust: %s." % [Species.info(id)["name"], "Dark" if kind == "dark" else "Light", Dust.offer_text(o)]
 
 
 ## Fight the pending encounter instantly (used by travel() and tests).

@@ -22,6 +22,7 @@ var _card_nodes: Array[Control] = []
 var _stored: HBoxContainer
 var _level_btn: Button
 var _tech_btn: Button
+var _dust_btns := {}
 ## Called after a memory swap instead of refresh(), when the cards are shown somewhere else
 ## (the level-up screen borrows _card() as its character sheet).
 var on_swap: Callable
@@ -76,14 +77,14 @@ func _ready() -> void:
 	var title := PreviewHud.label("Companions", 11)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
-	for dust in [["light_dust", "Light dust"], ["dark_dust", "Dark dust"]]:
-		var b := Ui.button(dust[1], 8)
-		b.icon = Rich.icon_tex(dust[0])
+	for k in ["light", "dark"]:
+		var b := Ui.button("", 8)
+		b.icon = Rich.icon_tex(k + "_dust")
 		b.focus_mode = Control.FOCUS_NONE
-		b.disabled = true
-		b.mouse_filter = Control.MOUSE_FILTER_PASS
-		Tips.attach(b, "g:" + dust[0])
+		b.pressed.connect(open_dust.bind(k))
+		Tips.attach(b, "g:" + k + "_dust")
 		head.add_child(b)
+		_dust_btns[k] = b
 	_tech_btn = Ui.button("", 8)
 	_tech_btn.icon = Rich.icon_tex("technique")
 	_tech_btn.focus_mode = Control.FOCUS_NONE
@@ -133,6 +134,8 @@ func refresh() -> void:
 	for mid in crossing.techniques:
 		techs += crossing.technique_count(mid)
 	_tech_btn.text = "Techniques (%d)" % techs
+	for k in _dust_btns:
+		(_dust_btns[k] as Button).text = "%s (%d)" % ["Light" if k == "light" else "Dark", crossing.dust_count(k)]
 	_level_btn.visible = crossing.pending_count() > 0
 	_level_btn.text = "Level ups (%d)" % crossing.pending_count()
 
@@ -142,6 +145,11 @@ func open_level_ups() -> void:
 		return
 	var l := LevelUpScreen.open(self, crossing)
 	l.closed.connect(refresh)
+
+
+func open_dust(k: String) -> void:
+	var d := DustScreen.open(self, crossing, k)
+	d.closed.connect(refresh)
 
 
 func open_techniques() -> void:
