@@ -19,7 +19,8 @@ const RARITIES := {
 	"guardian": {"name": "Guardian", "color": "ff8a7a", "weight": 0, "from_crossing": 99},
 }
 
-const DATA := {
+## The hand-written species. Everything else comes from the roster files (see Roster).
+const BASE := {
 	"brambleback": {"rarity": "rare", "name": "Brambleback", "type": "Forest", "size": "large", "hauling": 150,
 		"capabilities": {"strength": 3, "guard": 3}},
 	"coilhusk": {"rarity": "rare", "name": "Coilhusk", "type": "Forest", "size": "large", "hauling": 130,
@@ -49,76 +50,10 @@ const DATA := {
 		"capabilities": {"guard": 2, "scout": 1}},
 	"hollowstag": {"rarity": "guardian", "name": "Hollowstag", "type": "Forest", "size": "large", "hauling": 0,
 		"capabilities": {}},
-	# ----- Added with varied crossings -----
-	"mossmole": {"rarity": "common", "name": "Mossmole", "type": "Forest", "size": "small", "hauling": 0,
-		"capabilities": {"clear": 2, "forage": 2}},
-	"burlbear": {"rarity": "rare", "name": "Burlbear", "type": "Forest", "size": "large", "hauling": 140,
-		"capabilities": {"strength": 3, "guard": 2}},
-	"pebblotter": {"rarity": "common", "name": "Pebblotter", "type": "River", "size": "small", "hauling": 0,
-		"capabilities": {"float": 2, "heal": 1, "forage": 2}},
-	"lanternray": {"rarity": "rare", "name": "Lanternray", "type": "River", "size": "medium", "hauling": 0,
-		"capabilities": {"float": 3, "light": 2}},
-	"sporetoad": {"rarity": "common", "name": "Sporetoad", "type": "Swamp", "size": "small", "hauling": 0,
-		"capabilities": {"heal": 1, "forage": 2, "float": 1}},
-	"bogjaw": {"rarity": "rare", "name": "Bogjaw", "type": "Swamp", "size": "large", "hauling": 110,
-		"capabilities": {"strength": 2, "float": 2, "guard": 1}},
-	"slatebeak": {"rarity": "common", "name": "Slatebeak", "type": "Mountain", "size": "medium", "hauling": 0,
-		"capabilities": {"scout": 3, "steady": 1}},
-	"quarrytusk": {"rarity": "rare", "name": "Quarrytusk", "type": "Mountain", "size": "large", "hauling": 160,
-		"capabilities": {"strength": 3, "clear": 2}},
-	"flurrypup": {"rarity": "common", "name": "Flurrypup", "type": "Snow", "size": "small", "hauling": 0,
-		"capabilities": {"cold": 2, "scout": 2}},
-	"rimewing": {"rarity": "rare", "name": "Rimewing", "type": "Snow", "size": "medium", "hauling": 0,
-		"capabilities": {"cold": 3, "scout": 2}},
-	"vinegecko": {"rarity": "common", "name": "Vinegecko", "type": "Jungle", "size": "small", "hauling": 0,
-		"capabilities": {"clear": 2, "scout": 2, "forage": 1}},
-	"canopard": {"rarity": "rare", "name": "Canopard", "type": "Jungle", "size": "medium", "hauling": 0,
-		"capabilities": {"scout": 3, "guard": 1}},
-	"emberoak": {"rarity": "legendary", "name": "Emberoak", "type": "Forest", "size": "large", "hauling": 180,
-		"capabilities": {"strength": 3, "guard": 3, "light": 2}},
-	"tidewyrm": {"rarity": "legendary", "name": "Tidewyrm", "type": "River", "size": "large", "hauling": 0,
-		"capabilities": {"float": 3, "heal": 3}},
-	"auroryx": {"rarity": "legendary", "name": "Auroryx", "type": "Snow", "size": "medium", "hauling": 90,
-		"capabilities": {"cold": 3, "light": 2, "scout": 2}},
-	# ----- Batch 2 -----
-	"acornet": {"rarity": "common", "name": "Acornet", "type": "Forest", "size": "small", "hauling": 0,
-		"capabilities": {"forage": 3, "scout": 1}},
-	"minnowisp": {"rarity": "common", "name": "Minnowisp", "type": "River", "size": "small", "hauling": 0,
-		"capabilities": {"float": 3, "light": 1}},
-	"murkmoth": {"rarity": "common", "name": "Murkmoth", "type": "Swamp", "size": "small", "hauling": 0,
-		"capabilities": {"scout": 2, "light": 1}},
-	"cragkid": {"rarity": "common", "name": "Cragkid", "type": "Mountain", "size": "medium", "hauling": 70,
-		"capabilities": {"steady": 3, "strength": 1}},
-	"sleetmouse": {"rarity": "common", "name": "Sleetmouse", "type": "Snow", "size": "small", "hauling": 0,
-		"capabilities": {"scout": 2, "cold": 2}},
-	"vinekeet": {"rarity": "common", "name": "Vinekeet", "type": "Jungle", "size": "small", "hauling": 0,
-		"capabilities": {"scout": 3, "forage": 1}},
-	"barkbeetle": {"rarity": "rare", "name": "Barkbeetle", "type": "Forest", "size": "medium", "hauling": 60,
-		"capabilities": {"guard": 3, "strength": 1}},
-	"kelpoise": {"rarity": "rare", "name": "Kelpoise", "type": "River", "size": "large", "hauling": 100,
-		"capabilities": {"float": 3, "strength": 2}},
-	"gloomleech": {"rarity": "rare", "name": "Gloomleech", "type": "Swamp", "size": "medium", "hauling": 0,
-		"capabilities": {"float": 2, "heal": 1}},
-	"basaltortle": {"rarity": "rare", "name": "Basaltortle", "type": "Mountain", "size": "large", "hauling": 130,
-		"capabilities": {"strength": 2, "steady": 3}},
-	"frostmane": {"rarity": "rare", "name": "Frostmane", "type": "Snow", "size": "large", "hauling": 90,
-		"capabilities": {"cold": 3, "guard": 2}},
-	"prowlmander": {"rarity": "rare", "name": "Prowlmander", "type": "Jungle", "size": "medium", "hauling": 0,
-		"capabilities": {"scout": 2, "clear": 2}},
-	"mirehydra": {"rarity": "legendary", "name": "Mirehydra", "type": "Swamp", "size": "large", "hauling": 0,
-		"capabilities": {"float": 2, "strength": 2, "heal": 1}},
-	"titanox": {"rarity": "legendary", "name": "Titanox", "type": "Mountain", "size": "large", "hauling": 200,
-		"capabilities": {"strength": 3, "steady": 3}},
-	"quetzalith": {"rarity": "legendary", "name": "Quetzalith", "type": "Jungle", "size": "large", "hauling": 0,
-		"capabilities": {"scout": 3, "clear": 2, "light": 1}},
-	# Guardians (bosses at the end of later crossings).
-	"bogmother": {"rarity": "guardian", "name": "Bog Mother", "type": "Swamp", "size": "large", "hauling": 0,
-		"capabilities": {}},
-	"cogmammoth": {"rarity": "guardian", "name": "Cogmammoth", "type": "Mountain", "size": "large", "hauling": 0,
-		"capabilities": {}},
-	"rimewyrm": {"rarity": "guardian", "name": "Rimewyrm", "type": "Snow", "size": "large", "hauling": 0,
-		"capabilities": {}},
 }
+
+## Every species: BASE plus the roster files.
+static var DATA: Dictionary = Roster.merged("SPECIES", BASE)
 
 
 static func info(id: String) -> Dictionary:
@@ -173,3 +108,59 @@ static func pick_weighted(ids: Array, rng: RandomNumberGenerator) -> String:
 		if roll <= 0:
 			return String(id)
 	return String(ids[-1])
+
+
+# ---------- evolution ----------
+## A species can name what it grows into with "evolves_to" (one id, or a list when the line
+## branches, one form per archetype) and, optionally, "evolve_level". By default stage 1
+## evolves at level 10 and stage 2 at level 20.
+
+const EVOLVE_LEVELS := {1: 10, 2: 20}
+
+
+## What this species can evolve into ([] if it doesn't evolve).
+static func evolutions(id: String) -> Array[String]:
+	var out: Array[String] = []
+	var to: Variant = DATA.get(id, {}).get("evolves_to", "")
+	if to is Array:
+		for t in to:
+			out.append(String(t))
+	elif String(to) != "":
+		out.append(String(to))
+	return out
+
+
+## The species this one evolves from ("" for a first stage).
+static func previous(id: String) -> String:
+	for other in DATA:
+		if evolutions(other).has(id):
+			return String(other)
+	return ""
+
+
+## 1 for a first stage, 2 for its evolution, 3 for the one after that.
+static func stage(id: String) -> int:
+	var n := 1
+	var p := previous(id)
+	while p != "" and n < 5:
+		n += 1
+		p = previous(p)
+	return n
+
+
+## The first stage of this species' line (its family).
+static func family(id: String) -> String:
+	var p := id
+	while previous(p) != "":
+		p = previous(p)
+	return p
+
+
+## The level this species can evolve at.
+static func evolve_level(id: String) -> int:
+	return int(DATA.get(id, {}).get("evolve_level", EVOLVE_LEVELS.get(stage(id), 20)))
+
+
+## Dust-biome species: "Blight" or "Glow" ("" for ordinary habitat species).
+static func biome(id: String) -> String:
+	return String(DATA.get(id, {}).get("biome", ""))

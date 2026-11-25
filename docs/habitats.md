@@ -165,5 +165,12 @@ behind the target and slip out of the way of blows.
    habitat's signatures.
 7. Plan its two archetypes from the habitat's pair, for level-ups.
 8. Give it a look from the habitat's palette and shapes, and one or two trail jobs.
-9. Give it an original hybrid name (two real creatures or materials blended), like
-   Coilhusk or Frostsnip.
+9. Make it a hybrid of real animals, in look and name, like Coilhusk, Inkhoot, Plateflit,
+   Gillhorn, Scythelk or Frostsnip (Conner's rule for all 300).
+10. Write it into its habitat's roster file in `src/core/data/roster/` (species entry, kit and
+    its three moves). Dust-biome Trailomon go in `blight.gd` / `glow.gd` with
+    `"biome": "Blight"` or `"Glow"`. An evolution line names its next form with
+    `"evolves_to"` (a list when it branches). The encounter tables pick it up on their own.
+11. Run the tests: `tests/core/test_roster.gd` checks the keyword rule (Balance.SIGNATURE),
+    the power budget for its rarity and its speed. `tools/sim/roster_sim.gd` prints a round
+    robin against its own rarity.

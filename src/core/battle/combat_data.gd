@@ -51,7 +51,8 @@ const HABITATS := {
 	"Jungle": {"theme": "Reach", "owns": ["reach", "dodge"],
 		"line": "Strikes from anywhere: reaches the second row, hits behind and dodges."},
 }
-const KITS := {
+## Kits written here; the roster files add the rest (see Roster).
+const BASE_KITS := {
 	"brambleback": {"role": "Guard", "hp": 520, "atk": 26, "def": 45, "spd": 2.2,
 		"basic": "bramble_swipe", "passive": "thorny_hide", "ultimate": "briar_wall"},
 	"coilhusk": {"role": "Bruiser", "hp": 480, "atk": 32, "def": 34, "spd": 2.1,
@@ -81,79 +82,10 @@ const KITS := {
 	"hollowstag": {"role": "Boss", "hp": 900, "atk": 34, "def": 35, "spd": 2.2,
 		"basic": "antler_gore", "passive": "ancient_bark", "ultimate": "antler_storm",
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
-	# ----- Added with varied crossings (kits are data-driven MovePool moves) -----
-	"mossmole": {"role": "Guard", "hp": 400, "atk": 22, "def": 36, "spd": 2.1,
-		"basic": "moss_burrow", "passive": "mossy_hide", "ultimate": "dig_in"},
-	"burlbear": {"role": "Bruiser", "hp": 500, "atk": 33, "def": 32, "spd": 2.2,
-		"basic": "burl_maul", "passive": "burl_bark", "ultimate": "timber_crash"},
-	"pebblotter": {"role": "Healer", "hp": 280, "atk": 25, "def": 14, "spd": 1.7,
-		"basic": "pebble_toss", "passive": "otter_care", "ultimate": "brook_song"},
-	"lanternray": {"role": "Striker", "hp": 300, "atk": 34, "def": 14, "spd": 1.8,
-		"basic": "glow_sting", "passive": "deep_glow", "ultimate": "lantern_dive"},
-	"sporetoad": {"role": "Support", "hp": 290, "atk": 25, "def": 16, "spd": 1.8,
-		"basic": "spore_puff", "passive": "toxic_skin", "ultimate": "spore_storm"},
-	"bogjaw": {"role": "Bruiser", "hp": 470, "atk": 33, "def": 30, "spd": 2.2,
-		"basic": "bog_bite", "passive": "murk_jaws", "ultimate": "death_roll"},
-	"slatebeak": {"role": "Striker", "hp": 270, "atk": 31, "def": 14, "spd": 1.7,
-		"basic": "slate_peck", "passive": "carrion_eye", "ultimate": "rock_dive"},
-	"quarrytusk": {"role": "Guard", "hp": 470, "atk": 28, "def": 42, "spd": 2.3,
-		"basic": "tusk_shove", "passive": "quarry_hide", "ultimate": "quarry_quake"},
-	"flurrypup": {"role": "Support", "hp": 270, "atk": 24, "def": 12, "spd": 1.5,
-		"basic": "snow_nip", "passive": "pack_flurry", "ultimate": "blizzard_howl"},
-	"rimewing": {"role": "Striker", "hp": 290, "atk": 32, "def": 16, "spd": 1.6,
-		"basic": "frost_wing", "passive": "cold_edge", "ultimate": "rime_dive"},
-	"vinegecko": {"role": "Striker", "hp": 240, "atk": 28, "def": 11, "spd": 1.6,
-		"basic": "vine_flick", "passive": "sticky_feet", "ultimate": "canopy_drop"},
-	"canopard": {"role": "Striker", "hp": 320, "atk": 35, "def": 18, "spd": 1.7,
-		"basic": "leaf_pounce", "passive": "dapple", "ultimate": "canopy_strike"},
-	"emberoak": {"role": "Guard", "hp": 620, "atk": 32, "def": 52, "spd": 2.2,
-		"basic": "ember_bough", "passive": "ember_bark", "ultimate": "heartfire"},
-	"tidewyrm": {"role": "Healer", "hp": 400, "atk": 34, "def": 24, "spd": 1.8,
-		"basic": "tide_lash", "passive": "tidal_heart", "ultimate": "great_wave"},
-	"auroryx": {"role": "Striker", "hp": 360, "atk": 34, "def": 22, "spd": 1.5,
-		"basic": "aurora_horn", "passive": "aurora_mane", "ultimate": "polar_light"},
-	# ----- Batch 2 -----
-	"acornet": {"role": "Striker", "hp": 250, "atk": 27, "def": 14, "spd": 1.6,
-		"basic": "acorn_pelt", "passive": "nutshell", "ultimate": "nut_barrage"},
-	"minnowisp": {"role": "Healer", "hp": 250, "atk": 24, "def": 12, "spd": 1.6,
-		"basic": "wisp_splash", "passive": "glimmer", "ultimate": "spring_glow"},
-	"murkmoth": {"role": "Support", "hp": 240, "atk": 25, "def": 11, "spd": 1.7,
-		"basic": "dust_wing", "passive": "murk_scales", "ultimate": "moth_swarm"},
-	"cragkid": {"role": "Bruiser", "hp": 360, "atk": 29, "def": 26, "spd": 2.0,
-		"basic": "crag_butt", "passive": "sure_footed", "ultimate": "rockfall"},
-	"sleetmouse": {"role": "Striker", "hp": 220, "atk": 27, "def": 10, "spd": 1.3,
-		"basic": "sleet_nibble", "passive": "cold_whiskers", "ultimate": "snow_scurry"},
-	"vinekeet": {"role": "Support", "hp": 240, "atk": 24, "def": 12, "spd": 1.5,
-		"basic": "keet_peck", "passive": "chatter", "ultimate": "flock_call"},
-	"barkbeetle": {"role": "Guard", "hp": 420, "atk": 24, "def": 44, "spd": 2.2,
-		"basic": "horn_flip", "passive": "hard_shell", "ultimate": "carapace"},
-	"kelpoise": {"role": "Guard", "hp": 520, "atk": 24, "def": 38, "spd": 2.3,
-		"basic": "kelp_snap", "passive": "kelp_drink", "ultimate": "tide_shelter"},
-	"gloomleech": {"role": "Striker", "hp": 320, "atk": 33, "def": 16, "spd": 1.8,
-		"basic": "leech_bite", "passive": "gloom_feed", "ultimate": "bloodrot"},
-	"basaltortle": {"role": "Guard", "hp": 520, "atk": 26, "def": 46, "spd": 2.4,
-		"basic": "basalt_slam", "passive": "cooled_rock", "ultimate": "magma_crack"},
-	"frostmane": {"role": "Bruiser", "hp": 450, "atk": 33, "def": 28, "spd": 2.1,
-		"basic": "frost_maul", "passive": "ice_pride", "ultimate": "white_roar"},
-	"prowlmander": {"role": "Striker", "hp": 300, "atk": 34, "def": 15, "spd": 1.7,
-		"basic": "tongue_lash", "passive": "quick_tongue", "ultimate": "ambush_leap"},
-	"mirehydra": {"role": "Bruiser", "hp": 600, "atk": 36, "def": 32, "spd": 1.9,
-		"basic": "triple_bite", "passive": "many_heads", "ultimate": "hydra_rot"},
-	"titanox": {"role": "Guard", "hp": 640, "atk": 30, "def": 50, "spd": 2.3,
-		"basic": "titan_horn", "passive": "titan_hide", "ultimate": "earthsplitter"},
-	"quetzalith": {"role": "Striker", "hp": 370, "atk": 36, "def": 20, "spd": 1.6,
-		"basic": "plume_strike", "passive": "sun_plumes", "ultimate": "sky_dive"},
-	# ----- Guardians -----
-	"bogmother": {"role": "Boss", "hp": 1250, "atk": 39, "def": 30, "spd": 2.2,
-		"basic": "brood_spit", "passive": "mother_brood", "ultimate": "fen_flood",
-		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
-	"cogmammoth": {"role": "Boss", "hp": 950, "atk": 33, "def": 38, "spd": 2.4,
-		"basic": "gear_tusk", "passive": "iron_hide", "ultimate": "piston_stomp",
-		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
-	"rimewyrm": {"role": "Boss", "hp": 950, "atk": 33, "def": 32, "spd": 2.0,
-		"basic": "rime_fang", "passive": "frozen_heart", "ultimate": "glacier_breath",
-		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 }
+
+## Every kit: BASE_KITS plus the roster files.
+static var KITS: Dictionary = Roster.merged("KITS", BASE_KITS)
 
 ## Move text uses Rich markup plus number tokens filled from the creature's stats:
 ##   {atk:120}   "120% Attack (54)"     {maxhp:15}  "15% Max HP (69)"
@@ -591,6 +523,9 @@ static func packs_for(seg: Dictionary, crossing_no := 1) -> Array:
 		if int(seg.get("risk", 1)) >= int(p["min_risk"]) and crossing_no >= int(p.get("min_crossing", 1)) \
 				and (terrains.is_empty() or terrains.has(seg.get("terrain", ""))):
 			out.append(p)
+	var table := Encounters.table_entry(String(seg.get("terrain", "")), crossing_no)
+	if not table.is_empty():
+		out.append(table)
 	return out
 
 

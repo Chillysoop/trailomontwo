@@ -429,6 +429,8 @@ func step_day() -> bool:
 		var packs := CombatData.packs_for(trip, crossing_no)
 		if not packs.is_empty():
 			var pack: Dictionary = CombatData.pick_pack(packs, battle_rng)
+			if pack.get("table", false):
+				pack = Encounters.build(String(pack["terrain"]), crossing_no, int(trip["risk"]), battle_rng)
 			pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip["risk"]), 1.0)), "guardian": false}
 			_trip_had_battle = true
 			journal.append(pack["title"] + "!")
@@ -764,20 +766,17 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 	return d
 
 
-## Wild species that live in this terrain's habitat (or anywhere, on Hills) and aren't owned yet.
+## Wild species that live on this terrain (its encounter table) and aren't owned yet.
 func wild_for(terrain: String) -> Array[String]:
 	var out: Array[String] = []
 	if stored.size() >= STORAGE_MAX:
 		return out
-	var habitat: String = TrailLife.TERRAIN_HABITAT.get(terrain, "")
-	for id in Species.DATA:
-		if Species.is_boss(id) or roster.has(id) or stored.has(id) or not Species.can_meet(id, crossing_no):
-			continue
-		if habitat == "" or Species.info(id)["type"] == habitat:
+	for id in Encounters.pool(terrain, crossing_no):
+		if not roster.has(id) and not stored.has(id):
 			out.append(id)
-	if out.is_empty():
+	if out.is_empty() and not Encounters.BIOMES.has(terrain):
 		for id in Species.DATA:
-			if not Species.is_boss(id) and not roster.has(id) and not stored.has(id) and Species.can_meet(id, crossing_no):
+			if Species.biome(id) == "" and Encounters.can_turn_up(id, crossing_no) and not roster.has(id) and not stored.has(id):
 				out.append(id)
 	return out
 
@@ -928,6 +927,8 @@ func gain_xp(id: String, amount: int) -> int:
 		levels[id] = level(id) + 1
 		gained += 1
 		_queue_level_up(id, level(id))
+		if level(id) == Species.evolve_level(id) and not Species.evolutions(id).is_empty():
+			journal.append("%s is ready to evolve." % Species.info(id)["name"])
 	if level(id) >= Leveling.MAX_LEVEL:
 		xp[id] = 0
 	return gained
@@ -1026,6 +1027,59 @@ func knocked_out() -> Array[String]:
 ## The move stored in a creature's memory slot for "basic", "passive" or "ultimate" ("" if empty).
 func level(id: String) -> int:
 	return int(levels.get(id, 1))
+
+
+# ---------- evolution ----------
+
+## What a tamed Trailomon could evolve into right now: it is at the level, and you don't
+## already own that form. Evolving is always the player's choice.
+func evolve_options(id: String) -> Array[String]:
+	var out: Array[String] = []
+	if not (roster.has(id) or stored.has(id)) or level(id) < Species.evolve_level(id):
+		return out
+	for to in Species.evolutions(id):
+		if Species.DATA.has(to) and not roster.has(to) and not stored.has(to):
+			out.append(to)
+	return out
+
+
+func can_evolve(id: String) -> bool:
+	return not evolve_options(id).is_empty()
+
+
+## Evolve a Trailomon into `to`. It keeps its level, experience, level-up boosts, learned
+## moves, memory, dust and place in the team; it takes the new form's stats and kit (moves
+## you swapped in yourself stay). Health keeps the same share of the new Max HP.
+## Returns a line for the journal, or "" if it can't evolve.
+func evolve(id: String, to: String) -> String:
+	if not evolve_options(id).has(to):
+		return ""
+	var share := 1.0
+	if creature_hp.has(id):
+		share = clampf(float(creature_hp[id]) / maxf(1.0, max_hp(id)), 0.0, 1.0)
+	for list in [roster, haulers, stored]:
+		var i: int = list.find(id)
+		if i >= 0:
+			list[i] = to
+	for d in [fatigue, levels, xp, kits, boosts, known, memory, dust_used]:
+		if d.has(id):
+			d[to] = d[id]
+			d.erase(id)
+	for cell in lineup:
+		if lineup[cell] == id:
+			lineup[cell] = to
+	for p in pending_levels:
+		if p["id"] == id:
+			p["id"] = to
+	if creature_hp.has(id):
+		creature_hp.erase(id)
+		creature_hp[to] = max_hp(to) * share
+	if haulers.has(to) and not can_haul(to):
+		haulers.erase(to)
+	encountered[to] = true
+	var line := "%s evolved into %s!" % [Species.info(id)["name"], Species.info(to)["name"]]
+	journal.append(line)
+	return line
 
 
 func memory_move(id: String, slot: String) -> String:
