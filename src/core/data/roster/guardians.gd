@@ -16,6 +16,10 @@ const SPECIES := {
 		"capabilities": {}},
 	"dawnshell": {"rarity": "guardian", "name": "Dawnshell", "type": "River", "size": "large", "hauling": 0,
 		"capabilities": {}},
+	"briarking": {"rarity": "guardian", "name": "Briarking", "type": "Forest", "size": "large", "hauling": 0,
+		"capabilities": {}},
+	"sturgebull": {"rarity": "guardian", "name": "Sturgebull", "type": "River", "size": "large", "hauling": 0,
+		"capabilities": {}},
 }
 
 const KITS := {
@@ -33,6 +37,12 @@ const KITS := {
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 	"dawnshell": {"role": "Boss", "hp": 1150, "atk": 35, "def": 36, "spd": 2.2,
 		"basic": "sunfan_wave", "passive": "dawn_drink", "ultimate": "radiant_tide",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"briarking": {"role": "Boss", "hp": 1300, "atk": 38, "def": 40, "spd": 2.3,
+		"basic": "tusk_thicket", "passive": "crown_of_thorns", "ultimate": "bramble_throne",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"sturgebull": {"role": "Boss", "hp": 1300, "atk": 38, "def": 34, "spd": 2.2,
+		"basic": "barbel_ram", "passive": "ancient_gills", "ultimate": "river_stampede",
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 }
 
@@ -57,4 +67,12 @@ const MOVES := {
 	"sunfan_wave": {"name": "Sunfan Wave", "slot": "basic", "pct": 85, "wash": 60, "splash": 30},
 	"dawn_drink": {"name": "Dawn Drink", "slot": "passive", "kind": "drain", "pct": 25},
 	"radiant_tide": {"name": "Radiant Tide", "slot": "ultimate", "target": "all", "pct": 85, "wash": 80, "team": {"heal_maxhp": 8, "cleanse": true}},
+	# Briarking
+	"tusk_thicket": {"name": "Tusk Thicket", "slot": "basic", "pct": 100, "splash": 30, "self": {"shield_atk": 30}},
+	"crown_of_thorns": {"name": "Crown of Thorns", "slot": "passive", "kind": "thorns", "pct": 50},
+	"bramble_throne": {"name": "Bramble Throne", "slot": "ultimate", "target": "all", "pct": 90, "self": {"shield_def": 200}, "taunt": 4.0},
+	# Sturgebull
+	"barbel_ram": {"name": "Barbel Ram", "slot": "basic", "pct": 95, "wash": 60, "splash": 30},
+	"ancient_gills": {"name": "Ancient Gills", "slot": "passive", "kind": "drain", "pct": 20},
+	"river_stampede": {"name": "River Stampede", "slot": "ultimate", "target": "row", "pct": 130, "wash": 100},
 }

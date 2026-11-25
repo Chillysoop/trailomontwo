@@ -371,6 +371,12 @@ const GUARDIANS := [
 	{"id": "dawnshell", "title": "The Dawnshell", "terrains": [], "min_risk": 1, "boss": "dawnshell",
 		"text": "The river turns to gold. A sea turtle as big as a hill rises from the water, a fan of shining feathers opening over its shell.",
 		"front": ["halotaur", "", "pearlotter"], "back": ["seraseal", "", "lumifrog"]},
+	{"id": "briarking", "title": "The Briarking", "terrains": [], "min_risk": 1, "boss": "briarking",
+		"text": "The forest closes in behind you. A boar as big as a barn pushes through the thorns, a crown of brambles on its brow and quills rattling down its back.",
+		"front": ["brockwolf", "", "spinetoise"], "back": ["hornsquirl", "", "bumblemunk"]},
+	{"id": "sturgebull", "title": "The Sturgebull", "terrains": [], "min_risk": 1, "boss": "sturgebull",
+		"text": "The ford starts to churn. An ancient sturgeon with the horns and shoulders of a bull wades up the river toward you, and the water rises with it.",
+		"front": ["platygator", "", "goosetoise"], "back": ["ospreyfox", "", "minktrout"]},
 ]
 
 ## Enemy strength by segment risk (health and power multiplier).
