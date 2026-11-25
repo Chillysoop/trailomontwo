@@ -30,6 +30,7 @@ func _rate(level: int, crossing_no: int, pack: Dictionary, scale: float) -> int:
 
 
 func _init() -> void:
+	Expedition.default_map = "test"
 	var args := OS.get_cmdline_user_args()
 	if args.has("packs"):
 		_packs()
