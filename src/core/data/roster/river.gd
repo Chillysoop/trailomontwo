@@ -51,5 +51,5 @@ const MOVES := {
 	# Kelpoise
 	"kelp_snap": {"name": "Kelp Snap", "slot": "basic", "pct": 75, "self": {"heal_atk": 30}},
 	"kelp_drink": {"name": "Kelp Drink", "slot": "passive", "kind": "drain", "pct": 25},
-	"tide_shelter": {"name": "Tide Shelter", "slot": "ultimate", "target": "none", "team": {"heal_maxhp": 14, "cleanse": true}, "taunt": 4.0},
+	"tide_shelter": {"name": "Tide Shelter", "slot": "ultimate", "target": "none", "team": {"heal_maxhp": 14, "cleanse": true}, "self": {"shield_def": 100}},
 }

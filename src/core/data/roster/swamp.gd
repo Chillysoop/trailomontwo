@@ -41,7 +41,7 @@ const MOVES := {
 	"murk_jaws": {"name": "Murk Jaws", "slot": "passive", "kind": "bonus_vs", "vs": "weakened", "amount": 25},
 	"death_roll": {"name": "Death Roll", "slot": "ultimate", "pct": 200, "poison": [30, 4], "weaken": [25, 4]},
 	# Murkmoth
-	"dust_wing": {"name": "Dust Wing", "slot": "basic", "pct": 60, "poison": [12, 4], "reach": true},
+	"dust_wing": {"name": "Dust Wing", "slot": "basic", "pct": 60, "poison": [12, 4], "splash": 25},
 	"murk_scales": {"name": "Murk Scales", "slot": "passive", "kind": "bonus_vs", "vs": "poisoned", "amount": 15},
 	"moth_swarm": {"name": "Moth Swarm", "slot": "ultimate", "target": "row", "poison": [20, 4], "weaken": [15, 3]},
 	# Gloomleech
