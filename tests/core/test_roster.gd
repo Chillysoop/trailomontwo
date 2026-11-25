@@ -43,14 +43,14 @@ func _with_evolution(from: String, to: String, level := 0) -> Dictionary:
 
 
 func test_species_know_their_line() -> void:
-	var old := _with_evolution("mossmole", "burlbear")
-	check_eq(Species.evolutions("mossmole"), ["burlbear"] as Array[String])
-	check_eq(Species.previous("burlbear"), "mossmole")
-	check_eq(Species.stage("burlbear"), 2)
-	check_eq(Species.family("burlbear"), "mossmole")
+	check_eq(Species.evolutions("mossmole"), ["mossbrock"] as Array[String])
+	check_eq(Species.previous("sodursa"), "mossbrock")
+	check_eq(Species.stage("mossmole"), 1)
+	check_eq(Species.stage("sodursa"), 3)
+	check_eq(Species.family("sodursa"), "mossmole")
 	check_eq(Species.evolve_level("mossmole"), 10, "stage 1 evolves at level 10")
-	Species.DATA["mossmole"] = old
-	check(Species.evolutions("mossmole").is_empty(), "back to normal")
+	check_eq(Species.evolve_level("mossbrock"), 20, "stage 2 at level 20")
+	check(Species.evolutions("sodursa").is_empty(), "a last stage")
 
 
 func test_evolving_keeps_progress() -> void:
@@ -128,10 +128,10 @@ func test_dust_biome_species_stay_in_their_biome() -> void:
 
 
 func test_evolved_forms_turn_up_later() -> void:
-	var old := _with_evolution("mossmole", "burlbear")
-	check(not Encounters.can_turn_up("burlbear", 2), "stage 2 not before crossing 3")
-	check(Encounters.can_turn_up("burlbear", 3), "stage 2 from crossing 3")
-	Species.DATA["mossmole"] = old
+	check(not Encounters.can_turn_up("mossbrock", 2), "stage 2 not before crossing 3")
+	check(Encounters.can_turn_up("mossbrock", 3), "stage 2 from crossing 3")
+	check(not Encounters.can_turn_up("sodursa", 4), "stage 3 not before crossing 5")
+	check(Encounters.can_turn_up("sodursa", 5), "stage 3 from crossing 5")
 
 
 func test_built_packs_are_sound() -> void:
@@ -185,7 +185,7 @@ func test_every_kit_has_a_steady_rhythm() -> void:
 
 
 func test_round_robin_runs() -> void:
-	var rates := Balance.round_robin("legendary", 1)
-	check_eq(rates.size(), 6)
+	var rates := Balance.round_robin("legendary", 1, ["emberoak", "tidewyrm", "titanox"])
+	check_eq(rates.size(), 3)
 	for id in rates:
 		check(rates[id] >= 0.0 and rates[id] <= 1.0, "%s rate" % id)
