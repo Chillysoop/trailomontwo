@@ -81,6 +81,47 @@ const KITS := {
 	"hollowstag": {"role": "Boss", "hp": 900, "atk": 34, "def": 35, "spd": 2.2,
 		"basic": "antler_gore", "passive": "ancient_bark", "ultimate": "antler_storm",
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	# ----- Added with varied crossings (kits are data-driven MovePool moves) -----
+	"mossmole": {"role": "Guard", "hp": 400, "atk": 22, "def": 36, "spd": 2.1,
+		"basic": "moss_burrow", "passive": "mossy_hide", "ultimate": "dig_in"},
+	"burlbear": {"role": "Bruiser", "hp": 500, "atk": 33, "def": 32, "spd": 2.2,
+		"basic": "burl_maul", "passive": "burl_bark", "ultimate": "timber_crash"},
+	"pebblotter": {"role": "Healer", "hp": 280, "atk": 25, "def": 14, "spd": 1.7,
+		"basic": "pebble_toss", "passive": "otter_care", "ultimate": "brook_song"},
+	"lanternray": {"role": "Striker", "hp": 300, "atk": 34, "def": 14, "spd": 1.8,
+		"basic": "glow_sting", "passive": "deep_glow", "ultimate": "lantern_dive"},
+	"sporetoad": {"role": "Support", "hp": 290, "atk": 25, "def": 16, "spd": 1.8,
+		"basic": "spore_puff", "passive": "toxic_skin", "ultimate": "spore_storm"},
+	"bogjaw": {"role": "Bruiser", "hp": 470, "atk": 33, "def": 30, "spd": 2.2,
+		"basic": "bog_bite", "passive": "murk_jaws", "ultimate": "death_roll"},
+	"slatebeak": {"role": "Striker", "hp": 270, "atk": 31, "def": 14, "spd": 1.7,
+		"basic": "slate_peck", "passive": "carrion_eye", "ultimate": "rock_dive"},
+	"quarrytusk": {"role": "Guard", "hp": 470, "atk": 28, "def": 42, "spd": 2.3,
+		"basic": "tusk_shove", "passive": "quarry_hide", "ultimate": "quarry_quake"},
+	"flurrypup": {"role": "Support", "hp": 270, "atk": 24, "def": 12, "spd": 1.5,
+		"basic": "snow_nip", "passive": "pack_flurry", "ultimate": "blizzard_howl"},
+	"rimewing": {"role": "Striker", "hp": 290, "atk": 32, "def": 16, "spd": 1.6,
+		"basic": "frost_wing", "passive": "cold_edge", "ultimate": "rime_dive"},
+	"vinegecko": {"role": "Striker", "hp": 240, "atk": 28, "def": 11, "spd": 1.6,
+		"basic": "vine_flick", "passive": "sticky_feet", "ultimate": "canopy_drop"},
+	"canopard": {"role": "Striker", "hp": 320, "atk": 35, "def": 18, "spd": 1.7,
+		"basic": "leaf_pounce", "passive": "dapple", "ultimate": "canopy_strike"},
+	"emberoak": {"role": "Guard", "hp": 620, "atk": 32, "def": 52, "spd": 2.2,
+		"basic": "ember_bough", "passive": "ember_bark", "ultimate": "heartfire"},
+	"tidewyrm": {"role": "Healer", "hp": 400, "atk": 34, "def": 24, "spd": 1.8,
+		"basic": "tide_lash", "passive": "tidal_heart", "ultimate": "great_wave"},
+	"auroryx": {"role": "Striker", "hp": 360, "atk": 34, "def": 22, "spd": 1.5,
+		"basic": "aurora_horn", "passive": "aurora_mane", "ultimate": "polar_light"},
+	# ----- Guardians -----
+	"bogmother": {"role": "Boss", "hp": 1250, "atk": 39, "def": 30, "spd": 2.2,
+		"basic": "brood_spit", "passive": "mother_brood", "ultimate": "fen_flood",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"cogmammoth": {"role": "Boss", "hp": 950, "atk": 33, "def": 38, "spd": 2.4,
+		"basic": "gear_tusk", "passive": "iron_hide", "ultimate": "piston_stomp",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
+	"rimewyrm": {"role": "Boss", "hp": 950, "atk": 33, "def": 32, "spd": 2.0,
+		"basic": "rime_fang", "passive": "frozen_heart", "ultimate": "glacier_breath",
+		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 }
 
 ## Move text uses Rich markup plus number tokens filled from the creature's stats:
@@ -254,12 +295,71 @@ const PACKS := [
 	{"id": "canopy_raiders", "title": "Canopy raiders", "terrains": ["Forest", "River"], "min_risk": 2,
 		"text": "Lianetails drop from the branches while a thornfang cuts off the road.",
 		"front": ["plateflit", "thornfang", ""], "back": ["lianetail", "", "lianetail"]},
+	# ----- Packs with the species added with varied crossings. min_crossing: first crossing
+	# they can turn up on. weight: how often (default 3). -----
+	{"id": "mole_diggers", "title": "Mossmole diggers", "terrains": ["Forest", "Hills"], "min_risk": 1, "min_crossing": 1,
+		"text": "The road heaves. Mossmoles pop up all around the wagon.",
+		"front": ["mossmole", "mossmole", "thornfang"], "back": ["", "vinegecko", ""]},
+	{"id": "otter_raft", "title": "An otter raft", "terrains": ["River"], "min_risk": 1, "min_crossing": 1,
+		"text": "Pebblotters float by in a chattering raft, and they don't like wagons.",
+		"front": ["gillhorn", "", "gillhorn"], "back": ["pebblotter", "inkhoot", "pebblotter"]},
+	{"id": "spore_chorus", "title": "Spore chorus", "terrains": ["Swamp"], "min_risk": 1, "min_crossing": 1,
+		"text": "A deep croaking chorus, then a cloud of spores rolls over the reeds.",
+		"front": ["plateflit", "sporetoad", "plateflit"], "back": ["sporetoad", "", "sporetoad"]},
+	{"id": "slate_flock", "title": "Slatebeak flock", "terrains": ["Mountain", "Hills"], "min_risk": 1, "min_crossing": 1,
+		"text": "Stone-grey birds circle low over the wagon, then dive.",
+		"front": ["cairnram", "", ""], "back": ["slatebeak", "slatebeak", "slatebeak"]},
+	{"id": "pup_pack", "title": "Flurrypup pack", "terrains": ["Mountain", "Hills", "Forest"], "min_risk": 1, "min_crossing": 1,
+		"text": "Yips on the wind. A pack of flurrypups races up, tails crackling with frost.",
+		"front": ["flurrypup", "frostsnip", "flurrypup"], "back": ["", "flurrypup", ""]},
+	{"id": "burl_den", "title": "A burlbear's den", "terrains": ["Forest"], "min_risk": 2, "min_crossing": 1, "weight": 2,
+		"text": "The wagon rolls too close to a burlbear den. Mother is home.",
+		"front": ["mossmole", "burlbear", "mossmole"], "back": ["", "thornfang", ""]},
+	{"id": "lantern_shoal", "title": "Lantern shoal", "terrains": ["River", "Swamp"], "min_risk": 2, "min_crossing": 1, "weight": 2,
+		"text": "Lights glide under the water, then rise up glowing and stinging.",
+		"front": ["gillhorn", "", "pebblotter"], "back": ["lanternray", "", "lanternray"]},
+	{"id": "bogjaw_lair", "title": "Bogjaw lair", "terrains": ["Swamp", "River"], "min_risk": 2, "min_crossing": 2,
+		"text": "Two eyes rise from the black water, then two more.",
+		"front": ["bogjaw", "", "bogjaw"], "back": ["sporetoad", "mirelamp", ""]},
+	{"id": "quarry_herd", "title": "Quarry herd", "terrains": ["Mountain"], "min_risk": 2, "min_crossing": 2,
+		"text": "Quarrytusks grind down the slope, drill tusks spinning.",
+		"front": ["quarrytusk", "cairnram", "quarrytusk"], "back": ["", "slatebeak", ""]},
+	{"id": "rime_flight", "title": "Rimewing flight", "terrains": ["Mountain", "Hills"], "min_risk": 2, "min_crossing": 2,
+		"text": "Frost falls from a clear sky. Rimewings are hunting.",
+		"front": ["flurrypup", "", "flurrypup"], "back": ["rimewing", "frostsnip", "rimewing"]},
+	{"id": "canopy_hunters", "title": "Canopy hunters", "terrains": ["Forest", "River"], "min_risk": 2, "min_crossing": 2,
+		"text": "Something spotted moves through the leaves above, keeping pace with the wagon.",
+		"front": ["plateflit", "canopard", ""], "back": ["vinegecko", "", "vinegecko"]},
+	# Legendaries: rare, from crossing 2 on, and fierce.
+	{"id": "emberoak_grove", "title": "A walking grove", "terrains": ["Forest", "Hills"], "min_risk": 2, "min_crossing": 2, "weight": 1,
+		"text": "The trees ahead are moving. At their heart walks an ancient oak with a furnace glowing in its chest: Emberoak.",
+		"front": ["mossmole", "emberoak", "mossmole"], "back": ["", "thornfang", ""]},
+	{"id": "tidewyrm_rise", "title": "The tide rises", "terrains": ["River", "Swamp"], "min_risk": 2, "min_crossing": 2, "weight": 1,
+		"text": "The river swells for no reason, and a long shining serpent lifts out of it: Tidewyrm.",
+		"front": ["gillhorn", "tidewyrm", "gillhorn"], "back": ["", "lanternray", ""]},
+	{"id": "auroryx_lights", "title": "Lights in the sky", "terrains": ["Mountain", "Hills"], "min_risk": 2, "min_crossing": 2, "weight": 1,
+		"text": "Green light ripples across the sky. Beneath it, an oryx with an aurora for a mane: Auroryx.",
+		"front": ["flurrypup", "auroryx", ""], "back": ["rimewing", "", "frostsnip"]},
 ]
 
 ## The guardian that waits on the last stretch to Westwatch.
 const GUARDIAN := {"id": "hollow_stag", "title": "The Hollow Stag", "terrains": [], "min_risk": 1, "boss": "hollowstag",
 	"text": "The trail goes silent. A huge stag with hollow, glowing antlers steps out ahead, its pack fanning out around it.",
 	"front": ["thornfang", "cairnram", "thornfang"], "back": ["lianetail", "frostsnip", "lianetail"]}
+
+## Each crossing has its own guardian; after the last one they come round again, stronger.
+const GUARDIANS := [
+	GUARDIAN,
+	{"id": "bog_mother", "title": "The Bog Mother", "terrains": [], "min_risk": 1, "boss": "bogmother",
+		"text": "The marsh goes still. A toad the size of a cottage heaves out of the mire, her brood swarming around her.",
+		"front": ["bogjaw", "sporetoad", "bogjaw"], "back": ["sporetoad", "mirelamp", "lanternray"]},
+	{"id": "cogmammoth", "title": "The Cogmammoth", "terrains": [], "min_risk": 1, "boss": "cogmammoth",
+		"text": "Gears grind like thunder. A mammoth of moss and brass blocks the pass, its herd lowering their tusks.",
+		"front": ["quarrytusk", "", "quarrytusk"], "back": ["slatebeak", "", "slatebeak"]},
+	{"id": "rimewyrm", "title": "The Rimewyrm", "terrains": [], "min_risk": 1, "boss": "rimewyrm",
+		"text": "Snow begins to fall upward. A great wyrm of ice uncoils across the road, and the cold bites to the bone.",
+		"front": ["flurrypup", "rimehare", "flurrypup"], "back": ["", "rimewing", ""]},
+]
 
 ## Enemy strength by segment risk (health and power multiplier).
 const RISK_SCALE := {1: 1.2, 2: 1.35, 3: 1.45}
@@ -410,18 +510,38 @@ static func synergy_lines(ids: Array) -> Array[String]:
 	return active
 
 
-static func packs_for(seg: Dictionary) -> Array:
+static func packs_for(seg: Dictionary, crossing_no := 1) -> Array:
 	var out: Array = []
 	for p in PACKS:
 		var terrains: Array = p["terrains"]
-		if int(seg.get("risk", 1)) >= int(p["min_risk"]) and (terrains.is_empty() or terrains.has(seg.get("terrain", ""))):
+		if int(seg.get("risk", 1)) >= int(p["min_risk"]) and crossing_no >= int(p.get("min_crossing", 1)) \
+				and (terrains.is_empty() or terrains.has(seg.get("terrain", ""))):
 			out.append(p)
 	return out
 
 
+## Pick a pack, using each pack's weight (rare and legendary packs turn up less often).
+static func pick_pack(packs: Array, rng: RandomNumberGenerator) -> Dictionary:
+	var total := 0
+	for p in packs:
+		total += int(p.get("weight", 3))
+	var roll := rng.randi_range(1, maxi(1, total))
+	for p in packs:
+		roll -= int(p.get("weight", 3))
+		if roll <= 0:
+			return p
+	return packs[-1]
+
+
+## The guardian for a crossing: the Hollow Stag first, then a new one each crossing.
+static func guardian_for(crossing_no: int) -> Dictionary:
+	return GUARDIANS[(maxi(1, crossing_no) - 1) % GUARDIANS.size()]
+
+
 static func pack_by_id(id: String) -> Dictionary:
-	if id == GUARDIAN["id"]:
-		return GUARDIAN
+	for g in GUARDIANS:
+		if g["id"] == id:
+			return g
 	for p in PACKS:
 		if p["id"] == id:
 			return p

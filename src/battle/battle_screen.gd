@@ -315,7 +315,7 @@ func _auto_arrange() -> void:
 
 func _next_foe() -> void:
 	var all: Array = CombatData.PACKS.duplicate()
-	all.append(CombatData.GUARDIAN)
+	all.append_array(CombatData.GUARDIANS)
 	_practice_pack = (_practice_pack + 1) % all.size()
 	var pack: Dictionary = all[_practice_pack]
 	crossing.pending_encounter = {"pack": pack, "scale": CombatData.GUARDIAN_SCALE if pack.has("boss") else CombatData.RISK_SCALE[1], "guardian": pack.has("boss")}
@@ -624,7 +624,7 @@ func _end_combat() -> void:
 		_after_buttons.add_child(cont)
 		if crossing.pending_recruit != "":
 			var rid := crossing.pending_recruit
-			var take := Ui.button("Take in %s" % Species.info(rid)["name"], 10)
+			var take := Ui.button("Take in %s (%s)" % [Species.info(rid)["name"], Species.RARITIES[Species.rarity(rid)]["name"]], 10)
 			take.icon = CompanionsScreen.portrait(rid)
 			take.expand_icon = false
 			take.add_theme_constant_override("icon_max_width", 16)

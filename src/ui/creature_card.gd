@@ -44,7 +44,8 @@ static func markup(id: String, opts := {}) -> String:
 	var role: String = Glossary.ROLES.get(s["role"], "")
 	var scale := float(opts.get("scale", 1.0))
 	var lines: Array[String] = []
-	var head := "[b]%s[/b]  {i:%s} {i:%s}" % [info["name"], hab, role] if role != "" else "[b]%s[/b]  {i:%s}" % [info["name"], hab]
+	var head := "[b]%s[/b]  {i:%s} {i:%s}" % [Species.name_markup(id), hab, role] if role != "" else "[b]%s[/b]  {i:%s}" % [Species.name_markup(id), hab]
+	head += "  [font_size=7]%s[/font_size]" % Species.rarity_tag(id)
 	if opts.has("level"):
 		head += "  [color=#ffe3a3]Lv %d[/color]" % int(opts["level"])
 	if opts.get("enemy", false):

@@ -120,6 +120,7 @@ static func caravan(e: Expedition) -> Dictionary:
 static func next_crossing(caravan_data: Dictionary, rng_seed := -1, crossing_no := 2) -> Expedition:
 	var e := Expedition.new_default(rng_seed)
 	decode_into(e, caravan_data)
+	e.set_crossing(crossing_no)
 	e.fatigue.clear()
 	e.creature_hp.clear()
 	for id in e.roster + e.stored:
@@ -188,7 +189,7 @@ static func summary(slot: String) -> Dictionary:
 	var levels := []
 	for id in e.roster:
 		levels.append(e.level(id))
-	return {"crossing_no": r["crossing_no"], "day": e.day, "at": e.at, "state": e.state,
+	return {"crossing_no": e.crossing_no, "day": e.day, "at": e.at, "state": e.state,
 		"at_name": e.map.name_of(e.at) if e.map != null else e.at,
 		"roster": e.roster.duplicate(), "levels": levels, "saved_at": r["saved_at"]}
 

@@ -235,7 +235,7 @@ func _card(id: String, highlight := "") -> Control:
 	var dps := atk * float(CombatData.move(kit[0]).get("pct", 100)) / 100.0 / spd
 	var xp_text := "max" if crossing.level(id) >= Leveling.MAX_LEVEL else "%d/%d xp" % [int(crossing.xp.get(id, 0)), Leveling.xp_to_next(crossing.level(id))]
 	var text := "[font_size=10][b]%s[/b][/font_size]  {i:%s} {i:%s}  [font_size=7][color=#%s]%s[/color][/font_size]\n" % [
-		info["name"], Glossary.habitat_id(info["type"]), role, CreatureCard.MUTED, xp_text]
+		Species.name_markup(id), Glossary.habitat_id(info["type"]), role, CreatureCard.MUTED, xp_text]
 	text += "{i:hp} [color=#%s]%d[/color][color=#%s]/%d[/color]    {i:atk} [color=#%s]%d[/color]    {i:def} [color=#%s]%d[/color]\n" % [
 		CreatureCard.HP_COL, roundi(hp), CreatureCard.MUTED, roundi(max_hp), CreatureCard.ATK_COL, roundi(atk), CreatureCard.DEF_COL, roundi(def)]
 	text += "{i:spd} [color=#%s]%.2fs[/color]    {i:dps} [color=#%s]%.1f[/color]" % [CreatureCard.SPD_COL, spd, CreatureCard.DPS_COL, dps]

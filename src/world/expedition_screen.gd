@@ -62,7 +62,8 @@ var _comp_btn: Button
 
 ## Which crossing this caravan is on (1 for a new caravan), and the save slot it autosaves to
 ## ("" = no saving, e.g. tests and previews).
-var crossing_no := 1
+var crossing_no: int:
+	get: return crossing.crossing_no if crossing != null else 1
 var _slot := ""
 ## The caravan (team progress) as this crossing began, so a failed crossing can be retried.
 var _start := {}
@@ -95,7 +96,6 @@ func start_new() -> void:
 		_begin(Expedition.new_default(), 1)
 		return
 	crossing = loaded["expedition"]
-	crossing_no = int(loaded["crossing_no"])
 	_start = loaded["start"] if not (loaded["start"] as Dictionary).is_empty() else SaveGame.caravan(crossing)
 	_reset_view()
 	_resume(loaded["ui"])
@@ -104,7 +104,6 @@ func start_new() -> void:
 ## Start a crossing (new, next or retried) and save it.
 func _begin(e: Expedition, no: int) -> void:
 	crossing = e
-	crossing_no = no
 	_start = SaveGame.caravan(e)
 	_continue_to = ""
 	_reset_view()
@@ -117,7 +116,7 @@ func _reset_view() -> void:
 	_backdrop.set_moving(false)
 	_end.visible = false
 	_event.visible = false
-	_moment_seen = 0
+	_moment_seen = crossing.moments.size()
 	for t in _toasts.get_children():
 		t.queue_free()
 	_map.expedition = crossing

@@ -19,6 +19,9 @@ const HAUL_FATIGUE := 8.0
 const REST_RECOVERY := 35.0
 
 var day := 1
+## Which crossing this is (1 = the first). Later crossings have new maps, tougher foes and
+## a different guardian.
+var crossing_no := 1
 var at := TestRoute.START
 ## "world" makes a generated overworld; "test" uses the small hand-made TestRoute (tests set this).
 static var default_map := "world"
@@ -140,6 +143,25 @@ static func new_default(rng_seed := -1) -> Expedition:
 		e.encountered[id] = true
 	e.setup_map(1)
 	return e
+
+
+## Which crossing this is: sets the guardian and how tough the foes are (the map hooks in here too).
+func set_crossing(no: int) -> void:
+	crossing_no = maxi(1, no)
+	setup_map(crossing_no)
+
+
+## The guardian waiting on the last stretch of this crossing.
+func guardian_pack() -> Dictionary:
+	return CombatData.guardian_for(crossing_no)
+
+
+## Foes get tougher every crossing.
+const CROSSING_SCALE := 0.06
+
+
+func crossing_factor() -> float:
+	return 1.0 + CROSSING_SCALE * float(crossing_no - 1)
 
 
 ## Start crossing `no` on the map: its start and goal, back at the start, fog lifted around it.
@@ -388,9 +410,9 @@ func step_day() -> bool:
 			_trip_events += 1
 			journal.append(pending_event["title"] + "!")
 	if pending_event.is_empty() and events_enabled and not _trip_had_battle and battle_rng.randf() < BATTLE_CHANCE + BATTLE_RISK_CHANCE * int(trip["risk"]) + TrailLife.weather_value(weather, "ambush"):
-		var packs := CombatData.packs_for(trip)
+		var packs := CombatData.packs_for(trip, crossing_no)
 		if not packs.is_empty():
-			var pack: Dictionary = packs[battle_rng.randi_range(0, packs.size() - 1)]
+			var pack: Dictionary = CombatData.pick_pack(packs, battle_rng)
 			pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip["risk"]), 1.0)), "guardian": false}
 			_trip_had_battle = true
 			journal.append(pack["title"] + "!")
@@ -407,8 +429,8 @@ func step_day() -> bool:
 		return true
 	if trip["to"] == map.goal and guardian_enabled and not guardian_faced:
 		guardian_faced = true
-		pending_encounter = {"pack": CombatData.GUARDIAN, "scale": CombatData.GUARDIAN_SCALE, "guardian": true}
-		journal.append(CombatData.GUARDIAN["title"] + " blocks the way!")
+		pending_encounter = {"pack": guardian_pack(), "scale": CombatData.GUARDIAN_SCALE, "guardian": true}
+		journal.append(guardian_pack()["title"] + " blocks the way!")
 		return true
 	return _arrive()
 
@@ -661,7 +683,7 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 		items[iid] = item_count(iid) + 1
 		d.append({"icon": iid, "amount": 1})
 	for i in int(fx.get("technique", 0)):
-		var all: Array = MovePool.MOVES.keys()
+		var all: Array = MovePool.technique_ids()
 		var mid: String = all[life_rng.randi_range(0, all.size() - 1)]
 		techniques[mid] = technique_count(mid) + 1
 		d.append({"icon": "technique", "amount": 1, "label": CombatData.move(mid)["name"]})
@@ -691,6 +713,9 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 	if fx.has("recruit"):
 		var wild := wild_for(terrain)
 		if not wild.is_empty():
+			pending_recruit = Species.pick_weighted(wild, life_rng)
+
+
 			pending_recruit = wild[life_rng.randi_range(0, wild.size() - 1)]
 			meet(pending_recruit)
 			d.append({"icon": "ev_wildlife", "amount": 0, "who": pending_recruit, "label": "wants to join"})
@@ -729,13 +754,13 @@ func wild_for(terrain: String) -> Array[String]:
 		return out
 	var habitat: String = TrailLife.TERRAIN_HABITAT.get(terrain, "")
 	for id in Species.DATA:
-		if id == "hollowstag" or roster.has(id) or stored.has(id):
+		if Species.is_boss(id) or roster.has(id) or stored.has(id) or not Species.can_meet(id, crossing_no):
 			continue
 		if habitat == "" or Species.info(id)["type"] == habitat:
 			out.append(id)
 	if out.is_empty():
 		for id in Species.DATA:
-			if id != "hollowstag" and not roster.has(id) and not stored.has(id):
+			if not Species.is_boss(id) and not roster.has(id) and not stored.has(id) and Species.can_meet(id, crossing_no):
 				out.append(id)
 	return out
 
@@ -1142,7 +1167,7 @@ func enemy_scale() -> float:
 		total += level(lineup[cell])
 		n += 1
 	var avg := float(total) / maxf(1.0, float(n))
-	return base * (1.0 + LEVEL_SCALE * maxf(0.0, avg - 1.0))
+	return base * crossing_factor() * (1.0 + LEVEL_SCALE * maxf(0.0, avg - 1.0))
 
 
 const LEVEL_SCALE := 0.015
@@ -1217,7 +1242,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 			lines.append("Found a battle item: %s." % ", ".join(found))
 		var wild: Array[String] = recruit_candidates(pack)
 		if not wild.is_empty() and not from_event and battle_rng.randf() < RECRUIT_CHANCE:
-			pending_recruit = wild[battle_rng.randi_range(0, wild.size() - 1)]
+			pending_recruit = Species.pick_weighted(wild, battle_rng)
 			lines.append("A wild %s lingers after the fight. It could join you." % Species.info(pending_recruit)["name"])
 		var light := Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT
 		var dark := Dust.GUARDIAN_DARK if guardian else (1 if battle_scale >= Dust.STRONG_SCALE else 0)
@@ -1225,7 +1250,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 		dark_dust += dark
 		lines.append("Gathered dust: +%d {i:light_dust} Light%s." % [light, "" if dark == 0 else ", +%d {i:dark_dust} Dark" % dark])
 		if battle_rng.randf() < (1.0 if guardian else TECHNIQUE_DROP_CHANCE):
-			var all: Array = MovePool.MOVES.keys()
+			var all: Array = MovePool.technique_ids()
 			var mid: String = all[battle_rng.randi_range(0, all.size() - 1)]
 			techniques[mid] = int(techniques.get(mid, 0)) + 1
 			lines.append("Found a technique: %s." % CombatData.move(mid)["name"])
