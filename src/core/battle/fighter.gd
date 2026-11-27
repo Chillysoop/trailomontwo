@@ -53,10 +53,14 @@ var shield_done := 0.0
 var heal_done := 0.0
 var taken := 0.0
 var ults_fired := 0
+## Hunts only: prey never attacks and bolts off the field at bolt_at (seconds).
+var prey := false
+var fled := false
+var bolt_at := 0.0
 
 
 func alive() -> bool:
-	return hp > 0.0
+	return hp > 0.0 and not fled
 
 
 func is_boss() -> bool:

@@ -208,6 +208,11 @@ func _junction_tick(c: Expedition) -> void:
 		exp.call("_do_repair")
 	if c.state == Expedition.State.FAILED:
 		return
+	# Smart and careful: hunt when food runs low and there's game here.
+	if style != "reckless" and c.provisions < 70 and c.hunt_block() == "" and c.free_space() > 20:
+		stats["hunts"] = int(stats.get("hunts", 0)) + 1
+		exp.call("_do_hunt")
+		return
 	# Pick the road: closest to the goal, sometimes a random fork.
 	var best: Array = []
 	var best_h := 999
@@ -437,6 +442,19 @@ func _battle_tick(b: Node) -> void:
 		BattleScreen.Phase.LINEUP:
 			await _frames(10)
 			var guardian := bool(c.pending_encounter.get("guardian", false))
+			if c.is_hunt():
+				_battle_state = "hunt"
+				b.set_meta("food", c.provisions)
+				if not shots_taken.has("hunt"):
+					shots_taken["hunt"] = true
+					await _shot("hunt_lineup")
+				_find_button(b, "Auto-arrange").pressed.emit()
+				await _frames(2)
+				_find_button(b, "Start the hunt").pressed.emit()
+				await _frames(2)
+				b.call("_cycle_speed")
+				b.call("_cycle_speed")
+				return
 			if guardian:
 				await _shot("guardian_lineup_c%d" % c.crossing_no)
 			elif not shots_taken.has("lineup"):
@@ -462,7 +480,11 @@ func _battle_tick(b: Node) -> void:
 		BattleScreen.Phase.COMBAT:
 			if not b.has_meta("shot") and (b.get("battle") as Battle).time > 6.0:
 				b.set_meta("shot", true)
-				if _battle_state == "guardian":
+				if _battle_state == "hunt":
+					if not shots_taken.has("hunt_combat"):
+						shots_taken["hunt_combat"] = true
+						await _shot("hunt_combat")
+				elif _battle_state == "guardian":
 					await _shot("guardian_combat_c%d" % c.crossing_no)
 				elif not shots_taken.has("combat"):
 					shots_taken["combat"] = true
@@ -470,6 +492,15 @@ func _battle_tick(b: Node) -> void:
 		BattleScreen.Phase.AFTERMATH:
 			await _frames(5)
 			var battle: Battle = b.get("battle")
+			if _battle_state == "hunt":
+				_say("HUNT c%d caught %d (charger %s), food %d -> %d" % [c.crossing_no, battle.hunt_bag().size(), battle.charger_down(), int(b.get_meta("food", 0)), int(c.provisions)])
+				if not shots_taken.has("hunt_after"):
+					shots_taken["hunt_after"] = true
+					await _shot("hunt_after")
+				_battle_state = ""
+				_find_button(b, "Continue").pressed.emit()
+				await _frames(5)
+				return
 			var o := battle.outcome
 			var oname: String = {Battle.Outcome.VICTORY: "WIN", Battle.Outcome.DEFEAT: "LOSS", Battle.Outcome.WITHDRAW: "WITHDRAW", Battle.Outcome.RETREAT: "RETREAT"}[o]
 			if o == Battle.Outcome.VICTORY: stats["wins"] += 1

@@ -173,3 +173,37 @@ Gear picks matter: what you pack decides what trouble you can handle.
 - Code: `src/core/data/outfitter.gd`, `Expedition` (spares, curios, load_weight, repair_plan,
   outfitting, sell_back, pack_for_me, make_barter), `Wagon.SPARES`. Tests: `tests/core/test_gear.gd`.
   Screens: `tools/shots/gear_shots.gd`.
+
+## Paths (wave 2 of the wagon-trail ideas)
+
+Paths matter: which road you take, and when, decides how the crossing goes.
+
+- **Season clock**: every world crossing has a frost day, set from the quickest route (x1.6, +12
+  days). Six days before it the weather turns colder and stalls charge +1 for food and water. From
+  frost day on, most days are cold or stormy, everyone loses 2 health and haulers tire every day,
+  and stalls charge +2. The HUD shows the countdown; route cards say when you'd reach the goal at
+  the soonest and warn when that's after the frost. Resting is never free.
+- **Road info**: route buttons show risk marks, "ford" for a river and "rough" for a shortcut.
+  Each map has a few **rough tracks** that skip a layer: 3 days, risk 3, harder to pull.
+- **Rivers**: every River road starts with a crossing. Depth (shallow to torrent) comes from the
+  road's risk and the weather. Ford it (Strength), float it (Float), freeze a bridge on cold days
+  (Cold), take the ferry where people live (coins), or wait a day for the water to drop. Shallow
+  water can be waded slowly. Other Trailomon **assist** with their jobs: a Scout finds a shallower
+  line (+3), a Guard leans in on the ford, a Steady one keeps the float upright (+2). Failure loses
+  cargo and food and can break the canopy or axle.
+- **Panning**: a glinting stream on River, Mountain, Snow and Hills roads. Pan 1 day or 3 days for
+  coins (Scout check).
+- **Hunting**: at any wild stop (not towns or posts), once per stop, spend a day hunting a grazing
+  herd. It's an auto-battle with different rules: prey never fight back and bolt one by one (sooner
+  if hit but not knocked out), one charger at the front stands and fights, and after 25 seconds the
+  rest scatter. Each creature knocked out is food (6/10/16 by size, the charger double), if it fits
+  in the wagon. Battle items stay packed and the wagon stays quiet. Everyone gains 25 experience.
+  Tune with `tools/sim/hunt_sim.gd`.
+- **Delivery jobs**: towns, posts, villages and stilt villages have a job board with one delivery
+  to a stop closer to the goal: weight 15-35, pay 8 + 3 per day of road + 2 per crossing, due by
+  the quickest time x1.4 + 2 days. Paid on arrival, half if late. It's cargo: it can be dropped or
+  lost in a river.
+- Code: `src/core/trail/rivers.gd`, `WorldMap` (rough tracks, shortest_days, has_ferry),
+  `Expedition` (season, make_river, best_helper assists, hunt_block/start_hunt/_finish_hunt,
+  delivery_offer/take_delivery), `Battle` hunt mode (prey, bolt_at, hunt_bag).
+  Tests: `tests/core/test_paths.gd`, `tests/core/test_hunt.gd`.

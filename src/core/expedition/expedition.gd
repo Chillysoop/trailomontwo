@@ -54,6 +54,12 @@ const CARGO_PAY_DIV := 10
 var cargo_paid := 0
 ## Set once the wagon leaves the start town; until then the start town's stall is the outfitter.
 var departed := false
+## The stop where the team last hunted: the game there is spooked for the rest of the crossing.
+var hunted_at := ""
+## Delivery jobs: the offer at the current stop (rebuilt at each new stop), and the stops
+## whose job board you've already taken a job from.
+var job_offer := {}
+var jobs_taken := {}
 var fatigue := {}
 var cargo: Array[Dictionary] = []
 var rng := RandomNumberGenerator.new()
@@ -237,6 +243,49 @@ func setup_map(no: int) -> void:
 	trip = {}
 	seen[map.goal] = true
 	reveal(at)
+	# The season: frost closes in a while after the quickest possible crossing would arrive.
+	frost_day = 0 if map.is_test else day + ceili(map.shortest_days(map.start, map.goal) * FROST_SLACK) + FROST_EXTRA
+
+
+# ---------- the season ----------
+
+## Frost closes the roads on frost_day (0 = no season, as on the test route). LATE_DAYS before it
+## the weather turns and stalls charge more; after it every day is cold and the crew suffers.
+var frost_day := 0
+const FROST_SLACK := 1.6
+const FROST_EXTRA := 12
+const LATE_DAYS := 6
+const FROST_HEALTH := 2
+const FROST_FATIGUE := 5.0
+
+
+## "open", "late" or "frost".
+func season() -> String:
+	if frost_day <= 0:
+		return "open"
+	if day >= frost_day:
+		return "frost"
+	if day >= frost_day - LATE_DAYS:
+		return "late"
+	return "open"
+
+
+func frost_left() -> int:
+	return frost_day - day if frost_day > 0 else 999
+
+
+## Today's weather on a terrain, turned colder as the season closes.
+func _season_weather(terrain: String) -> String:
+	var w := TrailLife.roll_weather(terrain, life_rng)
+	if TrailLife.WEATHER_TABLE.has(terrain) and (terrain == "Blight" or terrain == "Glow"):
+		return w
+	match season():
+		"frost":
+			return "cold" if life_rng.randf() < 0.7 else "storm"
+		"late":
+			if life_rng.randf() < 0.35:
+				return "cold"
+	return w
 
 
 ## Lift the fog around a stop: its neighbours, two roads out with a sharp scout (job rank 4+),
@@ -440,6 +489,11 @@ func spend_day(travelling := false) -> String:
 	water += room_for("water", TrailLife.weather_value(weather, "water_gain"))
 	health = mini(100, health + int(TrailLife.ration(rations)["health"]) + (int(TrailLife.pace(pace)["health"]) if travelling else 0) \
 		+ int(TrailLife.weather_value(weather, "health")))
+	if season() == "frost":
+		health -= FROST_HEALTH
+		for id in fatigue:
+			fatigue[id] = clampf(float(fatigue[id]) + FROST_FATIGUE, 0.0, 100.0)
+		notes.append("frost")
 	if fever_days > 0:
 		fever_days -= 1
 		health -= TrailLife.FEVER_DAMAGE
@@ -515,14 +569,18 @@ func step_day() -> bool:
 			return true
 		return _arrive()
 	if events_enabled:
-		weather = TrailLife.roll_weather(String(trip["terrain"]), life_rng)
+		weather = _season_weather(String(trip["terrain"]))
 	journal.append(spend_day(true))
 	if state == State.FAILED:
 		return false
 	_wear_day(float(trip["terrain_factor"]), trip["pushing"])
 	if state == State.FAILED:
 		return false
-	if events_enabled and _trip_events < TrailEvents.PER_TRIP and rng.randf() < TrailEvents.daily_chance(int(trip["risk"])):
+	if events_enabled and String(trip.get("terrain", "")) == "River" and not trip.get("forded", false):
+		trip["forded"] = true
+		pending_event = make_river(Rivers.depth_for(int(trip["risk"]), weather))
+		journal.append("A river blocks the road!")
+	if pending_event.is_empty() and events_enabled and _trip_events < TrailEvents.PER_TRIP and rng.randf() < TrailEvents.daily_chance(int(trip["risk"])):
 		var options := TrailEvents.for_segment(trip, weather)
 		if not options.is_empty():
 			pending_event = options[rng.randi_range(0, options.size() - 1)]
@@ -577,6 +635,7 @@ func _arrive() -> bool:
 	journal.append("Reached %s." % map.name_of(at))
 	reveal(at)
 	state = State.ARRIVED if at == map.goal else State.AT_JUNCTION
+	_hand_over_deliveries()
 	if state == State.ARRIVED:
 		cargo_paid = cargo_value() / CARGO_PAY_DIV
 		coins += cargo_paid
@@ -661,6 +720,196 @@ func rest() -> void:
 		creature_hp[id] = minf(max_hp(id), float(creature_hp.get(id, 0.0)) + max_hp(id) * (REST_HEAL + (0.25 if pipe else 0.0)))
 	if state != State.FAILED:
 		journal.append("Rested. The haulers recovered and the team licked its wounds%s." % ((", %d back on their feet" % woke) if woke > 0 else ""))
+
+
+# ---------- delivery jobs ----------
+
+## Stops with a job board.
+const JOB_BOARDS := ["town", "post", "village", "stilts"]
+const JOB_GOODS := ["Mail sacks", "Lamp oil", "Seed sacks", "Bolts of cloth", "Herb bundles", "A crate of tools", "Salt blocks"]
+## Days allowed: the quickest way there times this, plus JOB_SPARE_DAYS. Late pays half.
+const JOB_SLACK := 1.4
+const JOB_SPARE_DAYS := 2
+
+
+## The job on offer at this stop: {"from", "to", "name", "weight", "pay", "due"}, or {}.
+func delivery_offer() -> Dictionary:
+	if map == null or map.is_test or state != State.AT_JUNCTION:
+		return {}
+	if not JOB_BOARDS.has(map.kind_of(at)) or jobs_taken.has(at):
+		return {}
+	if String(job_offer.get("from", "")) == at:
+		return {} if job_offer.has("none") else job_offer
+	var r := RandomNumberGenerator.new()
+	r.seed = hash(at) + crossing_no * 7919
+	var here := map.hops(at, map.goal)
+	var options: Array[String] = []
+	for j in map.junctions:
+		if j == at or j == map.goal:
+			continue
+		var d := map.shortest_days(at, j)
+		if d >= 3 and d <= 12 and map.hops(j, map.goal) < here:
+			options.append(j)
+	options.sort()
+	if options.is_empty():
+		job_offer = {"from": at, "none": true}
+		return {}
+	var to := options[r.randi_range(0, options.size() - 1)]
+	var days := map.shortest_days(at, to)
+	job_offer = {"from": at, "to": to, "name": "%s for %s" % [JOB_GOODS[r.randi_range(0, JOB_GOODS.size() - 1)], map.name_of(to)],
+		"weight": float(5 * r.randi_range(3, 7)), "pay": 8 + 3 * days + 2 * crossing_no,
+		"due": day + ceili(days * JOB_SLACK) + JOB_SPARE_DAYS}
+	return job_offer
+
+
+func can_take_delivery() -> bool:
+	var o := delivery_offer()
+	return not o.is_empty() and free_space() >= float(o["weight"])
+
+
+func take_delivery() -> bool:
+	if not can_take_delivery():
+		return false
+	var o := delivery_offer()
+	cargo.append({"name": o["name"], "weight": o["weight"], "value": 0, "deliver_to": o["to"], "due": o["due"], "pay": o["pay"]})
+	jobs_taken[at] = true
+	journal.append("Took the job: %s, due by day %d for %d coins." % [o["name"], o["due"], o["pay"]])
+	return true
+
+
+## Hand over any deliveries for this stop. Late ones pay half.
+func _hand_over_deliveries() -> void:
+	for i in range(cargo.size() - 1, -1, -1):
+		var c: Dictionary = cargo[i]
+		if String(c.get("deliver_to", "")) != at:
+			continue
+		var late := day > int(c["due"])
+		var pay := int(c["pay"]) / (2 if late else 1)
+		coins += pay
+		cargo.remove_at(i)
+		journal.append("Delivered: %s%s. +%d coins." % [String(c["name"]), " (late, half pay)" if late else "", pay])
+
+
+# ---------- hunting ----------
+
+## Food each creature in the bag brings in, by size. The charger counts double.
+const HUNT_FOOD := {"small": 6.0, "medium": 10.0, "large": 16.0}
+const HUNT_XP := 25
+## Stops too busy for game.
+const NO_GAME := ["town", "post"]
+
+
+## "" when the team can go hunting here, else why not.
+func hunt_block() -> String:
+	if state != State.AT_JUNCTION or map == null:
+		return "busy"
+	if NO_GAME.has(map.kind_of(at)):
+		return "town"
+	if hunted_at == at:
+		return "spooked"
+	if not can_fight():
+		return "ko"
+	if Encounters.pool(scenery()["terrain"], crossing_no).is_empty():
+		return "town"
+	return ""
+
+
+## A herd grazing near the stop: four to five prey and one charger in front. Prey are the
+## terrain's ordinary species; the charger is the biggest of them.
+func make_herd(rng_in: RandomNumberGenerator = null) -> Dictionary:
+	var r := rng_in if rng_in != null else battle_rng
+	var terrain := String(scenery()["terrain"])
+	var pool := Encounters.weighted_pool(terrain, crossing_no).filter(func(id): return Species.rarity(id) != "legendary")
+	if pool.is_empty():
+		return {}
+	var picks: Array[String] = []
+	for i in 4 + r.randi_range(0, 1):
+		picks.append(Species.pick_weighted(pool, r))
+	var sizes := {"small": 0, "medium": 1, "large": 2}
+	var charger := Species.pick_weighted(pool, r)
+	for i in 4:
+		var c := Species.pick_weighted(pool, r)
+		if int(sizes[Species.info(c)["size"]]) > int(sizes[Species.info(charger)["size"]]):
+			charger = c
+	var front := [picks[0], charger, picks[1]]
+	var back := ["", "", ""]
+	for i in range(2, picks.size()):
+		back[[1, 0, 2][i - 2]] = picks[i]
+	return {"id": "hunt", "title": "A grazing herd", "front": front, "back": back, "charger": charger,
+		"text": "A herd grazes near %s, %s at its head. Each one the team knocks out before it bolts drops the forage it was carrying." % [map.name_of(at), Species.info(charger)["name"]]}
+
+
+## Spend the day hunting. Sets pending_encounter to the herd; the battle screen plays it.
+func start_hunt() -> bool:
+	if hunt_block() != "":
+		return false
+	journal.append(spend_day())
+	if state == State.FAILED:
+		return false
+	hunted_at = at
+	var herd := make_herd()
+	if herd.is_empty():
+		return false
+	pending_encounter = {"pack": herd, "scale": float(CombatData.RISK_SCALE[1]), "guardian": false, "hunt": true}
+	journal.append("The team goes hunting.")
+	return true
+
+
+func is_hunt() -> bool:
+	return bool(pending_encounter.get("hunt", false))
+
+
+func _finish_hunt(battle: Battle) -> Array[String]:
+	var lines: Array[String] = []
+	pending_encounter = {}
+	pending_recruit = ""
+	if battle == null:
+		lines.append("Nobody is fit to hunt. The day is lost.")
+		return lines
+	var hp := battle.player_hp()
+	for id in hp:
+		creature_hp[id] = float(hp[id])
+	var bag := battle.hunt_bag()
+	if battle.outcome == Battle.Outcome.DEFEAT:
+		lines.append("The charger drives the team off. They limp back empty-handed.")
+	else:
+		var food := 0.0
+		var charger_food := 0.0
+		for f in battle.side_fighters(Formation.Side.ENEMY):
+			if f.hp <= 0.0 and not f.fled:
+				var n := float(HUNT_FOOD.get(Species.info(f.species)["size"], 8.0)) * (2.0 if not f.prey else 1.0)
+				food += n
+				if not f.prey:
+					charger_food = n
+		var got := room_for("food", food)
+		provisions += got
+		var fled := 0
+		for f in battle.side_fighters(Formation.Side.ENEMY):
+			if f.fled:
+				fled += 1
+		if bag.is_empty():
+			lines.append("The whole herd gets away. Nothing for the pot today.")
+		else:
+			lines.append("The team brings down %d of the herd%s, %d got away." % [bag.size(), " and the charger with them" if charger_food > 0.0 else "", fled])
+			lines.append("+%d {i:food} food." % roundi(got))
+			if got + 0.5 < food:
+				lines.append("No room in the wagon for the rest: %d food left behind." % roundi(food - got))
+	var grew: Array[String] = []
+	for f in battle.side_fighters(Formation.Side.PLAYER):
+		if gain_xp(f.species, HUNT_XP) > 0:
+			grew.append("%s (Lv %d)" % [Species.info(f.species)["name"], level(f.species)])
+	lines.append("Everyone who hunted gains %d experience." % HUNT_XP)
+	if not grew.is_empty():
+		lines.append("Level up! %s. Choose their upgrades from the Companions screen." % ", ".join(grew))
+	var down := knocked_out()
+	if not down.is_empty():
+		var names: Array[String] = []
+		for id in down:
+			names.append(Species.info(id)["name"])
+		lines.append("Knocked out: %s. Rest a day to get them back on their feet." % ", ".join(names))
+	for l in lines:
+		journal.append(l)
+	return lines
 
 
 ## What "Repair" would do right now: {"kind": "spare"|"jury"|"tune"|"none", "days", "spare",
@@ -765,12 +1014,12 @@ func job_rank(id: String, cap: String) -> int:
 	return r + job_bonus(id) if r > 0 else 0
 
 
-## The best creature in the roster for a job, or "" if none has it.
-func best_helper(cap: String) -> String:
+## The best creature in the roster for a job, or "" if none has it (skipping any in `busy`).
+func best_helper(cap: String, busy: Array = []) -> String:
 	var best := ""
 	var best_rank := 0
 	for id in roster:
-		if not conscious(id):
+		if not conscious(id) or busy.has(id):
 			continue
 		var r := job_rank(id, cap)
 		if r > best_rank:
@@ -801,6 +1050,15 @@ func event_choices(event: Dictionary) -> Array:
 			var score := job_rank(helper, c["cap"]) * TrailEvents.RANK_SCORE if helper != "" else 0
 			view["helper"] = helper
 			view["bonus"] = job_bonus(helper) if helper != "" else 0
+			# Other Trailomon can lend a hand: each assisting job adds to the score.
+			var assists: Array = []
+			var a: Dictionary = c.get("assist", {})
+			for cap in a:
+				var who := best_helper(cap, [helper])
+				if who != "" and job_rank(who, cap) >= Rivers.ASSIST_RANK:
+					score += int(a[cap])
+					assists.append({"who": who, "cap": cap, "bonus": int(a[cap])})
+			view["assists"] = assists
 			view["odds"] = CheckOdds.for_scores(score, int(c["difficulty"]))
 		out.append(view)
 	return out
@@ -827,6 +1085,7 @@ func resolve_event(choice: int, roll := -1) -> Dictionary:
 	var fx: Dictionary = c.get(outcome, c["success"])
 	var helper: String = view["helper"]
 	var terrain := String(trip.get("terrain", "Forest"))
+	var pending_event_was := pending_event
 	pending_event = {}
 	var text: String = fx["text"]
 	journal.append(text)
@@ -835,7 +1094,13 @@ func resolve_event(choice: int, roll := -1) -> Dictionary:
 		deltas.append_array(apply_fx(c["cost"], "", terrain))
 	if helper != "" and int(TrailEvents.JOB_XP[outcome]) > 0:
 		deltas.append_array(apply_fx({"job_xp": TrailEvents.JOB_XP[outcome]}, helper, terrain))
+		for a in view.get("assists", []):
+			gain_xp(String(a["who"]), int(TrailEvents.JOB_XP[outcome]) / 2)
+	var river_depth := int(pending_event_was.get("depth", 0)) if pending_event_was.get("id", "") == "river" else 0
 	deltas.append_array(apply_fx(fx, helper, terrain))
+	# Waiting at a river: the water drops a level, then the choice comes back.
+	if fx.get("river_wait", false) and state == State.TRAVELLING:
+		pending_event = make_river(maxi(1, river_depth - 1))
 	return {"outcome": outcome, "text": text, "deltas": deltas, "helper": helper,
 		"fight": not pending_encounter.is_empty(), "recruit": pending_recruit}
 
@@ -1121,7 +1386,16 @@ func stall() -> Dictionary:
 		for g in Outfitter.STOCK:
 			out[g] = {"price": int(Outfitter.STOCK[g][0]), "stock": int(Outfitter.STOCK[g][1])}
 		return out
-	return stop()["stall"]
+	var base: Dictionary = stop()["stall"]
+	var bump: int = {"late": 1, "frost": 2}.get(season(), 0)
+	if bump == 0:
+		return base
+	# Late in the season food and water cost more.
+	var dear := base.duplicate(true)
+	for g in ["food", "water"]:
+		if dear.has(g):
+			dear[g]["price"] = int(dear[g]["price"]) + bump
+	return dear
 
 
 func _stall_key() -> String:
@@ -1227,6 +1501,13 @@ func pack_for_me() -> int:
 
 
 # ---------- roadside barter ----------
+
+## The river crossing on this road at a given depth.
+func make_river(depth: int) -> Dictionary:
+	var ferry := map != null and not trip.is_empty() and map.has_ferry(trip)
+	var cold := weather == "cold" or season() == "frost"
+	return Rivers.make(depth, ferry, cold, crossing_no)
+
 
 ## A traveller wants one thing you carry and offers something you're short of. Built from what
 ## the caravan has right now, so it is a different deal each time (or empty if nothing fits).
@@ -1610,9 +1891,10 @@ func can_fight() -> bool:
 func make_battle(ambush := false, rng_seed := -1) -> Battle:
 	var pack: Dictionary = pending_encounter.get("pack", CombatData.PACKS[0])
 	meet_pack(pack)
-	var opts := {"ambush": ambush}
+	var opts := {"ambush": ambush and not is_hunt(), "hunt": is_hunt()}
 	opts["seed"] = rng_seed if rng_seed >= 0 else battle_rng.randi()
-	opts["items"] = slotted_items()
+	# Battle items are kept for real fights.
+	opts["items"] = [] if is_hunt() else slotted_items()
 	return Battle.create(
 		{"slots": lineup.duplicate(), "hp": creature_hp.duplicate(), "fatigue": fatigue.duplicate(),
 			"kits": kits.duplicate(true), "boosts": boosts.duplicate(true)},
@@ -1668,6 +1950,8 @@ const LURE_BONUS := 0.2
 
 ## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
 func finish_battle(battle: Battle) -> Array[String]:
+	if is_hunt():
+		return _finish_hunt(battle)
 	var lines: Array[String] = []
 	var outcome := Battle.Outcome.DEFEAT if battle == null else battle.outcome
 	if battle != null:

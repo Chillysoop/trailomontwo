@@ -54,8 +54,8 @@ const EVENTS := [
 			{"label": "Go around",
 				"success": {"text": "A long detour.", "days": 1}},
 		]},
-	{"id": "swollen_ford", "kind": "hazard", "title": "River crossing", "terrains": ["River"], "min_risk": 1,
-		"text": "Last night's rain turned the ford into a fast brown river.",
+	{"id": "swollen_ford", "kind": "hazard", "title": "Swollen creek", "terrains": ["Swamp", "Jungle", "Forest"], "min_risk": 1,
+		"text": "Last night's rain turned the creek into a fast brown river.",
 		"choices": [
 			{"label": "Float it across", "cap": "float", "difficulty": 6,
 				"success": {"text": "Guided across."},
@@ -287,6 +287,19 @@ const EVENTS := [
 			{"label": "Ride on", "success": {"text": "You keep what you have."}},
 		]},
 	# ----- finds -----
+	{"id": "glinting_stream", "kind": "find", "title": "A glinting stream", "terrains": ["River", "Mountain", "Snow", "Hills"], "min_risk": 1,
+		"text": "Bright flecks glint in a cold stream. Brass? Dust? Days could slip by.",
+		"choices": [
+			{"label": "Pan for a day", "cap": "scout", "difficulty": 5,
+				"success": {"text": "A pouch of bright flakes.", "coins": 18, "light_dust": 1, "days": 1},
+				"mixed": {"text": "A few flakes.", "coins": 9, "days": 1},
+				"failure": {"text": "Mud and pebbles.", "coins": 2, "days": 1}},
+			{"label": "Pan for three days", "cap": "scout", "difficulty": 4,
+				"success": {"text": "The stream gives up a fortune.", "coins": 55, "light_dust": 1, "days": 3},
+				"mixed": {"text": "Steady, cold work.", "coins": 28, "days": 3},
+				"failure": {"text": "Three days for a thimbleful.", "coins": 8, "days": 3}},
+			{"label": "Keep moving", "success": {"text": "Not worth the time."}},
+		]},
 	{"id": "abandoned_wagon", "kind": "find", "title": "Abandoned wagon", "terrains": [], "min_risk": 1,
 		"text": "An overgrown wagon sits off the road. Nobody's been here in years.",
 		"choices": [

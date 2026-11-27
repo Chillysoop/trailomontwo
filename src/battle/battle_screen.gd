@@ -70,6 +70,8 @@ var _after_title: Label
 var _after_body: RichTextLabel
 var _after_buttons: HBoxContainer
 var _result_lines: Array[String] = []
+## A hunt, not a fight (set when the lineup opens; the encounter is cleared afterwards).
+var _hunting := false
 
 
 ## Call before adding to the tree. For practice, pass a fresh Expedition and practice = true.
@@ -141,6 +143,7 @@ func _is_guardian() -> bool:
 
 func _enter_lineup() -> void:
 	phase = Phase.LINEUP
+	_hunting = crossing.is_hunt()
 	_grid.visible = true
 	_side_panel.visible = true
 	_info_panel.visible = true
@@ -179,6 +182,7 @@ func _refresh_lineup() -> void:
 	if String(pack.get("boss", "")) != "":
 		_add_unit(pack["boss"], Formation.BOSS_FEET, true, _foe_card.bind(pack["boss"], scale, true))
 	_enc_title.text = pack["title"] + ("  (ambush!)" if ambush else "")
+	_item_slots.visible = not _hunting
 	var strength := "weak" if scale < 1.1 else ("tough" if scale >= 1.4 else ("strong" if scale >= 1.25 else "ordinary"))
 	var risk_icons: int = {"weak": 0, "ordinary": 1, "strong": 2, "tough": 3}[strength]
 	Rich.set_text(_enc_text, "%sFoes look %s.%s%s" % ["{i:risk}".repeat(maxi(1, risk_icons)), strength,
@@ -197,8 +201,11 @@ func _refresh_lineup() -> void:
 	Rich.set_text(_syn_mine, "Your {k:synergy|habitat bonuses}:\n" + (synergy_markup(mine, true) if not mine.is_empty() else "nobody can fight"))
 	var theirs_text := synergy_markup(theirs, false)
 	Rich.set_text(_syn_theirs, "Theirs:\n" + (theirs_text if theirs_text != "" else "none"))
+	if _hunting:
+		Rich.set_text(_enc_text, "{i:food} The herd hasn't seen you. %s stands its ground and fights; the rest {k:hunt|bolt} when spooked. Hit hard and fast: a wounded one runs. %ds before they all scatter." % [
+			Species.info(String(pack.get("charger", pack["front"][1])))["name"], int(Battle.HUNT_SECS)])
 	_fight.disabled = mine.is_empty()
-	_fight.text = "Fight!" if not mine.is_empty() else "Nobody can fight"
+	_fight.text = ("Start the hunt" if _hunting else "Fight!") if not mine.is_empty() else "Nobody can fight"
 	_foe_btn.visible = practice
 	if _item_slots.crossing == null:
 		_item_slots.crossing = crossing
@@ -234,6 +241,8 @@ func _mine_card(id: String) -> String:
 
 func _foe_card(id: String, scale: float, boss: bool) -> String:
 	var t := CreatureCard.markup(id, {"scale": scale, "enemy": true})
+	if _hunting:
+		t += "\n" + ("[color=#ff8a7a]The charger: it fights back. Worth double food.[/color]" if id == String(_pack().get("charger", "")) else "Prey: never attacks, bolts when spooked or hurt.")
 	if boss:
 		t += "\n{k:role_boss|Boss}: can't be hit until its pack is down."
 	return t
@@ -366,7 +375,9 @@ func _start_combat() -> void:
 	_retreat_btn.disabled = _is_guardian()
 	_retreat_btn.set_meta("tip", "There's no way around this one." if _is_guardian() else "Pull back after 3 seconds. Costs {i:food} food and {i:wagon} wagon wear.")
 	_log_lines.clear()
-	_log.text = "The fight begins!"
+	_log.text = "The hunt begins! Quietly now..." if _hunting else "The fight begins!"
+	if _hunting:
+		_retreat_btn.set_meta("tip", "Call off the hunt and keep what you've caught.")
 	for c in _units.get_children():
 		c.queue_free()
 	_views.clear()
@@ -391,6 +402,8 @@ func _process(delta: float) -> void:
 	_stats.queue_redraw()
 	_update_target_line()
 	var clock := "{i:cooldown}%ds%s" % [int(battle.time), "  {k:tired|tiring!}" if battle.time >= Battle.FATIGUE_START else ""]
+	if _hunting:
+		clock = "{i:cooldown}%ds left  {i:food}%d caught" % [ceili(maxf(0.0, Battle.HUNT_SECS - battle.time)), battle.hunt_bag().size()]
 	if battle.retreating:
 		clock += "  retreating %.1fs" % maxf(0.0, battle.retreat_left)
 	Rich.set_text(_clock, clock)
@@ -442,6 +455,9 @@ func _drain_events() -> void:
 				_note("%s%s is knocked out!" % ["Enemy " if f.side == Formation.Side.ENEMY else "Your ", f.display_name()])
 			"wagon":
 				_bolt(e["dst"])
+			"flee":
+				_run_off(e["dst"])
+				_note("%s bolts!" % battle.fighter(e["dst"]).display_name())
 
 
 func _view_pos(uid: int) -> Vector2:
@@ -481,6 +497,18 @@ func _knock_out(uid: int) -> void:
 	t.tween_property(s, "modulate", Color(0.35, 0.35, 0.4, 0.35), 0.3)
 	var bar: HpBar = _views[uid]["bar"]
 	bar.visible = false
+
+
+## A prey animal runs off the right edge and fades.
+func _run_off(uid: int) -> void:
+	if not _views.has(uid):
+		return
+	var holder: Node2D = _views[uid]["holder"]
+	var bar: HpBar = _views[uid]["bar"]
+	bar.visible = false
+	var t := holder.create_tween().set_parallel()
+	t.tween_property(holder, "position", holder.position + Vector2(140, -6), 0.7 / SPEEDS[speed_index])
+	t.tween_property(holder, "modulate", Color(1, 1, 1, 0), 0.7 / SPEEDS[speed_index])
 
 
 func _update_bar(f: Fighter) -> void:
@@ -618,6 +646,8 @@ func _end_combat() -> void:
 	var o := battle.outcome
 	_after_title.text = {Battle.Outcome.VICTORY: "Victory!", Battle.Outcome.DEFEAT: "Defeat",
 		Battle.Outcome.WITHDRAW: "Both sides pull back", Battle.Outcome.RETREAT: "You got away"}[o]
+	if _hunting:
+		_after_title.text = "Driven off" if o == Battle.Outcome.DEFEAT else "The hunt is over"
 	_after_title.add_theme_color_override("font_color", GOOD if o == Battle.Outcome.VICTORY else (BAD if o == Battle.Outcome.DEFEAT else MID))
 	if practice:
 		var hp := battle.player_hp()
