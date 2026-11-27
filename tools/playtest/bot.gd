@@ -163,6 +163,11 @@ func _junction_tick(c: Expedition) -> void:
 				break
 		if c.wagon.wear > 45 and c.repair_kits == 0:
 			c.buy("repair_kit")
+		# A smart player keeps a couple of lures while the team is still small.
+		if style == "smart" and c.roster.size() < Expedition.TEAM_MAX and c.coins > 25:
+			for i in 2:
+				if c.lures < 2:
+					c.buy("lure")
 		if c.wagon.broken != Wagon.Part.NONE or (c.wagon.wear > 60 and c.repair_kits > 0):
 			exp.call("_do_repair")
 		# Rest when half the team is hurt or anyone is knocked out.

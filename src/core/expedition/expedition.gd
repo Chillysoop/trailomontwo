@@ -175,7 +175,7 @@ static func new_game(starter: String, rng_seed := -1) -> Expedition:
 	e.light_dust = 0
 	e.dark_dust = 0
 	e.lures = START_LURES
-	e.cargo = START_CARGO.duplicate(true)
+	e.cargo.assign(START_CARGO.duplicate(true))
 	e.fatigue = {starter: 0.0}
 	e.creature_hp = {starter: e.max_hp(starter)}
 	e.encountered = {starter: true}
