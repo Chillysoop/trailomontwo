@@ -49,7 +49,7 @@ var spares := {"axle": 1, "harness": 1, "canvas": 0}
 ## Outfitter curiosities aboard (Outfitter.CURIOS): id -> true.
 var curios := {}
 ## Delivered cargo pays its value divided by this, in coins, at the end of a crossing.
-const CARGO_PAY_DIV := 6
+const CARGO_PAY_DIV := 10
 ## What the cargo paid on arrival this crossing.
 var cargo_paid := 0
 ## Set once the wagon leaves the start town; until then the start town's stall is the outfitter.
@@ -581,14 +581,15 @@ func _wear_day(terrain_factor: float, pushing: bool) -> void:
 
 
 ## Something on the wagon breaks (unless the lucky cog takes the hit). Returns true if it broke.
-func _break(part: Wagon.Part) -> bool:
+## from_event: the event already took its integrity toll, so the break itself costs none.
+func _break(part: Wagon.Part, from_event := false) -> bool:
 	if wagon.broken != Wagon.Part.NONE:
 		return false
 	if has_curio("lucky_cog"):
 		curios.erase("lucky_cog")
 		journal.append("The %s should have gone. The lucky cog rattles loose instead." % Wagon.PART_NAMES[part])
 		return false
-	wagon.break_part(part)
+	wagon.break_part(part, 0 if from_event else Wagon.BREAKDOWN_DAMAGE)
 	journal.append("The wagon's %s broke!" % wagon.part_name())
 	if wagon.broken == Wagon.Part.RUNNING_GEAR and state == State.TRAVELLING:
 		trip_days_left += 1
@@ -843,7 +844,7 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 			journal.append("No room for the %s." % String(crate["name"]).to_lower())
 	if fx.has("break"):
 		var part: Wagon.Part = {"axle": Wagon.Part.RUNNING_GEAR, "harness": Wagon.Part.HARNESS, "canopy": Wagon.Part.CANOPY}.get(String(fx["break"]), Wagon.Part.NONE)
-		if part != Wagon.Part.NONE and _break(part):
+		if part != Wagon.Part.NONE and _break(part, true):
 			d.append({"icon": "spare_" + Wagon.spare_for(part), "amount": 0, "label": "%s broke" % Wagon.PART_NAMES[part]})
 	if fx.has("wear"):
 		wagon.wear = clampf(wagon.wear + float(fx["wear"]), 0.0, 100.0)
@@ -1086,10 +1087,10 @@ func stock_left(good: String) -> int:
 
 ## Why a good can't be bought right now ("" if it can): "stock", "coins", "room" or "have".
 func buy_block(good: String) -> String:
-	if state != State.AT_JUNCTION or stock_left(good) <= 0:
-		return "stock"
 	if Outfitter.is_curio(good) and has_curio(good):
 		return "have"
+	if state != State.AT_JUNCTION or stock_left(good) <= 0:
+		return "stock"
 	if coins < int(stall()[good]["price"]):
 		return "coins"
 	if Outfitter.weight_of(good) > free_space() + 0.001:

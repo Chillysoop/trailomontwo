@@ -110,11 +110,12 @@ func test_outfitter_refuses_what_does_not_fit_and_takes_things_back() -> void:
 	var e := _outfitting()
 	e.coins = 9999
 	var guard := 0
-	while e.can_buy("water") and guard < 100:
+	while (e.can_buy("water") or e.can_buy("food")) and guard < 100:
 		e.buy("water")
+		e.buy("food")
 		guard += 1
-	check(e.free_space() < Outfitter.weight_of("water"), "bought until the wagon was full")
-	check_eq(e.buy_block("water") if e.stock_left("water") > 0 else "room", "room")
+	check(e.free_space() < Outfitter.weight_of("food"), "bought until the wagon was full")
+	check_eq(e.buy_block("food"), "room")
 	var coins := e.coins
 	var water := e.water
 	check(not e.sell_back("water").is_empty(), "handed one back")

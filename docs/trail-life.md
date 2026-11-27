@@ -147,3 +147,29 @@ Regions are now drawn from seven terrains. Landmarks: the White Reach (frozen ai
 Frostfang Pass, Rimeholt, the Hoarwood; the Emerald Canopy, Vinehold, the Sunken Gardens,
 Parrotspire. Snow lodges and treehouses replace huts there. Events: frozen lake, snow slide,
 rope bridge, vine-choked temple; moments: snow melt, frost bite, fruit haul, vine snag.
+
+## Gear (wave 1 of the wagon-trail ideas)
+
+Gear picks matter: what you pack decides what trouble you can handle.
+
+- **Weight limit**: the wagon holds 300. Cargo, food (4 per 10), water (6 per 10), spare parts and
+  curiosities all count. A heavier wagon wears faster and is harder to pull (the load counts 60% for
+  hauling). Finds that don't fit are left behind ("No room for 20 food").
+- **Spare parts** replace repair kits: spare axle (20), spare harness (8), canopy canvas (10). The
+  right spare fixes its part in a day. Without it a Trailomon with the part's job (Strength for the
+  axle, Steady for the harness, Guard for the canopy) jury-rigs it: one day at rank 3+, two days
+  otherwise, and it costs integrity. With nothing broken, Repair is a one-day tune-up (-25 wear).
+  Some hazard failures now break a part (rockslide, bog, ford, storm, stampede).
+- **Outfitter**: a world crossing starts in the start town with an empty wagon and at least 135
+  coins. The stall there is the outfitter: big stock, spare parts, curiosities, battle items, and
+  anything can be handed back for a full refund until you set out. Two shopkeepers alternate:
+  Hob Ferrule the wagonwright (east, odd crossings) and Marrow Bell the provisioner (west). Each gives
+  one tip about the map's commonest terrain and has a biased "Pack it for me" kit.
+- **Curiosities** (one of each): lucky cog (stops the first breakdown), reed pipe (better rest
+  days), ember kettle (no extra food on cold days), brass spyglass (+1 road of sight).
+- **Barter**: a traveller wants one thing you carry (a spare, food, water, a battle item, Light
+  dust) and offers something you're short of. Built on the spot from your wagon.
+- **Cargo pays**: delivered cargo pays a tenth of its value in coins at the end of a crossing.
+- Code: `src/core/data/outfitter.gd`, `Expedition` (spares, curios, load_weight, repair_plan,
+  outfitting, sell_back, pack_for_me, make_barter), `Wagon.SPARES`. Tests: `tests/core/test_gear.gd`.
+  Screens: `tools/shots/gear_shots.gd`.

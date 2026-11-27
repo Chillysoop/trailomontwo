@@ -72,7 +72,7 @@ func test_overloaded_wagon_is_blocked_on_steep_ground() -> void:
 
 func test_pushing_takes_longer() -> void:
 	var e := _fresh()
-	e.cargo.append({"name": "Spare wheels", "weight": 40.0})
+	e.cargo.append({"name": "Spare wheels", "weight": 120.0})
 	var seg := _seg("eastgate", "ridge_fork")
 	var f := e.forecast(seg)
 	check_eq(f["hauling"], Hauling.Result.PUSH)

@@ -48,9 +48,9 @@ func warning() -> bool:
 	return wear >= WARN_WEAR
 
 
-func break_part(part: Part) -> void:
+func break_part(part: Part, damage := BREAKDOWN_DAMAGE) -> void:
 	broken = part
-	integrity = maxi(0, integrity - BREAKDOWN_DAMAGE)
+	integrity = maxi(0, integrity - damage)
 
 
 ## Fix the broken assembly: with the right spare it's good as new, a jury-rig costs integrity
@@ -64,9 +64,10 @@ func repair(with_spare: bool, skilled := false) -> void:
 		integrity = maxi(0, integrity - (5 if skilled else 10))
 
 
-## Routine upkeep when nothing is broken: grease and tighten, no parts needed.
+## Routine upkeep when nothing is broken: grease and tighten, no parts needed. Shores up a little integrity.
 func tune_up() -> void:
 	wear = maxf(0.0, wear - 25.0)
+	integrity = mini(100, integrity + 5)
 
 
 ## Which spare fixes the broken assembly ("" when nothing is broken).

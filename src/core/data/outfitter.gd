@@ -7,12 +7,12 @@ extends RefCounted
 ## Curiosities are odd little comforts that each do one specific thing. Most crossings you
 ## won't miss them; now and then one saves the trip.
 
-## Extra coins for outfitting on top of the purse you carry from crossing to crossing.
-const PURSE := 45
+## Extra coins for outfitting: every crossing sets out with at least WORLD_START_COINS + PURSE.
+const PURSE := 65
 
 ## What each lot weighs in the wagon (wagon capacity is Wagon.CAPACITY).
 const WEIGHTS := {
-	"food": 5.0, "water": 10.0, "spare_axle": 20.0, "spare_harness": 8.0, "spare_canvas": 10.0,
+	"food": 4.0, "water": 6.0, "spare_axle": 20.0, "spare_harness": 8.0, "spare_canvas": 10.0,
 	"lucky_cog": 2.0, "reed_pipe": 2.0, "ember_kettle": 6.0, "brass_spyglass": 3.0,
 }
 ## Battle items and techniques weigh this much a lot.

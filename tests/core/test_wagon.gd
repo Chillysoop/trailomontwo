@@ -72,7 +72,7 @@ func test_fatigue_weakens_haulers_and_rest_restores_them() -> void:
 
 func test_adding_a_hauler_lets_an_overloaded_wagon_through() -> void:
 	var e := Expedition.new_default(1)
-	e.cargo.append({"name": "Iron ore", "weight": 60.0, "value": 60})
+	e.cargo.append({"name": "Iron ore", "weight": 150.0, "value": 60})
 	var seg := _seg("cogspire", "westwatch")
 	check(not e.forecast(seg)["can_go"], "too heavy with two haulers")
 	e.toggle_hauler("scythelk")

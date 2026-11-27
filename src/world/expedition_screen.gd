@@ -628,18 +628,18 @@ func _refresh_trade() -> void:
 		_trade_list.add_child(Rich.label("Nothing for sale here.", 8))
 	for good in stall:
 		var left := crossing.stock_left(good)
-		var w: float = Outfitter.weight_of(good)
 		var line := HBoxContainer.new()
 		line.add_theme_constant_override("separation", 1)
-		var row := ClickRow.make("{i:%s} %s [color=#ffe3a3]{i:coins}%d[/color] [color=#c8bca8]x%d%s[/color]" % [
-			Settlements.good_icon(good), Settlements.good_name(good), int(stall[good]["price"]), left,
-			("  {i:weight}%d" % roundi(w)) if w >= 2.0 else ""], 8, 116 if outfit else 128)
+		var gname := Settlements.good_name(good).trim_prefix("a ").trim_prefix("an ")
+		var row := ClickRow.make("{i:%s} %s [color=#ffe3a3]{i:coins}%d[/color] [color=#c8bca8]x%d[/color]" % [
+			Settlements.good_icon(good), gname, int(stall[good]["price"]), left], 8, 112 if outfit else 128)
 		row.disabled = not crossing.can_buy(good)
 		row.pressed.connect(_buy.bind(good))
 		Tips.attach(row, _good_tip.bind(good))
 		line.add_child(row)
-		if outfit and crossing.sellable(good) > 0:
+		if outfit:
 			var back := _button("-", 8)
+			back.disabled = crossing.sellable(good) <= 0
 			back.focus_mode = Control.FOCUS_NONE
 			back.custom_minimum_size = Vector2(12, 0)
 			back.pressed.connect(_sell_back.bind(good))
@@ -819,7 +819,7 @@ func _refresh_wagon_page() -> void:
 			_repair.icon = Rich.icon_tex("spare_" + String(plan["spare"]))
 		"jury":
 			_repair.text = "Jury-rig (%d day%s)" % [plan["days"], "" if plan["days"] == 1 else "s"]
-			_repair.icon = Rich.icon_tex("job_" + String(plan["job"]))
+			_repair.icon = Rich.icon_tex(Glossary.icon("cap_" + String(plan["job"])))
 		_:
 			_repair.text = "Tune up (1 day)"
 			_repair.icon = Rich.icon_tex("repair_kit")
@@ -832,8 +832,8 @@ func _repair_tip() -> String:
 		"spare":
 			return "Swap in your %s. Takes a {i:day} day, and the wagon is good as new." % Wagon.SPARES[plan["spare"]]["name"]
 		"jury":
-			var who := ("{c:%s} has the {i:job_%s} %s job and can rig something solid in a day." % [plan["helper"], plan["job"], String(plan["job"]).capitalize()]) if plan["skilled"] \
-				else "Nobody on the team is good enough at {i:job_%s} %s (rank %d+) to do it fast." % [plan["job"], String(plan["job"]).capitalize(), Wagon.JURY_RANK]
+			var who := ("{c:%s} has the {k:cap_%s|%s} job and can rig something solid in a day." % [plan["helper"], plan["job"], String(plan["job"]).capitalize()]) if plan["skilled"] \
+				else "Nobody on the team is good enough at {k:cap_%s|%s} (rank %d+) to do it fast." % [plan["job"], String(plan["job"]).capitalize(), Wagon.JURY_RANK]
 			return "No %s aboard. Patch it with what you have: costs integrity.\n%s" % [Wagon.SPARES[plan["spare"]]["name"], who]
 		"tune":
 			return "Nothing is broken. A {i:day} day of upkeep takes 25 wear off, so a {k:breakdown} is less likely."
