@@ -1,6 +1,7 @@
 extends SceneTree
 ## Headless test runner.
 ## Usage: godot --headless --path . --script res://tests/run_tests.gd
+## (TEST_ONLY=wave2,world runs only the matching test files.)
 ## Finds every tests/**/test_*.gd, runs each test_ method, exits 1 on any failure.
 
 
@@ -9,6 +10,10 @@ func _init() -> void:
 	var files: Array[String] = []
 	_collect("res://tests", files)
 	files.sort()
+	# TEST_ONLY=a,b runs just the files whose names contain one of those words.
+	var only := OS.get_environment("TEST_ONLY")
+	if only != "":
+		files = files.filter(func(f): return Array(only.split(",")).any(func(w): return f.get_file().contains(w)))
 	var total := 0
 	var failed: Array[String] = []
 	for path in files:

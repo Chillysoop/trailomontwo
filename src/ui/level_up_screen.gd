@@ -280,6 +280,7 @@ func _pick(index: int) -> void:
 
 
 func _finish(index: int, keep_in_memory: bool) -> void:
+	Sound.sfx("level_up")
 	var line := crossing.choose_level_up(index, keep_in_memory)
 	crossing.journal.append(line)
 	_done.append(line)

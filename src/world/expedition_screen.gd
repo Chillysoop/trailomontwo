@@ -255,6 +255,7 @@ func _show_junction() -> void:
 	var kind: Dictionary = Settlements.KINDS.get(crossing.stop()["kind"], {"name": "Stop"})
 	Rich.set_text(_title, "{i:settlement} [b]%s[/b]  [color=#c8bca8]%s[/color]" % [crossing.map.name_of(crossing.at), kind["name"]])
 	_ambience.set_moving(false)
+	_refresh_music()
 	_ambience.encountered = crossing.encountered
 	_set_scenery()
 	_ambience.show_settlement(crossing.stop()["kind"])
@@ -268,6 +269,10 @@ func _show_junction() -> void:
 			marks += " ford"
 		if seg.get("rough", false):
 			marks += " rough"
+		match String(seg.get("block", {}).get("kind", "")):
+			"giant": marks += " giant"
+			"gate": marks += " blocked"
+			"deep": marks += " deep"
 		var b := _button("%s\n%d day%s%s" % [crossing.map.name_of(seg["to"]), seg["days"], "" if seg["days"] == 1 else "s", marks], 8)
 		b.icon = Rich.icon_tex(Glossary.habitat_id(seg["terrain"]))
 		b.add_theme_constant_override("icon_max_width", 16)
@@ -332,6 +337,18 @@ func _road_notes(seg: Dictionary) -> String:
 		t += "\n{i:river} A river to cross%s." % (" (ferry)" if crossing.map.has_ferry(seg) else ", no ferry")
 	if seg.get("rough", false):
 		t += "\n{i:risk} Rough track: a shortcut, steep and dangerous."
+	var o: Dictionary = seg.get("block", {})
+	match String(o.get("kind", "")):
+		"giant":
+			t += "\n{i:giant} A {k:giant|sleeping giant} %s lies across this road." % Species.info(String(o["species"]))["name"]
+		"gate":
+			var helper := crossing.best_helper(String(o["cap"]))
+			t += "\n{i:%s} %s: needs a {k:cap_%s|%s} Trailomon%s." % [Glossary.icon("cap_" + String(o["cap"])), String(o["name"]), String(o["cap"]), String(o["cap"]).capitalize(),
+				(", and %s can try" % crossing.display_name(helper)) if helper != "" else ", or two slow days forcing through"]
+		"deep":
+			t += "\n{i:deep} {k:deep|Deep wilds}: no stops for days. More fights, rarer Trailomon."
+	if crossing.lairs.has(String(seg["to"])) and crossing.is_seen(String(seg["to"])) and not bool(crossing.lairs[seg["to"]]["done"]):
+		t += "\n{i:lair} A {k:lair|legendary lair}. Something sleeps there."
 	for c in crossing.cargo:
 		if String(c.get("deliver_to", "")) == String(seg["to"]):
 			t += "\n{i:cargo} Deliver the %s here." % String(c["name"]).get_slice(" for ", 0).to_lower()
@@ -364,6 +381,7 @@ func _set_off() -> void:
 	_caravan.set_walking(true)
 	_set_scenery()
 	_ambience.set_moving(true)
+	_refresh_music()
 	_log.text = "Travelling to %s..." % crossing.map.name_of(_picked["to"])
 	_day_timer = SECONDS_PER_DAY
 
@@ -371,7 +389,7 @@ func _set_off() -> void:
 func _process(delta: float) -> void:
 	if _travel_map != null:
 		_travel_map.visible = crossing != null and crossing.state == Expedition.State.TRAVELLING and _battle == null
-	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null or _companions != null or _guide != null or _world.visible:
+	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null or _companions != null or _guide != null or _field_guide != null or _world.visible:
 		return
 	_day_timer -= delta
 	if _day_timer > 0.0:
@@ -402,7 +420,20 @@ func _halt() -> void:
 	_ambience.set_moving(false)
 
 
+## Town music at settlements, the trail theme on the road, something eerier in the deep wilds.
+func _refresh_music() -> void:
+	if crossing == null:
+		return
+	if crossing.state == Expedition.State.TRAVELLING:
+		Sound.music("wild" if crossing.trip.get("deep", false) else "trail")
+	elif ["town", "village", "post", "stilts", "sanctum", "warden"].has(String(crossing.stop()["kind"])):
+		Sound.music("town")
+	else:
+		Sound.music("trail")
+
+
 func _resume_travel() -> void:
+	_refresh_music()
 	_backdrop.set_moving(true)
 	_caravan.set_walking(true)
 	_ambience.set_moving(true)
@@ -566,6 +597,15 @@ func _show_encounter() -> void:
 	_event.visible = true
 	Rich.set_text(_event_title, "{i:risk} %s" % pack["title"])
 	_event_text.text = pack["text"]
+	var loud := String(pack.get("boss", ""))
+	if loud == "":
+		for lane in [1, 0, 2]:
+			if String(pack["front"][lane]) != "":
+				loud = String(pack["front"][lane])
+				break
+	Sound.cry(loud)
+	if String(enc.get("glint", "")) != "":
+		_event_text.text += "\nOne of them glints in strange colours!"
 	if bool(enc.get("guardian", false)):
 		_event_text.text += "\nFight it, pay the long toll road around, or gamble on the rapids. Going around beats nothing: no guardian rewards, and a smaller arrival score."
 	_event_result.visible = false
@@ -576,6 +616,8 @@ func _show_encounter() -> void:
 		var line := "[b]%s[/b]" % v["label"]
 		if v["id"] == "fight":
 			line = "[b]Fight[/b]   " + ("{i:role_guard} set your lineup" if crossing.can_fight() else "[color=#%s]{i:ko} nobody can fight[/color]" % TrailFx.BAD)
+		elif v["id"] == "flare":
+			line = "{i:flare} [b]Light a flare[/b]   they scatter (%d left)" % crossing.flares
 		elif v["id"] == "bribe":
 			line = "[b]Throw them food[/b]   " + TrailFx.cost({"food": -Expedition.BRIBE_FOOD})
 		elif v["id"] == "toll":
@@ -606,6 +648,8 @@ func _choose_encounter(id: String) -> void:
 		_event.visible = false
 		_open_battle(false)
 		return
+	if id == "flare":
+		Sound.sfx("flare")
 	var r := crossing.resolve_encounter(id)
 	for c in _event_choices.get_children():
 		c.queue_free()
@@ -656,6 +700,7 @@ func _on_battle_finished(lines: Array) -> void:
 	_caravan.visible = true
 	_ambience.set_active(true)
 	_log.text = lines[0] if lines.size() > 0 else ""
+	_refresh_music()
 	_refresh_hud()
 	_event_continue.text = "Continue"
 	_continue_after_event()
@@ -695,8 +740,8 @@ func _refresh_trade() -> void:
 			talk.append("{i:folk} [b]%s[/b], %s: [color=#e8dcc0]\"%s\"[/color]" % [f["name"], f["trade"], f["line"]])
 		Rich.set_text(_rumor, "\n".join(talk))
 	_refresh_workshop()
-	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  %s {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d  {i:lure}%d" % [
-		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), _spares_text(), _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust, crossing.lures])
+	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  %s {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d  {i:lure}%d {i:flare}%d" % [
+		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), _spares_text(), _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust, crossing.lures, crossing.flares])
 	_refresh_job()
 	for c in _trade_list.get_children():
 		c.queue_free()
@@ -983,7 +1028,7 @@ func _repair_tip() -> String:
 
 func _setup_caravan() -> void:
 	var buddy := _companion()
-	_caravan.setup(crossing.haulers, buddy)
+	_caravan.setup(crossing.haulers, buddy, crossing.glints)
 	_hover.clear()
 	_hover.add(Rect2(Caravan.WAGON_FEET + Vector2(-80, -170), Vector2(160, 172)), _wagon_tip)
 	var shown := crossing.haulers.slice(0, Caravan.HAULER_SLOTS.size())
@@ -996,12 +1041,7 @@ func _setup_caravan() -> void:
 ## The Trailomon that walks beside the wagon: Rimehare while it travels with you, otherwise
 ## the first team member who isn't in harness.
 func _companion() -> String:
-	if crossing.roster.has("rimehare") and not crossing.haulers.has("rimehare"):
-		return "rimehare"
-	for id in crossing.roster:
-		if not crossing.haulers.has(id):
-			return id
-	return ""
+	return crossing.lead_companion()
 
 
 func _creature_tip(id: String, hauling: bool) -> String:
@@ -1214,6 +1254,19 @@ func _build_ui() -> void:
 	guide.pressed.connect(_open_guide)
 	Tips.attach(guide, func(): return "How to play: the goal, food and water, roads and growing your team. Travel pauses while it's open.")
 	row.add_child(guide)
+	var speaker := _button("", 8)
+	speaker.icon = Rich.icon_tex("sound_off" if Sound.muted else "sound_on")
+	speaker.focus_mode = Control.FOCUS_NONE
+	speaker.pressed.connect(func():
+		speaker.icon = Rich.icon_tex("sound_off" if Sound.toggle_mute() else "sound_on"))
+	Tips.attach(speaker, func(): return "Sound and music on or off.")
+	row.add_child(speaker)
+	var book := _button("", 8)
+	book.icon = Rich.icon_tex("field_guide")
+	book.focus_mode = Control.FOCUS_NONE
+	book.pressed.connect(_open_field_guide)
+	Tips.attach(book, func(): return "{i:field_guide} [b]Field guide[/b]\nEvery Trailomon you've met, where you met it and how it grows. Travel pauses while it's open.")
+	row.add_child(book)
 	var map_btn := _button("", 8)
 	map_btn.icon = Rich.icon_tex("map")
 	map_btn.focus_mode = Control.FOCUS_NONE
@@ -1471,7 +1524,18 @@ func _open_companions() -> void:
 	_companions = CompanionsScreen.open(_ui, crossing)
 	_companions.closed.connect(func():
 		_companions = null
+		_setup_caravan()
 		_refresh_hud())
+
+
+var _field_guide: FieldGuideScreen
+
+
+func _open_field_guide() -> void:
+	if _field_guide != null and is_instance_valid(_field_guide):
+		return
+	_field_guide = FieldGuideScreen.open(_ui, crossing)
+	_field_guide.closed.connect(func(): _field_guide = null)
 
 
 ## The how-to-play guide (opens by itself when a new caravan sets out).

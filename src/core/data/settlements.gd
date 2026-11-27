@@ -32,6 +32,7 @@ const GOODS := {
 	"dark_dust": {"name": "Dark dust", "icon": "dark_dust", "fx": {"dark_dust": 1}},
 	"medicine": {"name": "fever medicine", "icon": "job_heal", "fx": {"cure": 1, "health": 10}},
 	"lure": {"name": "a catching lure", "icon": "lure", "fx": {"lures": 1}},
+	"flare": {"name": "a flare", "icon": "flare", "fx": {"flares": 1}},
 }
 
 ## Stops: kind, stall {good: {"price", "stock"}} and a rumor (Rich markup, short).

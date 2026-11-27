@@ -13,7 +13,7 @@ const PURSE := 65
 ## What each lot weighs in the wagon (wagon capacity is Wagon.CAPACITY).
 const WEIGHTS := {
 	"food": 4.0, "water": 6.0, "spare_axle": 20.0, "spare_harness": 8.0, "spare_canvas": 10.0,
-	"lure": 1.0, "lucky_cog": 2.0, "reed_pipe": 2.0, "ember_kettle": 6.0, "brass_spyglass": 3.0,
+	"lure": 1.0, "flare": 1.0, "lucky_cog": 2.0, "reed_pipe": 2.0, "ember_kettle": 6.0, "brass_spyglass": 3.0,
 }
 ## Battle items and techniques weigh this much a lot.
 const SMALL_WEIGHT := 1.0
@@ -34,7 +34,7 @@ const CURIOS := {
 const STOCK := {
 	"food": [2, 30], "water": [1, 20], "spare_axle": [14, 3], "spare_harness": [8, 3], "spare_canvas": [9, 3],
 	"lucky_cog": [12, 1], "reed_pipe": [10, 1], "ember_kettle": [11, 1], "brass_spyglass": [13, 1],
-	"smoke_pouch": [9, 2], "ironbark_salve": [10, 2], "lure": [6, 4],
+	"smoke_pouch": [9, 2], "ironbark_salve": [10, 2], "lure": [6, 4], "flare": [8, 3],
 }
 
 ## The two shopkeepers: odd crossings start in the east (Hob), even ones in the west (Marrow).

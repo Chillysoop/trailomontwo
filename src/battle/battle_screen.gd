@@ -129,6 +129,8 @@ func _ready() -> void:
 		setup(Expedition.new_default(), false, true)
 	crossing.tidy_lineup()
 	_enter_lineup()
+	if not practice:
+		Sound.music("guardian" if _is_guardian() else "battle")
 
 
 func _pack() -> Dictionary:
@@ -225,6 +227,8 @@ func _add_unit(id: String, feet: Vector2, enemy: bool, tip: Variant = null) -> D
 	holder.add_child(shadow)
 	var s := Stand.sprite(load("res://assets/creatures/%s.png" % id), Vector2.ZERO, enemy)
 	holder.add_child(s)
+	if crossing != null:
+		Glint.apply(s, (enemy and String(crossing.pending_encounter.get("glint", "")) == id) or (not enemy and crossing.glints.has(id)))
 	Stand.bob(s, 1, 1.0, randf() * 0.6)
 	var bar := HpBar.new()
 	bar.position = Vector2(-16, 4)
@@ -708,6 +712,8 @@ func _end_combat() -> void:
 	_combat_bar.visible = false
 	_stats.queue_redraw()
 	var o := battle.outcome
+	if not practice:
+		Sound.sfx("victory" if o == Battle.Outcome.VICTORY else ("defeat" if o == Battle.Outcome.DEFEAT else "miss"))
 	_after_title.text = {Battle.Outcome.VICTORY: "Victory!", Battle.Outcome.DEFEAT: "Defeat",
 		Battle.Outcome.WITHDRAW: "Both sides pull back", Battle.Outcome.RETREAT: "You got away"}[o]
 	if _hunting:
@@ -744,6 +750,9 @@ func _end_combat() -> void:
 			take.add_theme_constant_override("icon_max_width", 16)
 			take.pressed.connect(func():
 				var r := crossing.try_catch()
+				Sound.sfx("catch" if r["caught"] else "miss")
+				if r["caught"]:
+					Sound.cry(rid)
 				if String(r["line"]) != "":
 					_result_lines.append(String(r["line"]))
 					Rich.set_text(_after_body, "\n".join(_result_lines))

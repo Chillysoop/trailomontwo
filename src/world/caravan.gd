@@ -13,12 +13,13 @@ var _bobbing: Array[Node2D] = []
 
 
 ## haulers: species ids pulling the wagon (first three are shown). companion: optional species id walking behind.
-func setup(haulers: Array, companion := "") -> void:
+func setup(haulers: Array, companion := "", glints := {}) -> void:
 	for c in get_children():
 		c.queue_free()
 	_bobbing.clear()
 	if companion != "":
 		var comp := Stand.sprite(load("res://assets/creatures/%s.png" % companion), COMPANION_FEET)
+		Glint.apply(comp, glints.has(companion))
 		add_child(comp)
 		_bobbing.append(comp)
 	var wagon := Stand.sprite(load("res://assets/wagon/wagon.png"), WAGON_FEET)
@@ -31,6 +32,7 @@ func setup(haulers: Array, companion := "") -> void:
 		var from: Vector2 = HITCH + Vector2(0, 4 * (1 - i)) if i < 2 else HAULER_SLOTS[i - 1] + Vector2(10, -28)
 		add_child(_rope(from, feet + Vector2(6, -30 + 4 * (1 - i))))
 		var h := Stand.sprite(load("res://assets/creatures/%s.png" % shown[i]), feet)
+		Glint.apply(h, glints.has(shown[i]))
 		add_child(h)
 		_bobbing.append(h)
 

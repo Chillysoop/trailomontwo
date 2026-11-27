@@ -138,6 +138,14 @@ func _draw() -> void:
 			col = PICKED if other == picked else EXIT
 			w = 2.0 if other == picked else 1.0
 		draw_line(_pt(m.pos(a)), _pt(m.pos(b)), col, w, true)
+		# Known obstacles on the road: a giant, a blocked road, the deep wilds.
+		var o: Dictionary = expedition.obstacles.get(_key(a, b), {})
+		if both and not o.is_empty():
+			var ic: String = {"giant": "giant", "deep": "deep"}.get(String(o["kind"]), Glossary.icon("cap_" + String(o.get("cap", "clear"))))
+			var tex := _icon(ic)
+			if tex != null:
+				var mid := (_pt(m.pos(a)) + _pt(m.pos(b))) / 2.0
+				draw_texture_rect(tex, Rect2(mid - Vector2(5, 5), Vector2(10, 10)), false)
 	# Stops.
 	for id in m.junctions:
 		var goal: bool = id == m.goal
@@ -156,6 +164,10 @@ func _draw() -> void:
 		draw_circle(p, r, col)
 		if kind == "lookout":
 			draw_arc(p, r + 2.5, 0, TAU, 12, Color(PICKED, 0.6), 1.0)
+		if expedition.lairs.has(id) and not bool(expedition.lairs[id]["done"]):
+			var lt := _icon("lair")
+			if lt != null:
+				draw_texture_rect(lt, Rect2(p + Vector2(3, -12), Vector2(10, 10)), false)
 		if here and expedition.state != Expedition.State.TRAVELLING:
 			draw_arc(p, 6.0, 0, TAU, 16, PICKED, 1.0)
 		var show_name: bool = here or exits.has(id) or goal or id == _hover or (full and (kind == "town" or expedition.visited.has(id) or zoom >= 0.6))
@@ -205,6 +217,17 @@ func _junction_at(p: Vector2) -> String:
 		if (expedition.is_seen(id) or id == m.goal) and _pt(m.pos(id)).distance_to(p) < 6.0:
 			return id
 	return ""
+
+
+## Icons drawn on the map, kept here: a texture only referenced inside _draw() can be freed
+## before the frame renders, and then draws as a white square.
+var _icons := {}
+
+
+func _icon(id: String) -> Texture2D:
+	if not _icons.has(id):
+		_icons[id] = Rich.icon_tex(id)
+	return _icons[id]
 
 
 func _key(a: String, b: String) -> String:

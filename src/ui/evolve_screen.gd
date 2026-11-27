@@ -50,6 +50,8 @@ func _ready() -> void:
 	_text.position = Vector2(20, 300)
 	add_child(_text)
 
+	Sound.cry(from_id)
+	Sound.sfx("evolve")
 	var t := create_tween()
 	# The old form fills with light.
 	t.tween_property(_old, "modulate", Color(4, 4, 4), 1.2)
@@ -80,6 +82,7 @@ func _sprite(id: String) -> Sprite2D:
 
 func _reveal() -> void:
 	_done = true
+	Sound.cry(to_id)
 	Rich.set_text(_text, "[center]%s evolved into [b]%s[/b]![/center]\n[center][font_size=8][color=#%s]Click to continue[/color][/font_size][/center]" % [
 		shown_name, Species.name_markup(to_id), CreatureCard.MUTED])
 	var t := create_tween().set_loops(3)

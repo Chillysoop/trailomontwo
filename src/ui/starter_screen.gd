@@ -89,7 +89,9 @@ func _card(id: String) -> Control:
 	col.add_child(blurb)
 	var pick := Ui.button("Choose %s" % info["name"], 9)
 	pick.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pick.mouse_entered.connect(Sound.cry.bind(id))
 	pick.pressed.connect(func():
+		Sound.cry(id)
 		picked.emit(id)
 		queue_free())
 	col.add_child(pick)
