@@ -44,7 +44,16 @@ var water := 40.0
 var roster: Array[String] = []
 var haulers: Array[String] = []
 var wagon := Wagon.new()
-var repair_kits := 2
+## Spare parts aboard: "axle", "harness", "canvas" -> count (Wagon.SPARES).
+var spares := {"axle": 1, "harness": 1, "canvas": 0}
+## Outfitter curiosities aboard (Outfitter.CURIOS): id -> true.
+var curios := {}
+## Delivered cargo pays its value divided by this, in coins, at the end of a crossing.
+const CARGO_PAY_DIV := 10
+## What the cargo paid on arrival this crossing.
+var cargo_paid := 0
+## Set once the wagon leaves the start town; until then the start town's stall is the outfitter.
+var departed := false
 var fatigue := {}
 var cargo: Array[Dictionary] = []
 var rng := RandomNumberGenerator.new()
@@ -137,12 +146,22 @@ static func new_default(rng_seed := -1) -> Expedition:
 		e.map = WorldMap.test_route()
 	else:
 		e.map = WorldMap.generate(rng_seed if rng_seed >= 0 else randi())
-		# The overworld is long: set out with a purse for the stalls along the way.
-		e.coins = WORLD_START_COINS
+		# The overworld is long: set out with a purse, and an empty wagon to fill at the outfitter.
+		e.coins = WORLD_START_COINS + Outfitter.PURSE
+		e.empty_supplies()
 	for id in e.roster + e.stored:
 		e.encountered[id] = true
 	e.setup_map(1)
 	return e
+
+
+## A world crossing starts with nothing aboard but the cargo: everything else comes from the outfitter.
+func empty_supplies() -> void:
+	provisions = 0.0
+	water = 0.0
+	spares = {}
+	curios = {}
+	departed = false
 
 
 ## Which crossing this is: sets the guardian and how tough the foes are (the map hooks in here too).
@@ -184,6 +203,8 @@ func reveal(id: String) -> void:
 	var scout := best_helper("scout")
 	if scout != "" and job_rank(scout, "scout") >= 4:
 		depth = 2
+	if has_curio("brass_spyglass"):
+		depth += 1
 	if map.kind_of(id) == "lookout":
 		depth = 3
 	for j in map.around(id, depth):
@@ -283,6 +304,38 @@ func cargo_weight() -> float:
 	return w
 
 
+## Food, water, spare parts and curiosities (Outfitter.WEIGHTS; food and water per lot of 10).
+func supplies_weight() -> float:
+	var w := provisions / 10.0 * Outfitter.weight_of("food") + water / 10.0 * Outfitter.weight_of("water")
+	for k in spares:
+		w += float(spares[k]) * float(Wagon.SPARES[k]["weight"])
+	for k in curios:
+		w += Outfitter.weight_of(k)
+	return w
+
+
+## Everything aboard: cargo plus supplies. The wagon holds Wagon.CAPACITY.
+func load_weight() -> float:
+	return cargo_weight() + supplies_weight()
+
+
+func free_space() -> float:
+	return maxf(0.0, Wagon.CAPACITY - load_weight())
+
+
+## What the haulers have to pull: the empty wagon plus part of the load.
+func pull_demand(terrain_factor: float) -> float:
+	return Hauling.demand(Wagon.EMPTY_MASS, load_weight() * Wagon.LOAD_PULL, terrain_factor)
+
+
+func spare_count(id: String) -> int:
+	return int(spares.get(id, 0))
+
+
+func has_curio(id: String) -> bool:
+	return curios.has(id)
+
+
 func hauling_available() -> float:
 	var strengths: Array = []
 	for id in haulers:
@@ -299,13 +352,13 @@ func days_of(supply: float, per_day: float) -> float:
 
 ## Everything the route card shows for one segment, before committing.
 func forecast(seg: Dictionary) -> Dictionary:
-	var demand := Hauling.demand(Wagon.EMPTY_MASS, cargo_weight(), float(seg["terrain_factor"]))
+	var demand := pull_demand(float(seg["terrain_factor"]))
 	var available := hauling_available()
 	var result := Hauling.evaluate(demand, available)
 	var pushing := result == Hauling.Result.PUSH
 	var distance := trip_distance(seg, pushing)
 	var days := maxi(1, ceili((distance - carry) / float(TrailLife.pace(pace)["speed"]) - 0.0001))
-	var wear_added := Wagon.wear_per_day(float(seg["terrain_factor"]), cargo_weight(), pushing) * float(TrailLife.pace(pace)["wear"]) * days
+	var wear_added := Wagon.wear_per_day(float(seg["terrain_factor"]), load_weight(), pushing) * float(TrailLife.pace(pace)["wear"]) * days
 	return {
 		"wear": wear_added,
 		"wear_after": wagon.wear + wear_added,
@@ -335,9 +388,12 @@ func exits() -> Array[Dictionary]:
 func spend_day(travelling := false) -> String:
 	day += 1
 	var notes: Array[String] = []
-	var need_food := daily_provisions() * TrailLife.weather_value(weather, "food_mult", 1.0)
+	var food_mult := TrailLife.weather_value(weather, "food_mult", 1.0)
+	if has_curio("ember_kettle"):
+		food_mult = minf(food_mult, 1.0)
+	var need_food := daily_provisions() * food_mult
 	var need_water := daily_water() * TrailLife.weather_value(weather, "water_mult", 1.0)
-	water += TrailLife.weather_value(weather, "water_gain")
+	water += room_for("water", TrailLife.weather_value(weather, "water_gain"))
 	health = mini(100, health + int(TrailLife.ration(rations)["health"]) + (int(TrailLife.pace(pace)["health"]) if travelling else 0) \
 		+ int(TrailLife.weather_value(weather, "health")))
 	if fever_days > 0:
@@ -392,6 +448,7 @@ func start_trip(seg: Dictionary) -> bool:
 	if not f["can_go"]:
 		return false
 	trip = seg
+	departed = true
 	trip["pushing"] = f["hauling"] == Hauling.Result.PUSH
 	trip_days_left = trip_distance(seg, trip["pushing"]) - carry
 	carry = 0.0
@@ -425,6 +482,9 @@ func step_day() -> bool:
 		var options := TrailEvents.for_segment(trip, weather)
 		if not options.is_empty():
 			pending_event = options[rng.randi_range(0, options.size() - 1)]
+			if pending_event["id"] == "barter":
+				pending_event = make_barter()
+		if not pending_event.is_empty():
 			_trip_had_event = true
 			_trip_events += 1
 			journal.append(pending_event["title"] + "!")
@@ -471,6 +531,10 @@ func _arrive() -> bool:
 	journal.append("Reached %s." % map.name_of(at))
 	reveal(at)
 	state = State.ARRIVED if at == map.goal else State.AT_JUNCTION
+	if state == State.ARRIVED:
+		cargo_paid = cargo_value() / CARGO_PAY_DIV
+		coins += cargo_paid
+		journal.append("The cargo is delivered: +%d coins." % cargo_paid)
 	trip = {}
 	return false
 
@@ -507,17 +571,30 @@ func _wear_day(terrain_factor: float, pushing: bool) -> void:
 	for id in haulers:
 		fatigue[id] = clampf(float(fatigue.get(id, 0.0)) + HAUL_FATIGUE * (2.0 if pushing else 1.0) * float(p["fatigue"]) + TrailLife.weather_value(weather, "fatigue"), 0.0, 100.0)
 	var chance := Wagon.breakdown_chance(wagon.wear)
-	wagon.wear = minf(100.0, wagon.wear + Wagon.wear_per_day(terrain_factor, cargo_weight(), pushing) * float(p["wear"]) + TrailLife.weather_value(weather, "wear"))
+	wagon.wear = minf(100.0, wagon.wear + Wagon.wear_per_day(terrain_factor, load_weight(), pushing) * float(p["wear"]) + TrailLife.weather_value(weather, "wear"))
 	if wagon.broken == Wagon.Part.NONE and rng.randf() < chance:
 		var parts := [Wagon.Part.RUNNING_GEAR, Wagon.Part.HARNESS, Wagon.Part.CANOPY]
-		wagon.break_part(parts[rng.randi_range(0, parts.size() - 1)])
-		journal.append("The wagon's %s broke!" % wagon.part_name())
-		if wagon.broken == Wagon.Part.RUNNING_GEAR:
-			trip_days_left += 1
-			journal.append("Limping on a broken axle: one more day to the next stop.")
+		_break(parts[rng.randi_range(0, parts.size() - 1)])
 	if wagon.integrity <= 0:
 		state = State.FAILED
 		fail_reason = "The wagon fell apart on the trail."
+
+
+## Something on the wagon breaks (unless the lucky cog takes the hit). Returns true if it broke.
+## from_event: the event already took its integrity toll, so the break itself costs none.
+func _break(part: Wagon.Part, from_event := false) -> bool:
+	if wagon.broken != Wagon.Part.NONE:
+		return false
+	if has_curio("lucky_cog"):
+		curios.erase("lucky_cog")
+		journal.append("The %s should have gone. The lucky cog rattles loose instead." % Wagon.PART_NAMES[part])
+		return false
+	wagon.break_part(part, 0 if from_event else Wagon.BREAKDOWN_DAMAGE)
+	journal.append("The wagon's %s broke!" % wagon.part_name())
+	if wagon.broken == Wagon.Part.RUNNING_GEAR and state == State.TRAVELLING:
+		trip_days_left += 1
+		journal.append("Limping on a broken axle: one more day to the next stop.")
+	return true
 
 
 # ---------- actions at a junction ----------
@@ -528,31 +605,61 @@ func rest() -> void:
 		return
 	journal.append(spend_day())
 	fever_days = 0
+	var pipe := has_curio("reed_pipe")
 	for id in fatigue:
-		fatigue[id] = maxf(0.0, float(fatigue[id]) - REST_RECOVERY)
+		fatigue[id] = maxf(0.0, float(fatigue[id]) - REST_RECOVERY * (1.5 if pipe else 1.0))
 	var woke := 0
 	for id in roster:
 		if not conscious(id):
 			woke += 1
-		creature_hp[id] = minf(max_hp(id), float(creature_hp.get(id, 0.0)) + max_hp(id) * REST_HEAL)
+		creature_hp[id] = minf(max_hp(id), float(creature_hp.get(id, 0.0)) + max_hp(id) * (REST_HEAL + (0.25 if pipe else 0.0)))
 	if state != State.FAILED:
 		journal.append("Rested. The haulers recovered and the team licked its wounds%s." % ((", %d back on their feet" % woke) if woke > 0 else ""))
 
 
-## Repair the wagon: one day with a repair kit, or two days patching without one (costs integrity).
+## What "Repair" would do right now: {"kind": "spare"|"jury"|"tune"|"none", "days", "spare",
+## "helper", "skilled"}. A broken part takes its spare (one day). Without the spare a Trailomon
+## with the part's job jury-rigs it (one day if skilled, two if not, and integrity suffers).
+## With nothing broken it's a one-day tune-up that takes wear off.
+func repair_plan() -> Dictionary:
+	if wagon.broken == Wagon.Part.NONE:
+		return {"kind": "tune" if wagon.wear >= 1.0 else "none", "days": 1, "spare": "", "helper": "", "skilled": false}
+	var spare := wagon.spare_needed()
+	if spare_count(spare) > 0:
+		return {"kind": "spare", "days": 1, "spare": spare, "helper": "", "skilled": false}
+	var job: String = Wagon.SPARES[spare]["job"]
+	var helper := best_helper(job)
+	var skilled := helper != "" and job_rank(helper, job) >= Wagon.JURY_RANK
+	return {"kind": "jury", "days": 1 if skilled else 2, "spare": spare, "helper": helper, "skilled": skilled, "job": job}
+
+
+## Repair the wagon as repair_plan() says.
 func repair() -> void:
 	if state != State.AT_JUNCTION:
 		return
-	var kit := repair_kits > 0
-	var days := 1 if kit else 2
-	for i in days:
+	var plan := repair_plan()
+	if plan["kind"] == "none":
+		return
+	for i in int(plan["days"]):
 		journal.append(spend_day())
 		if state == State.FAILED:
 			return
-	if kit:
-		repair_kits -= 1
-	wagon.repair(kit)
-	journal.append("Repaired the wagon%s." % ("" if kit else " with whatever was at hand"))
+	match String(plan["kind"]):
+		"tune":
+			wagon.tune_up()
+			journal.append("A day of grease and tightening. The wagon runs smoother.")
+		"spare":
+			spares[plan["spare"]] = spare_count(plan["spare"]) - 1
+			if spare_count(plan["spare"]) <= 0:
+				spares.erase(plan["spare"])
+			wagon.repair(true)
+			journal.append("Fitted the %s. Good as new." % Wagon.SPARES[plan["spare"]]["name"])
+		"jury":
+			wagon.repair(false, plan["skilled"])
+			if plan["helper"] != "":
+				gain_xp(plan["helper"], TrailEvents.JOB_XP["mixed"])
+			journal.append("No %s. %s." % [Wagon.SPARES[plan["spare"]]["name"],
+				("%s rigs something that holds" % Species.info(plan["helper"])["name"]) if plan["skilled"] else "Patched with rope and hope"])
 	if wagon.integrity <= 0:
 		state = State.FAILED
 		fail_reason = "The wagon fell apart during repairs."
@@ -563,6 +670,24 @@ func drop_cargo(index: int) -> void:
 		return
 	journal.append("Left the %s behind." % String(cargo[index]["name"]).to_lower())
 	cargo.remove_at(index)
+
+
+## Leave supplies by the road: 10 food, 10 water, or one spare part ("spare_axle"...).
+func dump(kind: String) -> void:
+	match kind:
+		"food":
+			if provisions >= 10.0:
+				provisions -= 10.0
+				journal.append("Left 10 food by the road.")
+		"water":
+			if water >= 10.0:
+				water -= 10.0
+				journal.append("Poured out 10 water.")
+		_:
+			var k := kind.trim_prefix("spare_")
+			if spare_count(k) > 0:
+				_add_spare(k, -1)
+				journal.append("Left the %s by the road." % Wagon.SPARES[k]["name"])
 
 
 func toggle_hauler(id: String) -> void:
@@ -611,7 +736,9 @@ func best_helper(cap: String) -> String:
 ## Can the crew pay this cost right now? (Costs are negative deltas.)
 func can_afford(cost: Dictionary) -> bool:
 	return coins + int(cost.get("coins", 0)) >= 0 and provisions + float(cost.get("food", 0)) >= 0.0 \
-		and water + float(cost.get("water", 0)) >= 0.0 and repair_kits + int(cost.get("repair_kits", 0)) >= 0 \
+		and water + float(cost.get("water", 0)) >= 0.0 and spare_count("axle") + int(cost.get("spare_axle", 0)) >= 0 \
+		and spare_count("harness") + int(cost.get("spare_harness", 0)) >= 0 and spare_count("canvas") + int(cost.get("spare_canvas", 0)) >= 0 \
+		and (not cost.has("give_item") or item_free(String(cost["give_item"])) > 0) \
 		and light_dust + int(cost.get("light_dust", 0)) >= 0 and dark_dust + int(cost.get("dark_dust", 0)) >= 0
 
 
@@ -673,18 +800,52 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 	var d: Array = []
 	if fx.has("food"):
 		var was := provisions
-		provisions = maxf(0.0, provisions + float(fx["food"]))
+		var want := float(fx["food"])
+		var got := minf(want, room_for("food", want)) if want > 0.0 else want
+		provisions = maxf(0.0, provisions + got)
 		d.append({"icon": "food", "amount": roundi(provisions - was)})
+		if got < want:
+			d.append({"icon": "food", "amount": -roundi(want - got), "label": "left behind, no room"})
+			journal.append("No room for %d food. Left it behind." % roundi(want - got))
 	if fx.has("water"):
 		var was := water
-		water = maxf(0.0, water + float(fx["water"]))
+		var want := float(fx["water"])
+		var got := minf(want, room_for("water", want)) if want > 0.0 else want
+		water = maxf(0.0, water + got)
 		d.append({"icon": "water", "amount": roundi(water - was)})
+		if got < want:
+			d.append({"icon": "water", "amount": -roundi(want - got), "label": "left behind, no room"})
 	if fx.has("coins"):
 		coins = maxi(0, coins + int(fx["coins"]))
 		d.append({"icon": "coins", "amount": int(fx["coins"])})
-	if fx.has("repair_kits"):
-		repair_kits = maxi(0, repair_kits + int(fx["repair_kits"]))
-		d.append({"icon": "repair_kit", "amount": int(fx["repair_kits"])})
+	if fx.has("give_item"):
+		var gid := String(fx["give_item"])
+		items[gid] = item_count(gid) - 1
+		if int(items[gid]) <= 0:
+			items.erase(gid)
+		d.append({"icon": gid, "amount": -1})
+	for k in Wagon.SPARES:
+		if fx.has("spare_" + k):
+			d.append_array(_add_spare(k, int(fx["spare_" + k])))
+	if fx.has("spare"):
+		var keys: Array = Wagon.SPARES.keys()
+		var k: String = String(fx["spare"]) if Wagon.SPARES.has(String(fx["spare"])) else keys[life_rng.randi_range(0, keys.size() - 1)]
+		d.append_array(_add_spare(k, 1))
+	if fx.has("curio") and Outfitter.is_curio(String(fx["curio"])):
+		curios[String(fx["curio"])] = true
+		d.append({"icon": Outfitter.CURIOS[fx["curio"]]["icon"], "amount": 1})
+	if fx.has("salvage"):
+		var crate: Dictionary = fx["salvage"]
+		if float(crate["weight"]) <= free_space():
+			cargo.append(crate.duplicate())
+			d.append({"icon": "cargo", "amount": 1, "label": String(crate["name"])})
+		else:
+			d.append({"icon": "cargo", "amount": 0, "label": "no room for the %s" % String(crate["name"]).to_lower()})
+			journal.append("No room for the %s." % String(crate["name"]).to_lower())
+	if fx.has("break"):
+		var part: Wagon.Part = {"axle": Wagon.Part.RUNNING_GEAR, "harness": Wagon.Part.HARNESS, "canopy": Wagon.Part.CANOPY}.get(String(fx["break"]), Wagon.Part.NONE)
+		if part != Wagon.Part.NONE and _break(part, true):
+			d.append({"icon": "spare_" + Wagon.spare_for(part), "amount": 0, "label": "%s broke" % Wagon.PART_NAMES[part]})
 	if fx.has("wear"):
 		wagon.wear = clampf(wagon.wear + float(fx["wear"]), 0.0, 100.0)
 		d.append({"icon": "wagon", "amount": int(fx["wear"]), "bad_up": true, "label": "wear"})
@@ -774,6 +935,29 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 		if state == State.FAILED:
 			return d
 	return d
+
+
+## Add (or with a negative count, take away) spare parts. Gains only come aboard if they fit.
+func _add_spare(k: String, n: int) -> Array:
+	if n > 0:
+		var fits := int(floorf(free_space() / float(Wagon.SPARES[k]["weight"])))
+		if fits < n:
+			journal.append("No room for the %s." % Wagon.SPARES[k]["name"])
+		n = mini(n, fits)
+		if n <= 0:
+			return [{"icon": "spare_" + k, "amount": 0, "label": "no room"}]
+	spares[k] = maxi(0, spare_count(k) + n)
+	if spare_count(k) == 0:
+		spares.erase(k)
+	return [{"icon": "spare_" + k, "amount": n}]
+
+
+## How much of a supply fits in the free space (food and water are weighed per lot of 10).
+func room_for(supply: String, amount: float) -> float:
+	var per_unit: float = Outfitter.weight_of(supply) / 10.0
+	if per_unit <= 0.0:
+		return amount
+	return clampf(free_space() / per_unit, 0.0, amount)
 
 
 ## Wild species that live on this terrain (its encounter table) and aren't owned yet.
@@ -873,33 +1057,180 @@ func set_rations(id: String) -> void:
 		rations = id
 
 
+## True while the caravan is still in the start town of a world crossing: the stall there is
+## the outfitter (bigger stock, spare parts and curiosities, and you can sell things back).
+func outfitting() -> bool:
+	return map != null and not map.is_test and not departed and at == map.start and state == State.AT_JUNCTION
+
+
+## This stop's stall: {good: {"price", "stock"}}.
+func stall() -> Dictionary:
+	if outfitting():
+		var out := {}
+		for g in Outfitter.STOCK:
+			out[g] = {"price": int(Outfitter.STOCK[g][0]), "stock": int(Outfitter.STOCK[g][1])}
+		return out
+	return stop()["stall"]
+
+
+func _stall_key() -> String:
+	return "outfitter" if outfitting() else at
+
+
 ## How many of a good are left in this stop's stall.
 func stock_left(good: String) -> int:
-	var s: Dictionary = stop()["stall"]
+	var s := stall()
 	if not s.has(good):
 		return 0
-	return int(s[good]["stock"]) - int(bought.get(at, {}).get(good, 0))
+	return int(s[good]["stock"]) - int(bought.get(_stall_key(), {}).get(good, 0))
+
+
+## Why a good can't be bought right now ("" if it can): "stock", "coins", "room" or "have".
+func buy_block(good: String) -> String:
+	if Outfitter.is_curio(good) and has_curio(good):
+		return "have"
+	if state != State.AT_JUNCTION or stock_left(good) <= 0:
+		return "stock"
+	if coins < int(stall()[good]["price"]):
+		return "coins"
+	if Outfitter.weight_of(good) > free_space() + 0.001:
+		return "room"
+	return ""
 
 
 func can_buy(good: String) -> bool:
-	if state != State.AT_JUNCTION or stock_left(good) <= 0:
-		return false
-	return coins >= int(stop()["stall"][good]["price"])
+	return buy_block(good) == ""
 
 
 ## Buy one lot of a good at this stop. Returns what changed, or [] if it can't.
 func buy(good: String) -> Array:
 	if not can_buy(good):
 		return []
-	var lot: Dictionary = stop()["stall"][good]
+	var lot: Dictionary = stall()[good]
 	coins -= int(lot["price"])
-	var b: Dictionary = bought.get(at, {})
+	var key := _stall_key()
+	var b: Dictionary = bought.get(key, {})
 	b[good] = int(b.get(good, 0)) + 1
-	bought[at] = b
+	bought[key] = b
 	var d: Array = [{"icon": "coins", "amount": -int(lot["price"])}]
 	d.append_array(apply_fx(Settlements.goods_fx(good)))
 	journal.append("Bought %s." % Settlements.good_name(good))
 	return d
+
+
+## How many lots of a good you could hand back to the outfitter (only before setting out).
+func sellable(good: String) -> int:
+	if not outfitting():
+		return 0
+	var n := int(bought.get("outfitter", {}).get(good, 0))
+	match good:
+		"food":
+			n = mini(n, floori(provisions / 10.0 + 0.001))
+		"water":
+			n = mini(n, floori(water / 10.0 + 0.001))
+		_:
+			if good.begins_with("spare_"):
+				n = mini(n, spare_count(good.trim_prefix("spare_")))
+			elif Outfitter.is_curio(good):
+				n = mini(n, 1 if has_curio(good) else 0)
+			elif BattleItems.has(good):
+				n = mini(n, item_free(good))
+			else:
+				n = 0
+	return n
+
+
+## Hand a lot back to the outfitter for a full refund. Returns what changed, or [].
+func sell_back(good: String) -> Array:
+	if sellable(good) <= 0:
+		return []
+	var price := int(Outfitter.STOCK[good][0])
+	match good:
+		"food":
+			provisions -= 10.0
+		"water":
+			water -= 10.0
+		_:
+			if good.begins_with("spare_"):
+				_add_spare(good.trim_prefix("spare_"), -1)
+			elif Outfitter.is_curio(good):
+				curios.erase(good)
+			else:
+				items[good] = item_count(good) - 1
+				if int(items[good]) <= 0:
+					items.erase(good)
+	var b: Dictionary = bought["outfitter"]
+	b[good] = int(b[good]) - 1
+	coins += price
+	return [{"icon": "coins", "amount": price}, {"icon": Settlements.good_icon(good), "amount": -1}]
+
+
+## "Pack it for me": buy the shopkeeper's kit, in their order, while coins and room last.
+## Returns how many lots were bought.
+func pack_for_me() -> int:
+	var n := 0
+	for good in Outfitter.keeper(crossing_no)["kit"]:
+		if not buy(good).is_empty():
+			n += 1
+	return n
+
+
+# ---------- roadside barter ----------
+
+## A traveller wants one thing you carry and offers something you're short of. Built from what
+## the caravan has right now, so it is a different deal each time (or empty if nothing fits).
+func make_barter() -> Dictionary:
+	var wants: Array = []
+	for k in Wagon.SPARES:
+		if spare_count(k) > 0:
+			wants.append({"cost": {"spare_" + k: -1}, "label": Wagon.SPARES[k]["name"]})
+	if provisions >= 40.0:
+		wants.append({"cost": {"food": -20}, "label": "20 food"})
+	if water >= 30.0:
+		wants.append({"cost": {"water": -15}, "label": "15 water"})
+	for iid in items:
+		if item_free(iid) > 0:
+			wants.append({"cost": {"give_item": iid}, "label": BattleItems.item_name(iid)})
+	if light_dust > 0:
+		wants.append({"cost": {"light_dust": -1}, "label": "Light dust"})
+	var offers: Array = []
+	for k in Wagon.SPARES:
+		if spare_count(k) == 0:
+			offers.append({"fx": {"spare_" + k: 1}, "label": "a " + String(Wagon.SPARES[k]["name"])})
+	if days_of(water, daily_water()) < 4.0:
+		offers.append({"fx": {"water": 30}, "label": "30 water"})
+	if days_of(provisions, daily_provisions()) < 5.0:
+		offers.append({"fx": {"food": 35}, "label": "35 food"})
+	if offers.is_empty():
+		offers.append({"fx": {"coins": 18}, "label": "18 coins"})
+		offers.append({"fx": {"technique": 1}, "label": "a technique scroll"})
+	if wants.is_empty():
+		return {}
+	var w: Dictionary = wants[life_rng.randi_range(0, wants.size() - 1)]
+	var o: Dictionary = offers[life_rng.randi_range(0, offers.size() - 1)]
+	# Never trade a spare for the same spare, or food for food.
+	for tries in 6:
+		if not _same_goods(w["cost"], o["fx"]):
+			break
+		o = offers[life_rng.randi_range(0, offers.size() - 1)]
+	if _same_goods(w["cost"], o["fx"]):
+		return {}
+	var e: Dictionary = TrailEvents.by_id("barter").duplicate(true)
+	e["text"] = "A traveller eyes your wagon. They want your %s and offer %s." % [w["label"], o["label"]]
+	var fx: Dictionary = o["fx"].duplicate()
+	fx["text"] = "A handshake, and the swap is made."
+	e["choices"] = [
+		{"label": "Trade", "cost": w["cost"], "safe_paid": true, "success": fx},
+		{"label": "Ride on", "success": {"text": "You keep what you have."}},
+	]
+	return e
+
+
+static func _same_goods(cost: Dictionary, fx: Dictionary) -> bool:
+	for k in cost:
+		if fx.has(k):
+			return true
+	return false
 
 
 # ---------- creatures and battle lineup ----------

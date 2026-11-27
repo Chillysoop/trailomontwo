@@ -69,7 +69,7 @@ func test_next_crossing_sets_out_with_a_purse() -> void:
 	var e := _played()
 	e.coins = 3
 	var n := SaveGame.next_crossing(SaveGame.caravan(e), 2)
-	check_eq(n.coins, Expedition.WORLD_START_COINS, "a broke caravan still gets the starting purse")
+	check_eq(n.coins, Expedition.WORLD_START_COINS + Outfitter.PURSE, "a broke caravan still gets the starting purse")
 	e.coins = 200
 	n = SaveGame.next_crossing(SaveGame.caravan(e), 2)
 	check_eq(n.coins, 200, "savings carry over")

@@ -47,7 +47,10 @@ static func chips(deltas: Array) -> String:
 static func cost(c: Dictionary) -> String:
 	var parts: Array[String] = []
 	for k in c:
-		var icon: String = {"food": "food", "water": "water", "coins": "coins", "repair_kits": "repair_kit"}.get(k, k)
+		if k == "give_item":
+			parts.append("[color=#%s]{i:%s}-1[/color]" % [BAD, String(c[k])])
+			continue
+		var icon: String = {"food": "food", "water": "water", "coins": "coins"}.get(k, k)
 		parts.append("[color=#%s]{i:%s}%d[/color]" % [BAD, icon, int(c[k])])
 	return " ".join(parts)
 
@@ -55,7 +58,8 @@ static func cost(c: Dictionary) -> String:
 ## What a safe/paid choice gives (its success effects) as small chips, without rolling anything.
 static func preview(fx: Dictionary) -> String:
 	var parts: Array[String] = []
-	var map := {"food": "food", "water": "water", "coins": "coins", "repair_kits": "repair_kit", "light_dust": "light_dust",
+	var map := {"food": "food", "water": "water", "coins": "coins", "spare_axle": "spare_axle", "spare_harness": "spare_harness",
+		"spare_canvas": "spare_canvas", "light_dust": "light_dust",
 		"dark_dust": "dark_dust", "technique": "technique", "xp": "xp", "health": "health", "fatigue": "tired", "wear": "wagon"}
 	for k in map:
 		if fx.has(k):
