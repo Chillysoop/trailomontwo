@@ -133,6 +133,12 @@ var folk_heard := {}
 ## Camp life (see Camp): the crew's morale (0-100, fresh each crossing), the pantry of foraged
 ## ingredients, plants you've learned to tell apart, and where you last cooked/foraged/camped.
 var morale := Camp.START
+## The trail boss's background (see Backgrounds), picked once per run.
+var background := ""
+## Where this crossing's cargo is bound: the usual goal, or the other market on the far edge
+## (picked at the outfitter). dest_pay scales what the cargo pays on arrival.
+var main_goal := ""
+var dest_pay := 1.0
 var pantry := {}
 var known_plants := {}
 var cooked_at := ""
@@ -229,6 +235,39 @@ static func new_default(rng_seed := -1) -> Expedition:
 	return e
 
 
+# ---------- the trail boss ----------
+
+func is_bg(id: String) -> bool:
+	return background == id
+
+
+## Pick the trail boss's background (once, at the start of a run) and hand out its starting kit.
+func set_background(id: String) -> void:
+	if not Backgrounds.ALL.has(id) or background != "":
+		return
+	background = id
+	match id:
+		"tinker":
+			spares["axle"] = spare_count("axle") + 1
+			spares["harness"] = spare_count("harness") + 1
+		"herbalist":
+			for p in Camp.PLANTS:
+				known_plants[String(p[0])] = true
+			pantry["herbs"] = int(pantry.get("herbs", 0)) + 2
+		"merchant":
+			coins += Backgrounds.MERCHANT_COINS
+	note(Backgrounds.info(id)["icon"], "Set out as a %s." % String(Backgrounds.info(id)["name"]).to_lower())
+
+
+## Check bonus from the background for a trail job.
+func bg_bonus(cap: String) -> int:
+	if is_bg("herbalist") and (cap == "forage" or cap == "heal"):
+		return Backgrounds.CHECK_BONUS
+	if is_bg("ranger") and cap == "scout":
+		return Backgrounds.CHECK_BONUS
+	return 0
+
+
 ## The three Trailomon a new caravan can pick from. Each is the first stage of a three-stage
 ## line: a sturdy guard, a quick striker and a bruiser who can help pull. The rest of the team
 ## has to be caught on the road.
@@ -312,9 +351,72 @@ func setup_map(no: int) -> void:
 	state = State.AT_JUNCTION
 	trip = {}
 	seen[map.goal] = true
+	main_goal = map.goal
+	dest_pay = 1.0
 	reveal(at)
-	# The season: frost closes in a while after the quickest possible crossing would arrive.
+	_set_frost()
+
+
+## The season: frost closes in a while after the quickest possible crossing would arrive.
+func _set_frost() -> void:
 	frost_day = 0 if map.is_test else day + ceili(map.shortest_days(map.start, map.goal) * FROST_SLACK) + FROST_EXTRA
+
+
+# ---------- destinations ----------
+
+## The other market pays this much more (or less) per day further (or nearer) than the usual one.
+const PAY_PER_DAY := 0.15
+const PAY_MIN := 0.7
+const PAY_MAX := 1.6
+
+
+## The two places this crossing's cargo can go: [{"id", "to", "days", "pay", "label", "text"}].
+## The second is the other stop on the far edge (empty on the test route).
+func destinations() -> Array:
+	if map == null or map.is_test or main_goal == "":
+		return []
+	var main_days := map.shortest_days(map.start, main_goal)
+	var out: Array = [{"id": "main", "to": main_goal, "days": main_days, "pay": 1.0, "label": "The usual market",
+		"text": "Where the cargo was always meant to go."}]
+	var layer := int(map.junctions[main_goal]["layer"])
+	var best := ""
+	var best_days := -1
+	var others: Array = []
+	for id in map.junctions:
+		if id != main_goal and String(id).begins_with("j") and int(map.junctions[id]["layer"]) == layer:
+			others.append(id)
+	others.sort()
+	for id in others:
+		var d := map.shortest_days(map.start, id)
+		if d > best_days:
+			best = id
+			best_days = d
+	if best == "":
+		return out
+	var diff := best_days - main_days
+	var pay := snappedf(clampf(1.0 + PAY_PER_DAY * diff, PAY_MIN, PAY_MAX), 0.05)
+	out.append({"id": "alt", "to": best, "days": best_days, "pay": pay,
+		"label": "A richer market, further on" if diff > 0 else ("A poorer market, closer" if diff < 0 else "Another market, just as far"),
+		"text": ("Traders there pay more for your cargo, if you beat the frost." if diff > 0 else ("Quicker to reach, but they pay less for the cargo." if diff < 0 else "Same pay, a different road, a different set of dangers."))})
+	return out
+
+
+## Pick where the cargo goes (only while outfitting at the start).
+func choose_destination(id: String) -> bool:
+	if not outfitting():
+		return false
+	for d in destinations():
+		if d["id"] == id:
+			map.goal = String(d["to"])
+			dest_pay = float(d["pay"])
+			seen[map.goal] = true
+			_set_frost()
+			return true
+	return false
+
+
+func destination() -> String:
+	return "alt" if map != null and main_goal != "" and map.goal != main_goal else "main"
 
 
 # ---------- the season ----------
@@ -368,6 +470,8 @@ func reveal(id: String) -> void:
 	if has_curio("brass_spyglass"):
 		depth += 1
 	if has_upgrade("lantern_mast"):
+		depth += 1
+	if is_bg("ranger"):
 		depth += 1
 	if map.kind_of(id) == "lookout":
 		depth = 3
@@ -518,7 +622,7 @@ func has_upgrade(id: String) -> bool:
 
 ## Wear multiplier from upgrades (spring wheels).
 func wear_mult() -> float:
-	return Inventor.WEAR_MULT if has_upgrade("spring_wheels") else 1.0
+	return (Inventor.WEAR_MULT if has_upgrade("spring_wheels") else 1.0) * (Backgrounds.TINKER_WEAR if is_bg("tinker") else 1.0)
 
 
 ## The stop where Pip has set up shop this crossing.
@@ -1085,7 +1189,7 @@ func _arrive() -> bool:
 	state = State.ARRIVED if at == map.goal else State.AT_JUNCTION
 	_hand_over_deliveries()
 	if state == State.ARRIVED:
-		cargo_paid = cargo_value() / CARGO_PAY_DIV
+		cargo_paid = roundi(cargo_value() / CARGO_PAY_DIV * (Backgrounds.MERCHANT_PAY if is_bg("merchant") else 1.0) * dest_pay)
 		coins += cargo_paid
 		journal.append("The cargo is delivered: +%d coins." % cargo_paid)
 		note("score", "Reached %s on day %d." % [map.name_of(at), day])
@@ -1201,6 +1305,8 @@ func _ailment_chance() -> float:
 		c *= 1.5
 	if ["Swamp", "Jungle"].has(String(trip.get("terrain", ""))):
 		c *= 1.3
+	if is_bg("herbalist"):
+		c *= Backgrounds.HERBALIST_AILMENT
 	return c
 
 
@@ -1380,7 +1486,7 @@ func _hand_over_deliveries() -> void:
 		if String(c.get("deliver_to", "")) != at:
 			continue
 		var late := day > int(c["due"])
-		var pay := int(c["pay"]) / (2 if late else 1)
+		var pay := roundi(int(c["pay"]) / (2 if late else 1) * (Backgrounds.MERCHANT_PAY if is_bg("merchant") else 1.0))
 		if not late:
 			deliveries_on_time += 1
 			change_morale(Camp.ON["deliver"])
@@ -1481,6 +1587,8 @@ func _finish_hunt(battle: Battle) -> Array[String]:
 				food += n
 				if not f.prey:
 					charger_food = n
+		if is_bg("ranger"):
+			food *= Backgrounds.RANGER_HUNT
 		var got := room_for("food", food)
 		provisions += got
 		var fled := 0
@@ -1525,7 +1633,7 @@ func repair_plan() -> Dictionary:
 		return {"kind": "spare", "days": 1, "spare": spare, "helper": "", "skilled": false}
 	var job: String = Wagon.SPARES[spare]["job"]
 	var helper := best_helper(job)
-	var skilled := helper != "" and job_rank(helper, job) >= Wagon.JURY_RANK
+	var skilled := (helper != "" and job_rank(helper, job) >= Wagon.JURY_RANK) or is_bg("tinker")
 	return {"kind": "jury", "days": 1 if skilled else 2, "spare": spare, "helper": helper, "skilled": skilled, "job": job}
 
 
@@ -1555,7 +1663,7 @@ func repair() -> void:
 			if plan["helper"] != "":
 				gain_xp(plan["helper"], TrailEvents.JOB_XP["mixed"])
 			journal.append("No %s. %s." % [Wagon.SPARES[plan["spare"]]["name"],
-				("%s rigs something that holds" % Species.info(plan["helper"])["name"]) if plan["skilled"] else "Patched with rope and hope"])
+				(("%s rigs something that holds" % display_name(plan["helper"])) if plan["helper"] != "" else "Your tinker's hands rig something that holds") if plan["skilled"] else "Patched with rope and hope"])
 	if wagon.integrity <= 0:
 		state = State.FAILED
 		fail_reason = "The wagon fell apart during repairs."
@@ -1662,8 +1770,9 @@ func event_choices(event: Dictionary) -> Array:
 					score += int(a[cap])
 					assists.append({"who": who, "cap": cap, "bonus": int(a[cap])})
 			view["assists"] = assists
-			score += morale_bonus()
+			score += morale_bonus() + bg_bonus(String(c["cap"]))
 			view["morale"] = morale_bonus()
+			view["bg"] = bg_bonus(String(c["cap"]))
 			if c["cap"] == "float" and has_upgrade("float_tanks"):
 				score += Inventor.FLOAT_BONUS
 				view["gear"] = "float_tanks"
@@ -2234,6 +2343,9 @@ func make_barter() -> Dictionary:
 	e["text"] = "A traveller eyes your wagon. They want your %s and offer %s." % [w["label"], o["label"]]
 	var fx: Dictionary = o["fx"].duplicate()
 	fx["text"] = "A handshake, and the swap is made."
+	if is_bg("merchant"):
+		fx["coins"] = int(fx.get("coins", 0)) + 10
+		fx["text"] = "You haggle them up a little. A handshake, and the swap is made."
 	e["choices"] = [
 		{"label": "Trade", "cost": w["cost"], "safe_paid": true, "success": fx},
 		{"label": "Ride on", "success": {"text": "You keep what you have."}},

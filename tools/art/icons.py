@@ -190,6 +190,11 @@ ICONS = {
     "ing_mushrooms": "two small brown and red capped mushrooms",
     "ing_berries": "a small cluster of round purple and red berries on a twig",
     "ing_fish": "a small silver blue fish with a green fin",
+    # trail-boss backgrounds (wave 6)
+    "bg_tinker": "a brass gear with a small wrench through it and a leather tool strap",
+    "bg_herbalist": "a small mortar and pestle with a green leaf sprig and a flower",
+    "bg_ranger": "a green hooded ranger cloak pin with a feather and a small bow",
+    "bg_merchant": "a small leather coin purse with gold coins and a brass scale",
 }
 
 

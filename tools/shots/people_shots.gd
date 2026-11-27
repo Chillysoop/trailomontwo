@@ -24,6 +24,11 @@ func _run() -> void:
 			(n as Button).pressed.emit()
 			break
 	await _frames(5)
+	for n in root.find_children("*", "Button", true, false):
+		if (n as Button).text.begins_with("Lead as "):
+			(n as Button).pressed.emit()
+			break
+	await _frames(5)
 	var c := Expedition.new_default(11)
 	for id in ["brambleback", "coilhusk", "reedwake", "mirelamp", "gillhorn"]:
 		if not c.roster.has(id) and c.roster.size() < Expedition.TEAM_MAX:

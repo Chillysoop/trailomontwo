@@ -25,7 +25,7 @@ const CARRY := ["roster", "stored", "levels", "xp", "kits", "boosts", "known", "
 	"memory", "lineup", "items", "item_slots", "techniques", "light_dust", "dark_dust", "dust_used", "coins",
 	"map", "seen", "encountered", "met_in", "lures", "fresh_start", "score_history", "nicknames", "seals",
 	"upgrades", "family_stage", "family_trust", "flares", "caught", "glints", "lead", "tempers", "quirks", "eggs", "rival_record", "starter",
-	"pantry", "known_plants"]
+	"pantry", "known_plants", "background"]
 
 ## The save picked on the title screen for the crossing being played ("" = none, e.g. tests).
 static var current_slot := ""

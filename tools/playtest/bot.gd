@@ -21,6 +21,8 @@ var stats := {"battles": 0, "wins": 0, "losses": 0, "retreats": 0, "events": 0, 
 var exp: Node
 ## Which first partner to pick (starter=<id>); empty = a random one of the three.
 var starter := ""
+## Which trail-boss background (bg=<id>); empty = a random one.
+var bg := ""
 var started_ms := 0
 var _crossing_seen := 0
 
@@ -36,6 +38,7 @@ func _initialize() -> void:
 			"seed": seed_value = int(kv[1])
 			"style": style = kv[1]
 			"starter": starter = kv[1]
+			"bg": bg = kv[1]
 	rng.seed = seed_value
 	seed(seed_value)
 	DirAccess.make_dir_recursive_absolute(out_dir)
@@ -67,6 +70,18 @@ func _run() -> void:
 		waited += 1
 		choose = _find_button(root, "Choose %s" % Species.info(starter)["name"])
 	choose.pressed.emit()
+	await _frames(10)
+	await _shot("02b_background_pick")
+	if bg == "":
+		bg = Backgrounds.ORDER[rng.randi_range(0, Backgrounds.ORDER.size() - 1)]
+	var lead := _find_button(root, "Lead as %s" % Backgrounds.info(bg)["name"])
+	waited = 0
+	while lead == null and waited < 300:
+		await _frames(5)
+		waited += 1
+		lead = _find_button(root, "Lead as %s" % Backgrounds.info(bg)["name"])
+	lead.pressed.emit()
+	_say("BACKGROUND %s" % bg)
 	await _frames(10)
 	exp = current_scene
 	# The how-to-play guide opens for a new caravan: read it page by page, like a new player.
