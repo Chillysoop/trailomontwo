@@ -342,3 +342,35 @@ func test_hall_of_fame_keeps_finished_crossings() -> void:
 	check_eq(String(all[0]["team"][0]["name"]), "Clod", "names go up on the wall")
 	DirAccess.remove_absolute(HallOfFame.path)
 	HallOfFame.path = keep
+
+
+func test_personality_quirks_move_morale() -> void:
+	var e := Expedition.new_game("mossmole", 3)
+	check(Personalities.KINDS.has(String(e.quirks.get("mossmole", ""))), "the starter has a quirk")
+	e.pending_recruit = "thornfang"
+	e.recruit()
+	check(e.quirks.has("thornfang"), "catches get one")
+	check(SaveGame.CARRY.has("quirks"), "carried")
+	e.quirks = {"mossmole": "glutton", "thornfang": "sunny"}
+	e.morale = 50
+	check_eq(e.quirk_moment("meal"), 4, "the glutton loves a meal")
+	check_eq(e.morale, 54, "morale went up")
+	check_eq(e.quirk_moment("rest"), 3, "sunny lifts the camp")
+	check(e.journal[e.journal.size() - 1].contains(e.display_name("thornfang")), "the journal names who")
+	e.quirks["mossmole"] = "sore_loser"
+	check_eq(e.quirk_moment("lose", ["mossmole"]), -3, "only fighters react to a loss")
+	check_eq(e.quirk_moment("lose", ["thornfang"]), 0, "a sunny one shrugs it off")
+	var card := CreatureCard.team_opts(e, "mossmole")
+	check_eq(String(card["quirk"]), "sore_loser", "shown on the card")
+
+
+func test_field_guide_plants_page() -> void:
+	var e := Expedition.new_game("mossmole", 3)
+	check(FieldGuideScreen.TABS.has("Plants"), "a plants tab")
+	var page := FieldGuideScreen.plants_page(e)
+	check(not page.contains("Violet caps"), "untried plants are hidden")
+	e.known_plants["violet_caps"] = true
+	e.known_plants["snapwort"] = true
+	page = FieldGuideScreen.plants_page(e)
+	check(page.contains("Violet caps") and page.contains("Snapwort"), "tried plants show")
+	check(page.contains("tried 2 of %d" % Camp.PLANTS.size()), "a count")

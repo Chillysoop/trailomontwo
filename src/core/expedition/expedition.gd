@@ -163,6 +163,8 @@ var glints := {}
 var lead := ""
 ## Each Trailomon's temperament (Temperaments): species id -> kind.
 var tempers := {}
+## Each Trailomon's personality quirk (Personalities): species id -> kind.
+var quirks := {}
 ## Eggs riding in the wagon: [{"species", "days"}]. Each day on the road or at rest brings one
 ## closer; a hatchling joins without a catch roll.
 var eggs: Array = []
@@ -257,6 +259,7 @@ static func new_game(starter: String, rng_seed := -1) -> Expedition:
 	e.lures = START_LURES
 	e.tempers = {starter: Temperaments.roll(e.life_rng)}
 	e.starter = starter
+	e.quirks = {starter: Personalities.roll(e.life_rng)}
 	e.fresh_start = true
 	e.cargo.assign(START_CARGO.duplicate(true))
 	e.fatigue = {starter: 0.0}
@@ -565,6 +568,43 @@ func hear_folk() -> Array:
 # ---------- camp life ----------
 
 ## Raise or lower the crew's morale. reason goes in the journal for bigger swings.
+## The team's quirks react to a moment: their morale shifts add up, with a journal line naming
+## who reacted. who: only these Trailomon (e.g. the ones who fought); empty = the whole team.
+## Returns the total change.
+func quirk_moment(moment: String, who: Array = []) -> int:
+	var total := 0
+	var names: Array[String] = []
+	for id in (who if not who.is_empty() else Array(roster)):
+		var n := Personalities.amount(String(quirks.get(id, "")), moment)
+		if n != 0:
+			total += n
+			names.append(display_name(id))
+	if total != 0:
+		if Personalities.LINES.has(moment):
+			journal.append(Personalities.LINES[moment] % " and ".join(names))
+		change_morale(total)
+	return total
+
+
+## The daily quirks on a travel day: home roads, the lead, storms, thin rations.
+func _quirk_day() -> void:
+	var terrain := String(trip.get("terrain", ""))
+	var total := 0
+	for id in roster:
+		var q := String(quirks.get(id, ""))
+		if q == "":
+			continue
+		if terrain != "" and String(Species.info(id)["type"]) == terrain:
+			total += Personalities.amount(q, "home_day")
+		if lead_companion() == id:
+			total += Personalities.amount(q, "lead_day")
+		if weather == "rain" or weather == "storm":
+			total += Personalities.amount(q, "storm_day")
+		if rations == "thin":
+			total += Personalities.amount(q, "thin_day")
+	change_morale(total)
+
+
 func change_morale(amount: int, reason := "") -> void:
 	if amount == 0:
 		return
@@ -645,6 +685,7 @@ func cook() -> Array:
 	var d := [{"icon": "food", "amount": -roundi(Camp.MEAL_FOOD)}]
 	d.append_array(apply_fx(fx))
 	journal.append("You cook %s. Everyone gathers round." % String(r["name"]).to_lower())
+	quirk_moment("meal")
 	note("cook", "Cooked %s." % String(r["name"]).to_lower())
 	return d
 
@@ -839,6 +880,8 @@ func spend_day(travelling := false) -> String:
 		health -= THIRST_DAMAGE
 		notes.append("not enough water")
 	_morale_day(notes.has("not enough food") or notes.has("not enough water"), travelling)
+	if travelling:
+		_quirk_day()
 	if health <= 0:
 		health = 0
 		state = State.FAILED
@@ -1140,6 +1183,7 @@ func rest() -> void:
 	if state != State.FAILED:
 		journal.append("Rested. The haulers recovered and the team licked its wounds%s." % ((", %d back on their feet" % woke) if woke > 0 else ""))
 		change_morale(Camp.ON["rest"])
+		quirk_moment("rest")
 		_campfire()
 
 
@@ -1233,6 +1277,7 @@ func _landmark_card() -> void:
 		return
 	landmarks_seen[region] = true
 	pending_event = Landmarks.card(lm, String(map.regions[region]["name"]), day)
+	quirk_moment("landmark")
 	note("landmark", "Saw %s." % Landmarks.name_of(lm))
 
 
@@ -2373,7 +2418,7 @@ func evolve(id: String, to: String) -> String:
 		var i: int = list.find(id)
 		if i >= 0:
 			list[i] = to
-	for d in [fatigue, levels, xp, kits, boosts, known, memory, dust_used, nicknames, tempers, glints]:
+	for d in [fatigue, levels, xp, kits, boosts, known, memory, dust_used, nicknames, tempers, quirks, glints]:
 		if d.has(id):
 			d[to] = d[id]
 			d.erase(id)
@@ -2711,6 +2756,8 @@ func finish_battle(battle: Battle) -> Array[String]:
 				lines.append("{i:seal_%s} You earn the %s." % [gid, seal_name(gid)])
 			lines.append("You gather what they left behind: +%d food, +%d water." % [VICTORY_FOOD, VICTORY_WATER])
 			change_morale(Camp.ON["win"] * (2 if guardian else 1))
+			if battle != null:
+				quirk_moment("win", battle.side_fighters(Formation.Side.PLAYER).map(func(f): return f.species))
 			coins += VICTORY_COINS + bounty
 			lines.append("+%d {i:coins} coins." % (VICTORY_COINS + bounty))
 		Battle.Outcome.RETREAT, Battle.Outcome.WITHDRAW:
@@ -2730,6 +2777,8 @@ func finish_battle(battle: Battle) -> Array[String]:
 			wagon.integrity = maxi(0, wagon.integrity - BREACH_INTEGRITY)
 			lines.append("Defeat. They break through to the wagon.")
 			change_morale(Camp.ON["lose"], "A bitter defeat")
+			if battle != null:
+				quirk_moment("lose", battle.side_fighters(Formation.Side.PLAYER).map(func(f): return f.species))
 			lines.append("The wagon takes a beating (-%d%% integrity) and they make off with %d food and %d water." % [BREACH_INTEGRITY, food, drink])
 	# Battle items in the slots are used up; loot after a win.
 	if battle != null and not battle.items_used.is_empty():
@@ -2933,6 +2982,8 @@ func recruit() -> String:
 		line = "%s joined you%s. It waits in storage until you swap it into the team." % [Species.info(id)["name"], at_lv]
 	if not tempers.has(id):
 		tempers[id] = Temperaments.roll(life_rng)
+	if not quirks.has(id):
+		quirks[id] = Personalities.roll(life_rng)
 	creature_hp[id] = max_hp(id)
 	encountered[id] = true
 	caught[id] = true

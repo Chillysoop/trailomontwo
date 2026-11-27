@@ -11,7 +11,7 @@ signal closed
 const SCREEN := Vector2(640, 360)
 const TILE := 30.0
 const COLS := 10
-const TABS := ["Forest", "River", "Swamp", "Mountain", "Snow", "Jungle", "Blight", "Glow", "Guardians"]
+const TABS := ["Forest", "River", "Swamp", "Mountain", "Snow", "Jungle", "Blight", "Glow", "Guardians", "Plants"]
 
 var crossing: Expedition
 var _tab := "Forest"
@@ -89,7 +89,7 @@ func _ready() -> void:
 	col.add_child(tabs)
 	for t in TABS:
 		var b := Ui.button(t, 7)
-		var ic := "seal_hollow_stag" if t == "Guardians" else Glossary.icon(Glossary.habitat_id(t))
+		var ic := "seal_hollow_stag" if t == "Guardians" else ("forage" if t == "Plants" else Glossary.icon(Glossary.habitat_id(t)))
 		b.icon = Rich.icon_tex(ic)
 		b.add_theme_constant_override("icon_max_width", 12)
 		b.toggle_mode = true
@@ -130,6 +130,19 @@ func _ready() -> void:
 	_show_tab(_tab)
 
 
+## The plants page: every wild plant from foraging. Ones you haven't tried show as "?".
+static func plants_page(e: Expedition) -> String:
+	var lines: Array[String] = ["[b]Wild plants[/b]  (tried %d of %d)" % [e.known_plants.size(), Camp.PLANTS.size()]]
+	for p in Camp.PLANTS:
+		var id: String = p[0]
+		if e.known_plants.has(id):
+			var good: bool = p[2]
+			lines.append("[color=#%s]%s[/color] [b]%s[/b]: %s" % ["9fe39a" if good else "ff8a7a", "Good" if good else "Bad", String(p[1]).left(1).to_upper() + String(p[1]).substr(1), String(p[3] if good else p[4])])
+		else:
+			lines.append("[color=#%s]? ??? : not tried yet. Forage to find it.[/color]" % CreatureCard.MUTED)
+	return "\n".join(lines)
+
+
 func _update_count() -> void:
 	var met := 0
 	var had := 0
@@ -147,6 +160,10 @@ func _show_tab(tab: String) -> void:
 		(_tab_btns[t] as Button).button_pressed = t == tab
 	for c in _grid.get_children():
 		c.queue_free()
+	if tab == "Plants":
+		_pic.texture = Rich.icon_tex("forage")
+		Rich.set_text(_page, plants_page(crossing))
+		return
 	var ids := species_on(tab)
 	for id in ids:
 		_grid.add_child(_tile(id))
