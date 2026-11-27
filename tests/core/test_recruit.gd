@@ -59,3 +59,15 @@ func test_companions_swap_clicks() -> void:
 	s.refresh()
 	check(s.crossing.stored.has("inkhoot"), "nothing swapped until a card is clicked")
 	s.free()
+
+
+func test_recruits_join_near_the_team_level() -> void:
+	var e := Expedition.new_default(5)
+	for id in e.roster:
+		while e.level(id) < 8:
+			e.gain_xp(id, Leveling.xp_to_next(e.level(id)))
+	var waiting := e.pending_count()
+	e.pending_recruit = "thornfang"
+	e.recruit()
+	check_eq(e.level("thornfang"), 6, "two below the team")
+	check_eq(e.pending_count(), waiting + 5, "its level-up choices wait for you")

@@ -115,6 +115,27 @@ static func caravan(e: Expedition) -> Dictionary:
 
 # ---------- crossings ----------
 
+## What a team keeps when a failed crossing is tried again: the experience and growth it
+## earned on the way. Supplies, wagon, items and recruits go back to how the crossing began.
+const GROWTH := ["levels", "xp", "kits", "boosts", "known", "pending_levels", "memory",
+	"techniques", "light_dust", "dark_dust", "dust_used"]
+
+## The caravan for retrying a failed crossing: as it set out, plus the growth from the attempt.
+static func retry_caravan(start: Dictionary, failed: Expedition) -> Dictionary:
+	var out := start.duplicate(true)
+	var now := caravan(failed)
+	var owned: Array = Array(start.get("roster", [])) + Array(start.get("stored", []))
+	for k in GROWTH:
+		if now.has(k):
+			out[k] = now[k]
+	var waiting := []
+	for p in out.get("pending_levels", []):
+		if owned.has(p["id"]):
+			waiting.append(p)
+	out["pending_levels"] = waiting
+	return out
+
+
 ## A fresh crossing with a caravan carried over: same team and progress, everyone rested and
 ## healed, new supplies, cargo and wagon.
 static func next_crossing(caravan_data: Dictionary, rng_seed := -1, crossing_no := 2) -> Expedition:

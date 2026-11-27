@@ -199,6 +199,8 @@ func _style_targets(hover := "") -> void:
 	if _picked >= 0:
 		new_name = String(CombatData.move(crossing.pending_levels[0]["options"][_picked]["move"])["name"]).to_upper()
 	for where in _targets:
+		if not is_instance_valid(_targets[where]) or not is_instance_valid(_target_tags.get(where)):
+			continue
 		var b: Button = _targets[where]
 		var hot: bool = _picked >= 0 and where == hover
 		var label := "EQUIPPED" if where == "equipped" else "{i:memory} MEMORY"
