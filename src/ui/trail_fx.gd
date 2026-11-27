@@ -60,7 +60,7 @@ static func preview(fx: Dictionary) -> String:
 	var parts: Array[String] = []
 	var map := {"food": "food", "water": "water", "coins": "coins", "spare_axle": "spare_axle", "spare_harness": "spare_harness",
 		"spare_canvas": "spare_canvas", "light_dust": "light_dust",
-		"dark_dust": "dark_dust", "technique": "technique", "xp": "xp", "health": "health", "fatigue": "tired", "wear": "wagon"}
+		"dark_dust": "dark_dust", "technique": "technique", "xp": "xp", "health": "health", "fatigue": "tired", "wear": "wagon", "morale": "morale", "trust": "family", "lures": "lure"}
 	for k in map:
 		if fx.has(k):
 			var v := int(fx[k])
@@ -68,6 +68,9 @@ static func preview(fx: Dictionary) -> String:
 			parts.append("[color=#%s]{i:%s}%s%d[/color]" % [GOOD if good else BAD, map[k], "+" if v > 0 else "", v])
 	if fx.has("days"):
 		parts.append("[color=#%s]{i:day}+%d[/color]" % [BAD, int(fx["days"])])
+	if fx.has("pantry"):
+		for k in fx["pantry"]:
+			parts.append("[color=#%s]{i:%s}+%d[/color]" % [GOOD, Camp.ingredient(k)["icon"], int(fx["pantry"][k])])
 	if fx.has("item"):
 		parts.append("[color=#%s]{i:item_slot}+1[/color]" % GOOD)
 	if fx.has("recruit"):

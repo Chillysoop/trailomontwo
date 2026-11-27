@@ -211,8 +211,16 @@ func _junction_tick(c: Expedition) -> void:
 					hurt += 1
 	elif c.wagon.broken == Wagon.Part.RUNNING_GEAR:
 		exp.call("_do_repair")
-	if c.state == Expedition.State.FAILED:
+	if c.state == Expedition.State.FAILED or not c.pending_event.is_empty():
 		return
+	# Camp life: forage once per stop, cook when spirits sag.
+	if style != "reckless" and c.forage_block() == "":
+		stats["forages"] = int(stats.get("forages", 0)) + 1
+		exp.call("_do_forage")
+		return
+	if style != "reckless" and c.cook_block() == "" and c.morale < 70:
+		exp.call("_do_cook")
+		_say("COOK c%d morale now %d" % [c.crossing_no, c.morale])
 	# At Pip's workshop: fit an upgrade when there are coins to spare.
 	if style != "reckless" and c.at_workshop():
 		for u in ["spring_wheels", "float_tanks", "brass_horn", "cargo_rack", "dew_still", "lantern_mast"]:
@@ -255,6 +263,8 @@ func _junction_tick(c: Expedition) -> void:
 		else:
 			_say("Can't set off (%s), resting" % go.text)
 			exp.call("_do_rest")
+		if not c.pending_event.is_empty():
+			return
 		exp.call("_pick", seg)
 		tries += 1
 	if go.disabled:
@@ -562,7 +572,7 @@ func _end_tick(c: Expedition) -> bool:
 	var lv: Array = []
 	for id in c.roster:
 		lv.append("%s:%d" % [id, c.level(id)])
-	_say("END crossing %d %s day %d | %s | team %s" % [c.crossing_no, "ARRIVED" if won else "FAILED (" + c.fail_reason + ")", c.day, "coins %d food %d water %d" % [c.coins, c.provisions, c.water], ", ".join(lv)])
+	_say("END crossing %d %s day %d | %s | team %s" % [c.crossing_no, "ARRIVED" if won else "FAILED (" + c.fail_reason + ")", c.day, "coins %d food %d water %d morale %d" % [c.coins, c.provisions, c.water, c.morale], ", ".join(lv)])
 	if won:
 		var sc := c.arrival_score()
 		_say("SCORE c%d %d %s (finale %s)" % [c.crossing_no, int(sc["total"]), sc["rank"], c.finale])

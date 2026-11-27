@@ -130,6 +130,14 @@ var family_trust := 0
 var family_met := false
 ## What the locals said at each stop (see Folk), so they say the same thing if you come back.
 var folk_heard := {}
+## Camp life (see Camp): the crew's morale (0-100, fresh each crossing), the pantry of foraged
+## ingredients, plants you've learned to tell apart, and where you last cooked/foraged/camped.
+var morale := Camp.START
+var pantry := {}
+var known_plants := {}
+var cooked_at := ""
+var foraged_at := ""
+var camped_at := ""
 ## Dice for weather and trail moments, so they don't change which events and battles roll.
 var life_rng := RandomNumberGenerator.new()
 ## Every trail moment so far: {"id", "icon", "text", "who", "fx", "deltas", "sight"}. The screen shows new ones.
@@ -554,6 +562,142 @@ func hear_folk() -> Array:
 	return folk_heard[key]
 
 
+# ---------- camp life ----------
+
+## Raise or lower the crew's morale. reason goes in the journal for bigger swings.
+func change_morale(amount: int, reason := "") -> void:
+	if amount == 0:
+		return
+	var was := morale
+	morale = clampi(morale + amount, 0, Camp.MAX)
+	if reason != "" and absi(amount) >= 5:
+		journal.append("%s (morale %+d)." % [reason, morale - was])
+	if Camp.band(was)[1] != Camp.band(morale)[1]:
+		journal.append("The crew's spirits are %s." % String(Camp.band(morale)[2]).to_lower())
+
+
+func morale_band() -> String:
+	return String(Camp.band(morale)[1])
+
+
+## Bonus to every trail-job check from morale.
+func morale_bonus() -> int:
+	match morale_band():
+		"spirited":
+			return Camp.SPIRITED_BONUS
+		"grim":
+			return Camp.GRIM_PENALTY
+	return 0
+
+
+func _morale_day(hungry: bool, travelling := false) -> void:
+	var d := Camp.DRIFT["road"] if travelling else 0
+	if rations == "thin":
+		d += Camp.DRIFT["thin_rations"]
+	elif rations == "full":
+		d += Camp.DRIFT["full_rations"]
+	if pace == "grueling":
+		d += Camp.DRIFT["grueling"]
+	if season() == "frost":
+		d += Camp.DRIFT["frost"]
+	if weather == "storm":
+		d += Camp.DRIFT["storm"]
+	d += Camp.DRIFT["ailing"] * ailments.size()
+	if fever_days > 0:
+		d += Camp.DRIFT["fever"]
+	if hungry:
+		d += Camp.DRIFT["hungry"]
+	change_morale(d)
+
+
+func pantry_count() -> int:
+	var n := 0
+	for k in pantry:
+		n += int(pantry[k])
+	return n
+
+
+## Why the crew can't cook a hot meal here ("" = they can).
+func cook_block() -> String:
+	if state != State.AT_JUNCTION:
+		return "busy"
+	if cooked_at == at:
+		return "cooked"
+	if Camp.best_recipe(pantry).is_empty():
+		return "pantry"
+	if provisions < Camp.MEAL_FOOD:
+		return "food"
+	return ""
+
+
+## Cook the best meal the pantry allows. Returns its deltas ([] if nothing was cooked).
+func cook() -> Array:
+	if cook_block() != "":
+		return []
+	var r := Camp.best_recipe(pantry)
+	for k in r["needs"]:
+		pantry[k] = int(pantry[k]) - int(r["needs"][k])
+		if int(pantry[k]) <= 0:
+			pantry.erase(k)
+	cooked_at = at
+	provisions -= Camp.MEAL_FOOD
+	var fx: Dictionary = (r["fx"] as Dictionary).duplicate()
+	var d := [{"icon": "food", "amount": -roundi(Camp.MEAL_FOOD)}]
+	d.append_array(apply_fx(fx))
+	journal.append("You cook %s. Everyone gathers round." % String(r["name"]).to_lower())
+	note("cook", "Cooked %s." % String(r["name"]).to_lower())
+	return d
+
+
+## Why the crew can't forage here ("" = they can).
+func forage_block() -> String:
+	if state != State.AT_JUNCTION or not pending_event.is_empty():
+		return "busy"
+	if map.kind_of(at) == "town":
+		return "town"
+	if foraged_at == at:
+		return "picked"
+	return ""
+
+
+## Head out with a basket: sets the foraging card as the pending event.
+func forage() -> bool:
+	if forage_block() != "":
+		return false
+	foraged_at = at
+	var terrain := String(map.region_of(at).get("terrain", "Forest"))
+	var finds: Array = Camp.FORAGE.get(terrain, ["herbs"]).duplicate()
+	var r := RandomNumberGenerator.new()
+	r.seed = int(stop().get("rumor_seed", 0)) + crossing_no * 97 + day
+	var a: String = finds[r.randi_range(0, finds.size() - 1)]
+	var b: String = finds[r.randi_range(0, finds.size() - 1)]
+	var plant_id := ""
+	if r.randf() < Camp.PLANT_CHANCE:
+		plant_id = String(Camp.PLANTS[r.randi_range(0, Camp.PLANTS.size() - 1)][0])
+	var forager := best_helper("forage")
+	var knows := forager != "" and job_rank(forager, "forage") >= Camp.KNOW_RANK
+	pending_event = Camp.forage_card(terrain, [a, b], plant_id, known_plants.has(plant_id), knows)
+	return true
+
+
+## After a rest: the campfire (once per stop), with a tale and two Trailomon getting closer.
+func _campfire() -> void:
+	if camped_at == at or not pending_event.is_empty() or state != State.AT_JUNCTION:
+		return
+	camped_at = at
+	var tale: String = Camp.TALES[life_rng.randi_range(0, Camp.TALES.size() - 1)]
+	var bond := ""
+	var awake := roster.filter(func(id): return conscious(id))
+	if awake.size() >= 2:
+		var a: String = awake[life_rng.randi_range(0, awake.size() - 1)]
+		var others := awake.filter(func(id): return id != a)
+		var b: String = others[life_rng.randi_range(0, others.size() - 1)]
+		bond = Camp.BOND_LINES[life_rng.randi_range(0, Camp.BOND_LINES.size() - 1)] % [display_name(a), display_name(b)]
+		gain_xp(a, Camp.BOND_XP)
+		gain_xp(b, Camp.BOND_XP)
+	pending_event = Camp.campfire(tale, bond)
+
+
 # ---------- the Fernwicks ----------
 
 ## Their next story beat as an event (and count this crossing's meeting).
@@ -694,6 +838,7 @@ func spend_day(travelling := false) -> String:
 		water = 0.0
 		health -= THIRST_DAMAGE
 		notes.append("not enough water")
+	_morale_day(notes.has("not enough food") or notes.has("not enough water"), travelling)
 	if health <= 0:
 		health = 0
 		state = State.FAILED
@@ -760,6 +905,9 @@ func start_trip(seg: Dictionary) -> bool:
 	var f := forecast(seg)
 	if not f["can_go"]:
 		return false
+	# Camp cards left open at the stop (the campfire, foraging) are dropped when you set off.
+	if ["campfire", "forage"].has(String(pending_event.get("id", ""))):
+		pending_event = {}
 	trip = seg
 	departed = true
 	trip["pushing"] = f["hauling"] == Hauling.Result.PUSH
@@ -933,14 +1081,14 @@ func safe_choice(event: Dictionary) -> int:
 
 ## A safe choice has no roll, no cost and no fight.
 static func is_safe(choice: Dictionary) -> bool:
-	return not choice.has("cap") and not choice.has("cost") and not choice.has("deal") and not choice["success"].has("battle")
+	return not choice.has("cap") and not choice.has("cost") and not choice.has("deal") and not choice["success"].has("battle") and not choice.get("risky", false)
 
 
 ## Wagon wear, hauler fatigue and a possible breakdown for one travel day.
 func _wear_day(terrain_factor: float, pushing: bool) -> void:
 	var p := TrailLife.pace(pace)
 	for id in haulers:
-		fatigue[id] = clampf(float(fatigue.get(id, 0.0)) + HAUL_FATIGUE * (2.0 if pushing else 1.0) * float(p["fatigue"]) + TrailLife.weather_value(weather, "fatigue"), 0.0, 100.0)
+		fatigue[id] = clampf(float(fatigue.get(id, 0.0)) + HAUL_FATIGUE * (2.0 if pushing else 1.0) * float(p["fatigue"]) + TrailLife.weather_value(weather, "fatigue") + (Camp.GRIM_FATIGUE if morale_band() == "grim" else 0.0), 0.0, 100.0)
 	var chance := Wagon.breakdown_chance(wagon.wear)
 	wagon.wear = minf(100.0, wagon.wear + Wagon.wear_per_day(terrain_factor, load_weight(), pushing) * float(p["wear"]) * wear_mult() + TrailLife.weather_value(weather, "wear"))
 	if wagon.broken == Wagon.Part.NONE and rng.randf() < chance:
@@ -961,6 +1109,7 @@ func _break(part: Wagon.Part, from_event := false) -> bool:
 		journal.append("The %s should have gone. The lucky cog rattles loose instead." % Wagon.PART_NAMES[part])
 		return false
 	wagon.break_part(part, 0 if from_event else Wagon.BREAKDOWN_DAMAGE)
+	change_morale(Camp.ON["breakdown"])
 	journal.append("The wagon's %s broke!" % wagon.part_name())
 	if wagon.broken == Wagon.Part.RUNNING_GEAR and state == State.TRAVELLING:
 		trip_days_left += 1
@@ -990,6 +1139,8 @@ func rest() -> void:
 		creature_hp[id] = minf(max_hp(id), float(creature_hp.get(id, 0.0)) + max_hp(id) * (REST_HEAL + (0.25 if pipe else 0.0)))
 	if state != State.FAILED:
 		journal.append("Rested. The haulers recovered and the team licked its wounds%s." % ((", %d back on their feet" % woke) if woke > 0 else ""))
+		change_morale(Camp.ON["rest"])
+		_campfire()
 
 
 # ---------- ailments (trail doctor) ----------
@@ -1187,6 +1338,7 @@ func _hand_over_deliveries() -> void:
 		var pay := int(c["pay"]) / (2 if late else 1)
 		if not late:
 			deliveries_on_time += 1
+			change_morale(Camp.ON["deliver"])
 		note("cargo", "Delivered %s%s." % [String(c["name"]), " late" if late else " on time"])
 		coins += pay
 		cargo.remove_at(i)
@@ -1295,6 +1447,7 @@ func _finish_hunt(battle: Battle) -> Array[String]:
 		else:
 			lines.append("The team brings down %d of the herd%s, %d got away." % [bag.size(), " and the charger with them" if charger_food > 0.0 else "", fled])
 			lines.append("+%d {i:food} food." % roundi(got))
+			change_morale(Camp.ON["hunt"])
 			if got + 0.5 < food:
 				lines.append("No room in the wagon for the rest: %d food left behind." % roundi(food - got))
 	var grew: Array[String] = []
@@ -1449,7 +1602,7 @@ func event_choices(event: Dictionary) -> Array:
 		var cost: Dictionary = c.get("cost", {})
 		var view := {"label": c["label"], "safe": is_safe(c), "helper": "", "odds": {}, "cost": cost,
 			"affordable": can_afford(cost), "rolled": c.has("cap"), "cap": c.get("cap", ""), "bonus": 0,
-			"reward": c["success"], "fight": c["success"].has("battle")}
+			"reward": c["success"], "fight": c["success"].has("battle"), "hidden": c.get("risky", false)}
 		if c.has("cap"):
 			var helper := best_helper(c["cap"])
 			var score := job_rank(helper, c["cap"]) * TrailEvents.RANK_SCORE if helper != "" else 0
@@ -1464,6 +1617,8 @@ func event_choices(event: Dictionary) -> Array:
 					score += int(a[cap])
 					assists.append({"who": who, "cap": cap, "bonus": int(a[cap])})
 			view["assists"] = assists
+			score += morale_bonus()
+			view["morale"] = morale_bonus()
 			if c["cap"] == "float" and has_upgrade("float_tanks"):
 				score += Inventor.FLOAT_BONUS
 				view["gear"] = "float_tanks"
@@ -1538,8 +1693,21 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 	if fx.has("coins"):
 		coins = maxi(0, coins + int(fx["coins"]))
 		d.append({"icon": "coins", "amount": int(fx["coins"])})
+	if fx.has("morale"):
+		var was := morale
+		change_morale(int(fx["morale"]))
+		d.append({"icon": "morale", "amount": morale - was})
+	if fx.has("pantry"):
+		for k in fx["pantry"]:
+			var n := mini(int(fx["pantry"][k]), Camp.PANTRY_MAX - pantry_count())
+			if n > 0:
+				pantry[k] = int(pantry.get(k, 0)) + n
+				d.append({"icon": Camp.ingredient(k)["icon"], "amount": n})
+	if fx.has("learn_plant"):
+		known_plants[String(fx["learn_plant"])] = true
 	if fx.has("trust"):
 		family_trust = clampi(family_trust + int(fx["trust"]), 0, Family.MAX_TRUST)
+		change_morale(3 * signi(int(fx["trust"])))
 		if int(fx["trust"]) != 0:
 			d.append({"icon": "family", "amount": int(fx["trust"]), "label": "trust"})
 	if fx.has("lures"):
@@ -2542,6 +2710,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 				seals.append(gid)
 				lines.append("{i:seal_%s} You earn the %s." % [gid, seal_name(gid)])
 			lines.append("You gather what they left behind: +%d food, +%d water." % [VICTORY_FOOD, VICTORY_WATER])
+			change_morale(Camp.ON["win"] * (2 if guardian else 1))
 			coins += VICTORY_COINS + bounty
 			lines.append("+%d {i:coins} coins." % (VICTORY_COINS + bounty))
 		Battle.Outcome.RETREAT, Battle.Outcome.WITHDRAW:
@@ -2560,6 +2729,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 			water -= drink
 			wagon.integrity = maxi(0, wagon.integrity - BREACH_INTEGRITY)
 			lines.append("Defeat. They break through to the wagon.")
+			change_morale(Camp.ON["lose"], "A bitter defeat")
 			lines.append("The wagon takes a beating (-%d%% integrity) and they make off with %d food and %d water." % [BREACH_INTEGRITY, food, drink])
 	# Battle items in the slots are used up; loot after a win.
 	if battle != null and not battle.items_used.is_empty():
@@ -2860,6 +3030,7 @@ func try_catch() -> Dictionary:
 		lures -= 1
 	if battle_rng.randf() < chance:
 		var line := recruit()
+		change_morale(Camp.ON["catch"])
 		return {"caught": true, "line": ("The lure works. " if lured else "") + "Caught! " + line}
 	pending_recruit = ""
 	pending_glint = false

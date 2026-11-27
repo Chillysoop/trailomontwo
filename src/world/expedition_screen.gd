@@ -35,6 +35,9 @@ var _rest: Button
 var _healer: Button
 var _repair: Button
 var _hunt: Button
+var _forage: Button
+var _cook: Button
+var _pantry_label: RichTextLabel
 var _routes: GridContainer
 var _card: RichTextLabel
 var _go: Button
@@ -374,7 +377,7 @@ func _set_scenery() -> void:
 
 
 func _set_off() -> void:
-	if _picked.is_empty() or not crossing.start_trip(_picked):
+	if _event.visible or _picked.is_empty() or not crossing.start_trip(_picked):
 		return
 	_panel.visible = false
 	_backdrop.set_moving(true)
@@ -521,12 +524,16 @@ func _choice_markup(v: Dictionary) -> String:
 				help += " [color=#%s]+{i:cap_%s}[/color]%s" % [TrailFx.GOOD, a["cap"], TrailFx.portrait(a["who"])]
 			if v.get("gear", "") != "":
 				help += " [color=#%s]+{i:%s}[/color]" % [TrailFx.GOOD, Inventor.info(v["gear"])["icon"]]
+			if int(v.get("morale", 0)) != 0:
+				help += " [color=#%s]{i:morale}%+d[/color]" % [TrailFx.GOOD if int(v["morale"]) > 0 else TrailFx.BAD, int(v["morale"])]
 			parts.append("%s%s%s%s %s" % [job, TrailFx.portrait(v["helper"]), bonus, help, TrailFx.odds(v["odds"])])
 		else:
 			parts.append("%s[color=#%s]nobody[/color] %s" % [job, TrailFx.BAD, TrailFx.odds(v["odds"])])
 		var reward := TrailFx.preview(v["reward"])
 		if reward != "":
 			parts.append(reward)
+	elif v.get("hidden", false):
+		parts.append("[color=#%s]who knows?[/color]" % TrailFx.MID)
 	else:
 		var gives := TrailFx.preview(v["reward"])
 		if gives != "":
@@ -1010,6 +1017,12 @@ func _refresh_wagon_page() -> void:
 	_healer.visible = crossing.has_healer()
 	_healer.text = "Healer (%d)" % crossing.heal_cost()
 	_healer.disabled = crossing.heal_cost() <= 0 or crossing.coins < crossing.heal_cost()
+	_forage.disabled = crossing.forage_block() != ""
+	_cook.disabled = crossing.cook_block() != ""
+	var shelf := ""
+	for k in crossing.pantry:
+		shelf += "{i:%s}%d " % [Camp.ingredient(k)["icon"], int(crossing.pantry[k])]
+	Rich.set_text(_pantry_label, "{i:cook} " + (shelf if shelf != "" else "[color=#8a7f8c]empty[/color]"))
 
 
 func _repair_tip() -> String:
@@ -1098,6 +1111,35 @@ func _do_heal() -> void:
 func _do_rest() -> void:
 	crossing.rest()
 	_after_action()
+	if not crossing.pending_event.is_empty() and crossing.state == Expedition.State.AT_JUNCTION:
+		_show_event()
+
+
+func _do_forage() -> void:
+	if crossing.forage():
+		_show_event()
+	_after_action()
+
+
+func _forage_tip() -> String:
+	var why: String = {"town": "Nothing grows in town but weeds.", "picked": "You've already picked this stop clean.", "busy": ""}.get(crossing.forage_block(), "")
+	return "{k:forage}\n" + ("[color=#ff8a7a]%s[/color]" % why if why != "" else "Free, once per stop.")
+
+
+func _do_cook() -> void:
+	var d := crossing.cook()
+	_after_action()
+	if not d.is_empty():
+		_log.text = crossing.journal[crossing.journal.size() - 1]
+
+
+func _cook_tip() -> String:
+	var r := Camp.best_recipe(crossing.pantry)
+	var why: String = {"cooked": "You've already cooked here.", "pantry": "Nothing in the pantry to cook. Go foraging.", "food": "Not enough food for a meal.", "busy": ""}.get(crossing.cook_block(), "")
+	var t := "{k:cook}"
+	if not r.is_empty():
+		t += "\n[b]%s[/b]: %s %s" % [r["name"], TrailFx.cost({"food": -int(Camp.MEAL_FOOD)}), TrailFx.preview(r["fx"])]
+	return t + ("\n[color=#ff8a7a]%s[/color]" % why if why != "" else "")
 
 
 func _do_hunt() -> void:
@@ -1129,7 +1171,8 @@ func _refresh_hud() -> void:
 	Rich.set_text(_hud, "{i:%s} {i:day}%d   {i:food}%d[color=#c8bca8]/%.0fd[/color]   {i:water}%d[color=#c8bca8]/%.0fd[/color]   {i:coins}%d   {i:weight}%d   {i:haul}%d   {i:wagon}%d%%" % [
 		w["icon"], crossing.day, roundi(crossing.provisions), floorf(crossing.days_of(crossing.provisions, crossing.daily_provisions())),
 		roundi(crossing.water), floorf(crossing.days_of(crossing.water, crossing.daily_water())), crossing.coins, roundi(crossing.load_weight()), roundi(crossing.hauling_available()), crossing.wagon.integrity])
-	var hp := ("{i:health}[color=#ff8a7a]%d[/color]" if crossing.health < 50 else "{i:health}%d") % crossing.health
+	var band := Camp.band(crossing.morale)
+	var hp := ("[color=#%s]{i:morale}%d[/color]  " % [band[3], crossing.morale]) + (("{i:health}[color=#ff8a7a]%d[/color]" if crossing.health < 50 else "{i:health}%d") % crossing.health)
 	if crossing.fever_days > 0:
 		hp = "{i:fever}" + hp
 	if crossing.frost_day > 0:
@@ -1224,6 +1267,7 @@ func _build_ui() -> void:
 	row.add_child(_hud)
 	_hud_health = Rich.label("", 9)
 	row.add_child(_hud_health)
+	Tips.attach(_hud_health, func(): return "{i:morale} [b]Morale %d[/b]: %s\n{k:morale}" % [crossing.morale, Camp.band(crossing.morale)[2]])
 	_pace_btn = _button("", 8)
 	_pace_btn.focus_mode = Control.FOCUS_NONE
 	_pace_btn.pressed.connect(func():
@@ -1386,8 +1430,24 @@ func _build_ui() -> void:
 	_healer.pressed.connect(_do_heal)
 	Tips.attach(_healer, func(): return "The stop's healer patches the whole team back to full health and wakes {k:ko|knocked out} ones, without losing a day. %d {i:coins} (%d per hurt Trailomon, %d per knocked out one). Once per stop each crossing." % [
 		crossing.heal_cost(), Expedition.HEAL_COST_HURT, Expedition.HEAL_COST_KO])
-	acts.add_child(_healer)
 	_wagon_page.add_child(acts)
+	var camp := HBoxContainer.new()
+	camp.add_theme_constant_override("separation", 4)
+	camp.add_child(_healer)
+	_forage = _button("Forage", 9)
+	_forage.icon = Rich.icon_tex("forage")
+	_forage.pressed.connect(_do_forage)
+	Tips.attach(_forage, _forage_tip)
+	camp.add_child(_forage)
+	_cook = _button("Cook", 9)
+	_cook.icon = Rich.icon_tex("cook")
+	_cook.pressed.connect(_do_cook)
+	Tips.attach(_cook, _cook_tip)
+	camp.add_child(_cook)
+	_pantry_label = Rich.label("", 8)
+	Tips.attach(_pantry_label, func(): return "{k:cook}")
+	camp.add_child(_pantry_label)
+	_wagon_page.add_child(camp)
 	_ui.add_child(_panel)
 
 	_log = PreviewHud.label("", 9)

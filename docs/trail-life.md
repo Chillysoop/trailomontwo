@@ -253,3 +253,25 @@ Paths matter: which road you take, and when, decides how the crossing goes.
   Choices change `family_trust` (fx key `trust`); at 3+ trust the old-friends beat brings a gift.
   `family_stage` and `family_trust` carry between crossings.
 - Tests: `tests/core/test_people.gd`. Shots: `tools/shots/people_shots.gd`.
+
+## Camp life (wave 5 of the wagon-trail ideas)
+
+All in `src/core/trail/camp.gd` (class Camp), wired into `Expedition`.
+- **Morale** (`Expedition.morale`, 0-100, starts at 70 every crossing). Bands: Spirited 75+
+  (+1 on every trail-job check), Steady 50+, Low 25+, Grim (-1 on checks, haulers +4 tiredness a
+  day). It drifts daily: -1 a road day, plus thin/full rations, a grueling pace, frost, storms, sickness and
+  hunger, and moves with wins, defeats, catches, hunts, landmarks, deliveries, breakdowns, rest,
+  meals, the campfire and the Fernwicks. Other systems call `change_morale(amount, reason)`.
+  Shown in the HUD next to health.
+- **Pantry and cooking**: ingredients (herbs, mushrooms, berries, fish; at most 6) go in
+  `Expedition.pantry` (carried between crossings). At a stop, Cook makes the best recipe the
+  pantry allows, once per stop, for 5 food: morale, and the best recipes heal too.
+- **Foraging**: at any stop but a town, once per stop, free. A Forage check fills the pantry
+  with what grows in that region. 35% of the time there's a plant too: unknown plants are a
+  gamble (good: food and morale; bad: fever), shown as "who knows?". Eating one teaches it
+  (`Expedition.known_plants`, carried over); a Forage Trailomon of rank 3+ can tell them anyway.
+- **Campfire**: after a rest (once per stop) a card with a tale, two Trailomon bonding (+10 XP
+  each), and a choice: another story (morale), a song (morale, less tiredness) or bed (health).
+  Camp cards left open are dropped when you set off.
+- Fixed the wagon tab's action row overflowing: the Healer button moved to the camp row.
+- Tests: `tests/core/test_camp.gd`. Shots: `tools/shots/camp_shots.gd`.

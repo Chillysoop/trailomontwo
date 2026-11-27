@@ -55,6 +55,7 @@ static func card(lm: String, region_name: String, day: int) -> Dictionary:
 	var e: Array = ALL[lm]
 	var fx: Dictionary = (e[2] as Dictionary).duplicate()
 	fx["text"] = "You stop to take it in."
+	fx["morale"] = Camp.ON["landmark"]
 	return {"id": "landmark", "kind": "find", "icon": "landmark", "title": String(e[0]), "landmark": lm,
 		"text": "Day %d, %s. %s" % [day, region_name, String(e[1])],
 		"choices": [{"label": "Take it in", "success": fx}]}
