@@ -14,9 +14,9 @@ const SPIRITED_BONUS := 1
 const GRIM_PENALTY := -1
 const GRIM_FATIGUE := 4.0
 ## Daily drift.
-const DRIFT := {"road": -1, "thin_rations": -2, "full_rations": 1, "grueling": -2, "frost": -2, "storm": -1, "ailing": -1, "fever": -1, "hungry": -6}
+const DRIFT := {"road": -2, "thin_rations": -2, "full_rations": 1, "grueling": -2, "frost": -2, "storm": -1, "ailing": -1, "fever": -1, "hungry": -6}
 ## Gains and losses from things that happen.
-const ON := {"win": 4, "catch": 5, "landmark": 3, "rest": 4, "lose": -6, "ko": -3, "breakdown": -4, "lost_cargo": -3, "hunt": 3, "deliver": 3}
+const ON := {"win": 2, "catch": 5, "landmark": 2, "rest": 4, "lose": -6, "ko": -3, "breakdown": -4, "lost_cargo": -3, "hunt": 3, "deliver": 3}
 
 
 static func band(morale: int) -> Array:
@@ -115,7 +115,7 @@ static func forage_card(terrain: String, finds: Array, plant_id: String, known: 
 		else:
 			e["text"] += " You spot something you don't know: %s." % p[1]
 		if not safe or p[2]:
-			var good := {"text": String(p[3]), "morale": 6, "food": 6, "learn_plant": plant_id}
+			var good := {"text": String(p[3]), "morale": 4, "food": 6, "learn_plant": plant_id}
 			var bad := {"text": String(p[4]), "fever": 2, "morale": -4, "learn_plant": plant_id}
 			choices.append({"label": "Eat the %s" % p[1], "success": good if p[2] else bad, "risky": not safe})
 	choices.append({"label": "Head back to camp", "success": {"text": "You head back."}})

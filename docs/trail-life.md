@@ -259,7 +259,7 @@ Paths matter: which road you take, and when, decides how the crossing goes.
 All in `src/core/trail/camp.gd` (class Camp), wired into `Expedition`.
 - **Morale** (`Expedition.morale`, 0-100, starts at 70 every crossing). Bands: Spirited 75+
   (+1 on every trail-job check), Steady 50+, Low 25+, Grim (-1 on checks, haulers +4 tiredness a
-  day). It drifts daily: -1 a road day, plus thin/full rations, a grueling pace, frost, storms, sickness and
+  day). It drifts daily: -2 a road day, plus thin/full rations, a grueling pace, frost, storms, sickness and
   hunger, and moves with wins, defeats, catches, hunts, landmarks, deliveries, breakdowns, rest,
   meals, the campfire and the Fernwicks. Other systems call `change_morale(amount, reason)`.
   Shown in the HUD next to health.
