@@ -498,4 +498,6 @@ static func daily_chance(risk: int) -> float:
 
 
 static func kind_icon(event: Dictionary) -> String:
+	if event.has("icon"):
+		return String(event["icon"])
 	return KIND_ICON.get(event.get("kind", "hazard"), "ev_hazard")

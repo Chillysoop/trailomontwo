@@ -54,6 +54,9 @@ var _trade_page: VBoxContainer
 var _trade_list: GridContainer
 var _rumor: RichTextLabel
 var _job_box: HBoxContainer
+var _end_score: RichTextLabel
+var _end_grave: HBoxContainer
+var _epitaph: LineEdit
 var _coins_label: RichTextLabel
 ## Outfitter header (keeper, advice, load bar, pack button), shown only in the start town.
 var _outfit_box: VBoxContainer
@@ -559,6 +562,8 @@ func _show_encounter() -> void:
 	_event.visible = true
 	Rich.set_text(_event_title, "{i:risk} %s" % pack["title"])
 	_event_text.text = pack["text"]
+	if bool(enc.get("guardian", false)):
+		_event_text.text += "\nFight it, pay the long toll road around, or gamble on the rapids. Going around beats nothing: no guardian rewards, and a smaller arrival score."
 	_event_result.visible = false
 	_event_continue.visible = false
 	for c in _event_choices.get_children():
@@ -569,6 +574,14 @@ func _show_encounter() -> void:
 			line = "[b]Fight[/b]   " + ("{i:role_guard} set your lineup" if crossing.can_fight() else "[color=#%s]{i:ko} nobody can fight[/color]" % TrailFx.BAD)
 		elif v["id"] == "bribe":
 			line = "[b]Throw them food[/b]   " + TrailFx.cost({"food": -Expedition.BRIBE_FOOD})
+		elif v["id"] == "toll":
+			line = "{i:toll} [b]Toll road around[/b]   " + TrailFx.cost({"coins": -int(v["cost"])}) + " {i:day}+%d" % int(v["days"])
+		elif v["id"] == "rapids":
+			line = "{i:rapids} [b]Run the rapids[/b]   {i:job_float}"
+			line += (TrailFx.portrait(v["helper"]) if v["helper"] != "" else "[color=#%s]nobody[/color]" % TrailFx.BAD)
+			for a in v.get("assists", []):
+				line += " +{i:%s}%s" % [Glossary.icon("cap_" + String(a["cap"])), TrailFx.portrait(a["who"])]
+			line += " " + TrailFx.odds(v["odds"])
 		elif not v["safe"]:
 			line = "[b]Slip past[/b]   {i:cap_scout}"
 			if v["helper"] != "":
@@ -576,6 +589,7 @@ func _show_encounter() -> void:
 			else:
 				line += "[color=#%s]nobody[/color] %s" % [TrailFx.BAD, TrailFx.odds(v["odds"])]
 		var row := ClickRow.make(line, 8, 316)
+		row.disabled = not bool(v.get("affordable", true))
 		row.pressed.connect(_choose_encounter.bind(v["id"]))
 		_event_choices.add_child(row)
 	_event_choices.get_child(0).grab_focus.call_deferred()
@@ -840,7 +854,8 @@ func _refresh_wagon_page() -> void:
 	_team_status.add_child(grid)
 	for id in crossing.roster:
 		var hp := roundi(float(crossing.creature_hp.get(id, 0.0)))
-		var cell := Rich.label("{c:%s} %s" % [id, ("%d" % hp) if hp > 0 else "{i:ko}"], 8)
+		var sick := crossing.ailment_of(id)
+		var cell := Rich.label("{c:%s} %s%s" % [id, ("%d" % hp) if hp > 0 else "{i:ko}", (" {i:%s}" % Ailments.info(sick)["icon"]) if sick != "" else ""], 8)
 		cell.custom_minimum_size = Vector2(92, 0)
 		grid.add_child(cell)
 	for c in _hauler_list.get_children():
@@ -948,6 +963,10 @@ func _creature_tip(id: String, hauling: bool) -> String:
 		"fatigue": crossing.fatigue.get(id, 0.0)})
 	if hauling:
 		t += "\nIn harness: pulls {i:haul}%d" % roundi(crossing.hauler_strength(id))
+	var sick := crossing.ailment_of(id)
+	if sick != "":
+		var k := Ailments.info(sick)
+		t += "\n[color=#ff8a7a]{i:%s} %s: %s, %d more days. Resting helps.[/color]" % [k["icon"], k["name"], k["effect"], int(crossing.ailments[id]["days"])]
 	return t
 
 
@@ -1039,13 +1058,17 @@ func _show_end(won: bool) -> void:
 	var title: Label = _end.find_child("EndTitle", true, false)
 	var body: Label = _end.find_child("EndBody", true, false)
 	var again: Button = _end.find_child("Again", true, false)
+	_end_grave.visible = not won
 	if won:
 		title.text = "Crossing %d: you reached %s" % [crossing_no, crossing.map.name_of(crossing.map.goal)]
-		body.text = "Day %d. %d food and %d water left.\nDelivered %d cargo for %d coins. Wagon at %d%%.\nYour team, levels, dust, items and coins come with you." % [crossing.day, roundi(crossing.provisions), roundi(crossing.water), crossing.cargo.size(), crossing.cargo_paid, crossing.wagon.integrity]
+		body.text = "Day %d. Delivered %d cargo for %d coins.\nYour team, levels, dust, items and coins come with you." % [crossing.day, crossing.cargo.size(), crossing.cargo_paid]
+		Rich.set_text(_end_score, _score_markup() + _scrapbook_markup())
 		again.text = "Next crossing"
 	else:
 		title.text = "Crossing %d failed" % crossing_no
 		body.text = "%s\nDay %d, %d visited stops." % [crossing.fail_reason, crossing.day, crossing.visited.size()]
+		Rich.set_text(_end_score, _scrapbook_markup())
+		_epitaph.editable = true
 		if SaveGame.is_hardcore(_slot):
 			body.text += "\nHardcore: this caravan is gone for good."
 			again.text = "New hardcore caravan"
@@ -1054,6 +1077,42 @@ func _show_end(won: bool) -> void:
 			again.text = "Try this crossing again"
 	_save()
 	(_end.find_child("Again", true, false) as Button).grab_focus.call_deferred()
+
+
+## The arrival reckoning, as icon rows and a rank.
+func _score_markup() -> String:
+	var sc := crossing.arrival_score()
+	var t := "[b]Arrival score: %d[/b]  [color=#ffe3a3]%s[/color]" % [int(sc["total"]), sc["rank"]]
+	var best := 0
+	for v in crossing.score_history.slice(0, crossing.score_history.size() - 1):
+		best = maxi(best, int(v))
+	if best > 0:
+		t += "  [color=#c8bca8](best before: %d)[/color]" % best
+	var parts: Array[String] = []
+	for l in sc["lines"]:
+		parts.append("{i:%s}%s [color=#%s]%+d[/color]" % [l[0], l[1], "9fe0a0" if int(l[2]) >= 0 else "ff8a7a", int(l[2])])
+	return t + "\n" + "   ".join(parts)
+
+
+## The last few scrapbook entries of the crossing.
+func _scrapbook_markup() -> String:
+	if crossing.scrapbook.is_empty():
+		return ""
+	var t := "\n[b]Scrapbook[/b]"
+	var entries: Array = crossing.scrapbook.slice(maxi(0, crossing.scrapbook.size() - 8))
+	for e in entries:
+		t += "\n{i:%s} [color=#c8bca8]Day %d[/color]  %s" % [e["icon"], int(e["day"]), e["text"]]
+	return t
+
+
+func _lay_stone() -> void:
+	if not _epitaph.editable:
+		return
+	var lead: String = Species.info(crossing.roster[0])["name"] if not crossing.roster.is_empty() else "Your"
+	var region: String = crossing.map.regions.get(crossing.map.junctions.get(crossing.at, {}).get("region", ""), {}).get("name", "")
+	var g := Graves.lay(crossing_no, crossing.day, lead, region, _epitaph.text)
+	_epitaph.text = "\"%s\"" % g["epitaph"]
+	_epitaph.editable = false
 
 
 func _build_ui() -> void:
@@ -1281,8 +1340,8 @@ func _build_ui() -> void:
 	_ui.add_child(_toasts)
 
 	_end = PanelContainer.new()
-	_end.position = Vector2(170, 110)
-	_end.custom_minimum_size = Vector2(300, 120)
+	_end.position = Vector2(120, 40)
+	_end.custom_minimum_size = Vector2(400, 120)
 	_end.add_theme_stylebox_override("panel", PreviewHud.box(Color(0.13, 0.10, 0.15, 0.94)))
 	var ecol := VBoxContainer.new()
 	ecol.add_theme_constant_override("separation", 6)
@@ -1292,7 +1351,26 @@ func _build_ui() -> void:
 	ecol.add_child(et)
 	var eb := PreviewHud.label("", 9)
 	eb.name = "EndBody"
+	eb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	eb.custom_minimum_size = Vector2(388, 0)
 	ecol.add_child(eb)
+	_end_score = Rich.label("", 8, 388)
+	ecol.add_child(_end_score)
+	# A failed caravan: write its epitaph. The stone turns up on later runs.
+	_end_grave = HBoxContainer.new()
+	_end_grave.add_theme_constant_override("separation", 4)
+	_epitaph = LineEdit.new()
+	_epitaph.placeholder_text = "Write an epitaph..."
+	_epitaph.max_length = Graves.EPITAPH_MAX
+	_epitaph.add_theme_font_size_override("font_size", 9)
+	_epitaph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_end_grave.add_child(_epitaph)
+	var lay := _button("Lay the stone", 9)
+	lay.icon = Rich.icon_tex("grave")
+	lay.pressed.connect(_lay_stone)
+	Tips.attach(lay, func(): return "{i:grave} Your stone will stand by the road on this crossing in later runs.")
+	_end_grave.add_child(lay)
+	ecol.add_child(_end_grave)
 	var again := _button("Try again", 10)
 	again.name = "Again"
 	again.pressed.connect(func(): _next_crossing() if crossing.state == Expedition.State.ARRIVED else _retry())

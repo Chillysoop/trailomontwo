@@ -409,8 +409,21 @@ func _event_tick(c: Expedition, event: Control) -> void:
 		if first:
 			shots_taken["encounter"] = true
 			await _shot("encounter_c%d" % c.crossing_no)
-		# Always fight (this is a battle playtest), unless nobody can.
-		(kids[0] as ClickRow).pressed.emit()
+		# Fight, but a smart caravan that already lost to this guardian goes around:
+		# the rapids when the odds are good, else the toll road if it can pay.
+		var pick := 0
+		if style == "smart" and bool(c.pending_encounter.get("guardian", false)) and _guardian_losses.get(c.crossing_no, 0) >= 2:
+			var views := c.encounter_choices()
+			for i in views.size():
+				if views[i]["id"] == "rapids" and int(views[i]["odds"].get("success", 0)) >= 60:
+					pick = i
+			if pick == 0:
+				for i in views.size():
+					if views[i]["id"] == "toll" and bool(views[i].get("affordable", false)):
+						pick = i
+			if pick > 0:
+				_say("FINALE c%d %s" % [c.crossing_no, views[pick]["id"]])
+		(kids[pick] as ClickRow).pressed.emit()
 		return
 	stats["events"] += 1
 	var ev := c.pending_event
@@ -434,6 +447,8 @@ func _event_tick(c: Expedition, event: Control) -> void:
 
 
 var _style_of := {}
+## Guardian losses per crossing number (the smart bot goes around after two).
+var _guardian_losses := {}
 var _battle_state := ""
 func _battle_tick(b: Node) -> void:
 	var c := _c()
@@ -511,6 +526,8 @@ func _battle_tick(b: Node) -> void:
 				avg += l
 			avg /= maxf(1, (b.get_meta("levels") as Array).size())
 			_say("BATTLE c%d %s %s vs %s (scale %.2f, team avg Lv %.1f, %ds)" % [c.crossing_no, _battle_state, oname, b.get_meta("pack"), b.get_meta("scale"), avg, int(battle.time)])
+			if _battle_state == "guardian" and o != Battle.Outcome.VICTORY:
+				_guardian_losses[c.crossing_no] = int(_guardian_losses.get(c.crossing_no, 0)) + 1
 			if _battle_state == "guardian":
 				stats["guardian"].append("c%d %s %s Lv%.1f" % [c.crossing_no, b.get_meta("pack"), oname, avg])
 				await _shot("guardian_after_c%d" % c.crossing_no)
@@ -534,6 +551,9 @@ func _end_tick(c: Expedition) -> bool:
 	for id in c.roster:
 		lv.append("%s:%d" % [id, c.level(id)])
 	_say("END crossing %d %s day %d | %s | team %s" % [c.crossing_no, "ARRIVED" if won else "FAILED (" + c.fail_reason + ")", c.day, "coins %d food %d water %d" % [c.coins, c.provisions, c.water], ", ".join(lv)])
+	if won:
+		var sc := c.arrival_score()
+		_say("SCORE c%d %d %s (finale %s)" % [c.crossing_no, int(sc["total"]), sc["rank"], c.finale])
 	if won:
 		stats["crossing_days"].append(c.day)
 		stats["levels"].append(lv)
