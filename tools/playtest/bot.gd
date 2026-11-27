@@ -211,7 +211,7 @@ func _junction_tick(c: Expedition) -> void:
 	# At Pip's workshop: fit an upgrade when there are coins to spare.
 	if style != "reckless" and c.at_workshop():
 		for u in ["spring_wheels", "float_tanks", "brass_horn", "cargo_rack", "dew_still", "lantern_mast"]:
-			if c.can_buy_upgrade(u) and c.coins >= c.upgrade_price(u) + 25:
+			if c.can_buy_upgrade(u) and c.coins >= c.upgrade_price(u) + 15:
 				c.buy_upgrade(u)
 				_say("UPGRADE c%d %s, coins left %d" % [c.crossing_no, u, c.coins])
 	# Smart and careful: hunt when food runs low and there's game here.

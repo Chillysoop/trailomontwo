@@ -241,7 +241,7 @@ Paths matter: which road you take, and when, decides how the crossing goes.
   - spring wheels (wear x0.8), cargo rack (+40 room, `Expedition.capacity()`),
   - dew still (+2 water a travel day), float tanks (+3 on Float checks, rivers and rapids),
   - brass horn (wild packs x0.6), lantern mast (+1 sight through the fog).
-  Prices are 40 to 60 coins, +5 each crossing.
+  Prices are 30 to 50 coins, +5 each crossing.
 - **Locals** (`src/core/trail/folk.gd`). Two named locals at every stop, each with a tip drawn
   from the real game state: what the guardian fears (the habitat strong against its boss), the
   frost day, the dangerous road out, a river's depth, Pip's workshop, whether there's game.

@@ -9,17 +9,17 @@ const TRADE := "travelling inventor"
 const KINDS := ["town", "post", "village", "waystation", "stilts"]
 
 const UPGRADES := {
-	"spring_wheels": {"name": "Spring wheels", "price": 55, "icon": "up_spring_wheels",
+	"spring_wheels": {"name": "Spring wheels", "price": 45, "icon": "up_spring_wheels",
 		"text": "Coiled brass springs on every wheel: the wagon wears 20% slower."},
-	"cargo_rack": {"name": "Cargo rack", "price": 50, "icon": "up_cargo_rack",
+	"cargo_rack": {"name": "Cargo rack", "price": 40, "icon": "up_cargo_rack",
 		"text": "A roof rack and side baskets: +40 room in the wagon."},
-	"dew_still": {"name": "Dew still", "price": 45, "icon": "up_dew_still",
+	"dew_still": {"name": "Dew still", "price": 35, "icon": "up_dew_still",
 		"text": "A copper still that drips all night: +2 water every travel day (if there's room)."},
-	"float_tanks": {"name": "Float tanks", "price": 60, "icon": "up_float_tanks",
+	"float_tanks": {"name": "Float tanks", "price": 50, "icon": "up_float_tanks",
 		"text": "Sealed barrels under the floor: +3 on every Float check, rivers and rapids too."},
-	"brass_horn": {"name": "Brass horn", "price": 40, "icon": "up_brass_horn",
+	"brass_horn": {"name": "Brass horn", "price": 30, "icon": "up_brass_horn",
 		"text": "A great honking horn: wild packs jump you 40% less often."},
-	"lantern_mast": {"name": "Lantern mast", "price": 45, "icon": "up_lantern_mast",
+	"lantern_mast": {"name": "Lantern mast", "price": 35, "icon": "up_lantern_mast",
 		"text": "A tall mast with a bright lamp: see one stop further through the fog."},
 }
 const WEAR_MULT := 0.8
