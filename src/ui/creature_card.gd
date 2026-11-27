@@ -33,7 +33,7 @@ const GAP := "[font_size=3]\u00a0[/font_size]"
 static func team_opts(e: Expedition, id: String) -> Dictionary:
 	return {"hp": e.creature_hp.get(id, 0.0), "max_hp": e.max_hp(id), "fatigue": e.fatigue.get(id, 0.0),
 		"kit": e.kit_moves(id), "atk": e.stat(id, "atk"), "def": e.stat(id, "def"), "spd": e.stat(id, "spd"),
-		"level": e.level(id)}
+		"level": e.level(id), "temper": String(e.tempers.get(id, ""))}
 
 
 static func markup(id: String, opts := {}) -> String:
@@ -51,7 +51,10 @@ static func markup(id: String, opts := {}) -> String:
 	if opts.get("enemy", false):
 		head += "  [color=#ff8a7a]foe[/color]"
 	lines.append(head)
-	lines.append("[color=#%s]%s[/color]" % [MUTED, "{k:%s|%s} · {k:%s|%s}" % [hab, type, role, s["role"]] if role != "" else "{k:%s|%s}" % [hab, type]])
+	var sub := "{k:%s|%s} · {k:%s|%s}" % [hab, type, role, s["role"]] if role != "" else "{k:%s|%s}" % [hab, type]
+	if String(opts.get("temper", "")) != "":
+		sub += " · {k:temperament|%s}" % Temperaments.KINDS[opts["temper"]]["name"]
+	lines.append("[color=#%s]%s[/color]" % [MUTED, sub])
 	var f: Fighter = opts.get("fighter", null)
 	var max_hp := float(opts.get("max_hp", CombatData.max_hp(id, scale)))
 	var hp_text := "%d" % roundi(max_hp)

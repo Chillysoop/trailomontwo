@@ -17,7 +17,7 @@ const SPECIES := {
 	"frostmane": {"rarity": "rare", "name": "Frostmane", "type": "Snow", "size": "large", "hauling": 90,
 		"capabilities": {"cold": 3, "guard": 2}},
 	# ----- Milestone 3 -----
-	"blizzfox": {"rarity": "common", "name": "Blizzfox", "type": "Snow", "size": "small", "hauling": 0, "evolves_to": "owlvix",
+	"blizzfox": {"rarity": "common", "name": "Blizzfox", "type": "Snow", "size": "small", "hauling": 0, "evolves_to": ["owlvix", "rimevix"],
 		"capabilities": {"cold": 3, "scout": 2}},
 	"owlvix": {"rarity": "rare", "name": "Owlvix", "type": "Snow", "size": "medium", "hauling": 0,
 		"capabilities": {"cold": 3, "scout": 3}},
@@ -84,6 +84,9 @@ const SPECIES := {
 		"capabilities": {"cold": 3, "float": 3}},
 	"wolvatross": {"rarity": "legendary", "name": "Wolvatross", "type": "Snow", "size": "large", "hauling": 0,
 		"capabilities": {"cold": 3, "scout": 3}},
+	# ----- Branch: blizzfox can grow into this instead of Owlvix -----
+	"rimevix": {"rarity": "rare", "branch": true, "name": "Rimevix", "type": "Snow", "size": "medium", "hauling": 0,
+		"capabilities": {"cold": 3, "scout": 2}},
 }
 
 const KITS := {
@@ -165,6 +168,8 @@ const KITS := {
 		"basic": "leopard_bite", "passive": "blood_in_ice", "ultimate": "floe_ambush"},
 	"wolvatross": {"role": "Striker", "hp": 470, "atk": 41, "def": 26, "spd": 1.5,
 		"basic": "gale_fang", "passive": "endless_glide", "ultimate": "southern_storm"},
+	"rimevix": {"role": "Striker", "hp": 380, "atk": 38, "def": 18, "spd": 1.5,
+		"basic": "ice_kick", "passive": "frostbite", "ultimate": "whiteout"},
 }
 
 const MOVES := {

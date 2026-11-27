@@ -17,7 +17,7 @@ const SPECIES := {
 	"quetzalith": {"rarity": "legendary", "name": "Quetzalith", "type": "Jungle", "size": "large", "hauling": 0,
 		"capabilities": {"scout": 3, "clear": 2, "light": 1}},
 	# ----- Milestone 3 -----
-	"chamegecko": {"rarity": "common", "name": "Chamegecko", "type": "Jungle", "size": "small", "hauling": 0, "evolves_to": "crestlisk",
+	"chamegecko": {"rarity": "common", "name": "Chamegecko", "type": "Jungle", "size": "small", "hauling": 0, "evolves_to": ["crestlisk", "canopisk"],
 		"capabilities": {"clear": 2, "scout": 3}},
 	"crestlisk": {"rarity": "rare", "name": "Crestlisk", "type": "Jungle", "size": "medium", "hauling": 0,
 		"capabilities": {"clear": 3, "scout": 3}},
@@ -84,6 +84,9 @@ const SPECIES := {
 		"capabilities": {"strength": 2, "clear": 2}},
 	"paratigris": {"rarity": "legendary", "name": "Paratigris", "type": "Jungle", "size": "large", "hauling": 0,
 		"capabilities": {"scout": 3, "clear": 3}},
+	# ----- Branch: chamegecko can grow into this instead of Crestlisk -----
+	"canopisk": {"rarity": "rare", "branch": true, "name": "Canopisk", "type": "Jungle", "size": "medium", "hauling": 0,
+		"capabilities": {"scout": 3, "forage": 2}},
 }
 
 const KITS := {
@@ -165,6 +168,8 @@ const KITS := {
 		"basic": "long_reach", "passive": "old_wisdom", "ultimate": "fig_feast"},
 	"paratigris": {"role": "Striker", "hp": 470, "atk": 41, "def": 26, "spd": 1.5,
 		"basic": "plume_pounce", "passive": "courtship_dance", "ultimate": "paradise_strike"},
+	"canopisk": {"role": "Support", "hp": 380, "atk": 32, "def": 20, "spd": 1.6,
+		"basic": "high_vine", "passive": "treetop", "ultimate": "vine_rain"},
 }
 
 const MOVES := {

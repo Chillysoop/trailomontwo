@@ -244,3 +244,101 @@ func test_lead_companion_walks_beside_the_wagon() -> void:
 	check_eq(e.lead_companion(), "thornfang", "the picked lead")
 	e.haulers.append("thornfang")
 	check_eq(e.lead_companion(), "mossmole", "not while in harness")
+
+
+func test_temperaments_lean_stats() -> void:
+	var e := Expedition.new_game("mossmole", 3)
+	check(Temperaments.KINDS.has(String(e.tempers.get("mossmole", ""))), "the starter has one")
+	var hp := CombatData.max_hp("mossmole")
+	e.tempers["mossmole"] = "hardy"
+	check(e.max_hp("mossmole") > hp, "hardy is tougher")
+	e.tempers["mossmole"] = "bold"
+	check(e.stat("mossmole", "atk") > float(CombatData.stats("mossmole")["atk"]), "bold hits harder")
+	e.lineup = {Vector2i(0, 1): "mossmole"}
+	e.creature_hp["mossmole"] = e.max_hp("mossmole")
+	e.pending_encounter = {"pack": CombatData.PACKS[0], "scale": 1.0, "guardian": false}
+	var b := e.make_battle(false, 1)
+	var f: Fighter = b.side_fighters(Formation.Side.PLAYER)[0]
+	check(absf(f.atk - e.stat("mossmole", "atk")) < 0.01, "the battle uses it")
+	e.pending_recruit = "thornfang"
+	e.recruit()
+	check(e.tempers.has("thornfang"), "catches get one")
+	check(SaveGame.CARRY.has("tempers"), "carried")
+
+
+func test_eggs_hatch_after_days() -> void:
+	var e := Expedition.new_game("mossmole", 3)
+	e.apply_fx({"egg": 1}, "", "Forest")
+	check_eq(e.eggs.size(), 1, "an egg")
+	var sp := String(e.eggs[0]["species"])
+	check_eq(Species.stage(sp), 1, "a first form")
+	for i in Expedition.EGG_DAYS:
+		e.spend_day()
+	check(e.roster.has(sp), "hatched and joined")
+	check(e.eggs.is_empty(), "no egg left")
+	check(SaveGame.CARRY.has("eggs"), "eggs carry over")
+	check(not TrailEvents.by_id("nest").is_empty(), "nests turn up on the road")
+
+
+func test_rival_picks_the_edge_and_grows() -> void:
+	for s in Expedition.STARTERS:
+		var r := Rival.starter_for(s)
+		check(r != s, "a different starter")
+	check_eq(Rival.grown("mossmole", 1), "mossmole")
+	check_eq(Rival.grown("mossmole", 4), "mossbrock")
+	var small := Rival.pack("mossmole", 1)
+	var big := Rival.pack("mossmole", 6)
+	var count := func(p): return (p["front"] + p["back"]).filter(func(x): return String(x) != "").size()
+	check(count.call(big) > count.call(small), "the team grows")
+	check(String(small["id"]).begins_with("trainer_"), "a loss costs only the bet")
+
+
+func test_rival_turns_up_once_mid_crossing() -> void:
+	Expedition.default_map = "world"
+	var e := Expedition.new_game("mossmole", 11)
+	Expedition.default_map = "test"
+	check_eq(e.starter, "mossmole")
+	var mid := ""
+	var from := ""
+	for s in e.map.segments:
+		var lb := int(e.map.junctions[s["b"]]["layer"])
+		if lb == Rival.LAYERS_FROM and String(s["b"]).begins_with("j"):
+			mid = s["b"]
+			from = s["a"]
+			break
+	e.obstacles.clear()
+	e.at = from
+	e.provisions = 200.0
+	e.water = 200.0
+	e.cargo.clear()
+	for seg in e.exits():
+		if seg["to"] == mid:
+			check(e.start_trip(seg), "set off")
+	e.step_day()
+	check_eq(String(e.pending_event.get("id", "")), "rival", "Rook pulls alongside")
+	e.coins = 50
+	e.resolve_event(0)
+	check(bool(e.pending_encounter.get("rival", false)), "a battle with Rook")
+	e.pending_encounter["scale"] = 0.05
+	var b := e.make_battle(false, 1)
+	b.run_to_end()
+	e.finish_battle(b)
+	check_eq(int(e.rival_record["wins"]), 1, "a win on the record")
+	check(e.coins > 50, "took the purse")
+	check(e.rival_met, "only once a crossing")
+
+
+func test_hall_of_fame_keeps_finished_crossings() -> void:
+	var keep := HallOfFame.path
+	HallOfFame.path = "user://test_hall_of_fame.json"
+	if FileAccess.file_exists(HallOfFame.path):
+		DirAccess.remove_absolute(HallOfFame.path)
+	var e := Expedition.new_game("mossmole", 3)
+	e.rename("mossmole", "Clod")
+	HallOfFame.record(e, "slot_1")
+	HallOfFame.record(e, "slot_1")
+	var all := HallOfFame.entries()
+	check_eq(all.size(), 2)
+	check_eq(String(all[0]["team"][0]["name"]), "Clod", "names go up on the wall")
+	DirAccess.remove_absolute(HallOfFame.path)
+	HallOfFame.path = keep

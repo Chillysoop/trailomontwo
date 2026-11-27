@@ -46,6 +46,9 @@ func _ready() -> void:
 		col.add_child(b)
 		if first == null:
 			first = b
+	var hall := _button("Hall of Fame")
+	hall.pressed.connect(func(): HallOfFameScreen.open(ui).closed.connect(hall.grab_focus))
+	col.add_child(hall)
 	var quit := _button("Quit")
 	quit.pressed.connect(get_tree().quit)
 	col.add_child(quit)

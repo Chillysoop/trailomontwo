@@ -107,7 +107,7 @@ func test_moments_apply_and_reward_the_helper() -> void:
 func test_every_moment_and_event_effect_is_known() -> void:
 	var known := ["text", "food", "water", "health", "wear", "integrity", "days", "fatigue", "lose_cargo", "coins",
 		"spare_axle", "spare_harness", "spare_canvas", "spare", "break", "salvage", "curio", "give_item", "light_dust", "dark_dust", "item", "technique", "xp", "recruit", "fever", "cure", "progress",
-		"heal_team", "battle", "bounty"]
+		"heal_team", "battle", "bounty", "egg"]
 	for m in TrailMoments.MOMENTS:
 		for k in m["fx"]:
 			check(known.has(k), "%s: unknown effect %s" % [m["id"], k])

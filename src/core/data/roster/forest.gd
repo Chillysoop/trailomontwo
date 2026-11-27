@@ -17,7 +17,7 @@ const SPECIES := {
 	"barkbeetle": {"rarity": "rare", "name": "Barkbeetle", "type": "Forest", "size": "medium", "hauling": 60,
 		"capabilities": {"guard": 3, "strength": 1}},
 	# ----- Milestone 1 -----
-	"mossbrock": {"rarity": "common", "name": "Mossbrock", "type": "Forest", "size": "medium", "hauling": 60, "evolves_to": "sodursa",
+	"mossbrock": {"rarity": "common", "name": "Mossbrock", "type": "Forest", "size": "medium", "hauling": 60, "evolves_to": ["sodursa", "briarbrock"],
 		"capabilities": {"clear": 3, "strength": 1}},
 	"sodursa": {"rarity": "rare", "name": "Sodursa", "type": "Forest", "size": "large", "hauling": 150,
 		"capabilities": {"strength": 3, "clear": 2}},
@@ -82,6 +82,9 @@ const SPECIES := {
 		"capabilities": {"guard": 2, "forage": 1}},
 	"ursalk": {"rarity": "legendary", "name": "Ursalk", "type": "Forest", "size": "large", "hauling": 200,
 		"capabilities": {"strength": 3, "guard": 2, "forage": 1}},
+	# ----- Branch: mossbrock can grow into this instead of Sodursa -----
+	"briarbrock": {"rarity": "rare", "branch": true, "name": "Briarbrock", "type": "Forest", "size": "large", "hauling": 120,
+		"capabilities": {"clear": 3, "guard": 2}},
 }
 
 const KITS := {
@@ -161,6 +164,8 @@ const KITS := {
 		"basic": "roll_bump", "passive": "plated_back", "ultimate": "ball_up"},
 	"ursalk": {"role": "Bruiser", "hp": 590, "atk": 37, "def": 36, "spd": 2.0,
 		"basic": "elk_maul", "passive": "grizzled_hide", "ultimate": "forest_charge"},
+	"briarbrock": {"role": "Striker", "hp": 470, "atk": 37, "def": 30, "spd": 1.9,
+		"basic": "thorn_rake", "passive": "bramble_coat", "ultimate": "thicket_burst"},
 }
 
 const MOVES := {

@@ -50,6 +50,13 @@ CREATURES = {
     # ----- Milestone 1: Forest and River -----
     "mossbrock": (64, "a stocky badger and mole hybrid with a mossy striped back, brass digging goggles and big shovel claws"),
     "sodursa": (64, "a huge bear and mole hybrid covered in turf and moss, tiny eyes, giant shovel claws and brass shoulder plates"),
+    # Branch evolutions (each grows from the same form as another species).
+    "briarbrock": (64, "a lean badger and mole hybrid bristling with bramble thorns along its back, brass claw guards, fierce stance"),
+    "riptoad": (64, "a sleek blue frog and crayfish hybrid with big pincers, a swirling whirlpool pattern on its back and brass fin rings"),
+    "cairnhorn": (64, "a heavy mountain goat and armadillo hybrid armoured with stacked stone-slab bands held by brass rivets, thick curled horns"),
+    "canopisk": (64, "a gliding gecko and flying lizard hybrid with wide green leaf-sail wings and a brass crest"),
+    "rimevix": (64, "a lean white fox and snow leopard hybrid with spotted frost-blue fur, icicle fangs and a brass frost-gauge collar"),
+    "sporewt": (64, "a plump swamp newt and toad hybrid with glowing toadstool caps sprouting from its back and a little brass lantern on its tail"),
     "hazelhorn": (64, "a squirrel and stag beetle hybrid with a fluffy tail, a hazelnut shell carapace and big beetle mandible horns"),
     "briarwolf": (64, "a lean wolf and porcupine hybrid with thorny bramble quills down its back and a brass collar"),
     "fawnmoth": (64, "a small spotted fawn and moth hybrid with soft leafy moth wings and feathery antennae"),

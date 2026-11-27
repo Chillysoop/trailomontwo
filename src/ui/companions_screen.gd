@@ -143,6 +143,8 @@ func refresh() -> void:
 	var note := "kept back at camp. Click one, then a team card, to swap them."
 	if _swap_pick != "":
 		note = "[color=#ffe3a3]Now click a team card to swap with %s (click it again to cancel).[/color]" % Species.info(_swap_pick)["name"]
+	for egg in crossing.eggs:
+		note += "   {i:egg} egg: %s" % ("ready to hatch when there's room" if int(egg["days"]) <= 0 else "hatches in %d day%s" % [int(egg["days"]), "" if int(egg["days"]) == 1 else "s"])
 	Rich.set_text(_stored_note, "[color=#e8d6a8]STORED[/color]   [color=#%s]%s[/color]" % [CreatureCard.MUTED, note])
 	var techs := 0
 	for mid in crossing.techniques:
