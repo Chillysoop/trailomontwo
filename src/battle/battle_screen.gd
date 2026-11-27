@@ -162,9 +162,11 @@ func _refresh_lineup() -> void:
 		c.queue_free()
 	_views.clear()
 	_hover.clear()
+	var foes := _foe_ids()
 	for cell in crossing.lineup:
 		var id: String = crossing.lineup[cell]
 		var v := _add_unit(id, Formation.slot_feet(Formation.Side.PLAYER, cell.x, cell.y), false, _mine_card.bind(id))
+		_add_matchup_marker(v["holder"], CombatData.standing(id, foes))
 		if not crossing.conscious(id):
 			v["sprite"].modulate = Color(0.45, 0.45, 0.5, 0.6)
 		elif id == _selected:
@@ -200,7 +202,7 @@ func _refresh_lineup() -> void:
 		theirs.append(pack["boss"])
 	Rich.set_text(_syn_mine, "Your {k:synergy|habitat bonuses}:\n" + (synergy_markup(mine, true) if not mine.is_empty() else "nobody can fight"))
 	var theirs_text := synergy_markup(theirs, false)
-	Rich.set_text(_syn_theirs, "Theirs:\n" + (theirs_text if theirs_text != "" else "none"))
+	Rich.set_text(_syn_theirs, "Theirs:\n" + (theirs_text if theirs_text != "" else "none") + _matchup_markup(mine, foes))
 	if _hunting:
 		Rich.set_text(_enc_text, "{i:food} The herd hasn't seen you. %s stands its ground and fights; the rest {k:hunt|bolt} when spooked. Hit hard and fast: a wounded one runs. %ds before they all scatter." % [
 			Species.info(String(pack.get("charger", pack["front"][1])))["name"], int(Battle.HUNT_SECS)])
@@ -234,9 +236,71 @@ func _add_unit(id: String, feet: Vector2, enemy: bool, tip: Variant = null) -> D
 	return v
 
 
-## Tooltip for one of your creatures before the fight.
+## Tooltip for one of your creatures before the fight, with how it stands against these foes.
 func _mine_card(id: String) -> String:
-	return CreatureCard.markup(id, CreatureCard.team_opts(crossing, id))
+	var t := CreatureCard.markup(id, CreatureCard.team_opts(crossing, id))
+	var st := CombatData.standing(id, _foe_ids())
+	for t2 in st["up"]:
+		t += "\n{i:adv_up} [color=#9fe0a0]Hits {i:%s} %s foes hard (+%d%%).[/color]" % [Glossary.habitat_id(t2), t2, roundi((CombatData.STRONG - 1.0) * 100.0)]
+	for t2 in st["down"]:
+		t += "\n{i:adv_down} [color=#ff8a7a]{i:%s} %s foes hit it hard.[/color]" % [Glossary.habitat_id(t2), t2]
+	return t
+
+
+## Every foe in the pending fight (boss included).
+func _foe_ids() -> Array:
+	var pack := _pack()
+	var out: Array = []
+	for id in pack.get("front", []) + pack.get("back", []):
+		if String(id) != "":
+			out.append(String(id))
+	if String(pack.get("boss", "")) != "":
+		out.append(String(pack["boss"]))
+	return out
+
+
+## A small green arrow over a creature that hits these foes hard, red when they hit it hard
+## (both: green on the left, red on the right).
+func _add_matchup_marker(holder: Node2D, st: Dictionary) -> void:
+	var marks: Array[String] = []
+	if not (st["up"] as Array).is_empty():
+		marks.append("adv_up")
+	if not (st["down"] as Array).is_empty():
+		marks.append("adv_down")
+	for i in marks.size():
+		var m := Sprite2D.new()
+		m.texture = Rich.icon_tex(marks[i])
+		m.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		m.scale = Vector2(0.5, 0.5)
+		m.position = Vector2(-20 + 8 * i, -6)
+		holder.add_child(m)
+
+
+## One line per foe habitat: which of your team hits it hard, and which it hits hard.
+func _matchup_markup(mine: Array, foes: Array) -> String:
+	var lines: Array[String] = []
+	var types: Array[String] = []
+	for f in foes:
+		var t := CombatData.type_of(String(f))
+		if not types.has(t) and CombatData.CHART.has(t):
+			types.append(t)
+	for t in types:
+		var good: Array[String] = []
+		var bad: Array[String] = []
+		for id in mine:
+			if CombatData.matchup(CombatData.type_of(id), t) > 1.0:
+				good.append(crossing.display_name(id))
+			if CombatData.matchup(t, CombatData.type_of(id)) > 1.0:
+				bad.append(crossing.display_name(id))
+		if good.is_empty() and bad.is_empty():
+			continue
+		var line := "{i:%s} " % Glossary.habitat_id(t)
+		if not good.is_empty():
+			line += "{i:adv_up}" + ", ".join(good) + " "
+		if not bad.is_empty():
+			line += "{i:adv_down}" + ", ".join(bad)
+		lines.append(line)
+	return "" if lines.is_empty() else "\n{k:matchup|Matchups}:\n" + "\n".join(lines)
 
 
 func _foe_card(id: String, scale: float, boss: bool) -> String:

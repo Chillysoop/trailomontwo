@@ -32,6 +32,7 @@ var _wagon_status: RichTextLabel
 var _hauler_list: VBoxContainer
 var _cargo_list: VBoxContainer
 var _rest: Button
+var _healer: Button
 var _repair: Button
 var _hunt: Button
 var _routes: GridContainer
@@ -917,6 +918,9 @@ func _refresh_wagon_page() -> void:
 			_repair.icon = Rich.icon_tex("repair_kit")
 	_repair.disabled = plan["kind"] == "none"
 	_hunt.disabled = crossing.hunt_block() != ""
+	_healer.visible = crossing.has_healer()
+	_healer.text = "Healer (%d)" % crossing.heal_cost()
+	_healer.disabled = crossing.heal_cost() <= 0 or crossing.coins < crossing.heal_cost()
 
 
 func _repair_tip() -> String:
@@ -999,6 +1003,11 @@ func _drop(index: int) -> void:
 
 func _dump(kind: String) -> void:
 	crossing.dump(kind)
+	_after_action()
+
+
+func _do_heal() -> void:
+	crossing.visit_healer()
 	_after_action()
 
 
@@ -1271,6 +1280,12 @@ func _build_ui() -> void:
 	_hunt.pressed.connect(_do_hunt)
 	Tips.attach(_hunt, _hunt_tip)
 	acts.add_child(_hunt)
+	_healer = _button("Healer", 9)
+	_healer.icon = Rich.icon_tex("healer")
+	_healer.pressed.connect(_do_heal)
+	Tips.attach(_healer, func(): return "The stop's healer patches the whole team back to full health and wakes {k:ko|knocked out} ones, without losing a day. %d {i:coins} (%d per hurt Trailomon, %d per knocked out one). Once per stop each crossing." % [
+		crossing.heal_cost(), Expedition.HEAL_COST_HURT, Expedition.HEAL_COST_KO])
+	acts.add_child(_healer)
 	_wagon_page.add_child(acts)
 	_ui.add_child(_panel)
 

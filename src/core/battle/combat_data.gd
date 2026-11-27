@@ -493,6 +493,21 @@ static func matchup(attack_type: String, target_type: String) -> float:
 	return 1.0
 
 
+## How one creature stands against a set of foes: {"up": foe types it hits hard, "down": foe
+## types that hit it hard}. Blight and Glow have no chart row, so they never show.
+static func standing(id: String, foes: Array) -> Dictionary:
+	var me := type_of(id)
+	var up: Array[String] = []
+	var down: Array[String] = []
+	for f in foes:
+		var t := type_of(String(f))
+		if matchup(me, t) > 1.0 and not up.has(t):
+			up.append(t)
+		if matchup(t, me) > 1.0 and not down.has(t):
+			down.append(t)
+	return {"up": up, "down": down}
+
+
 ## Active synergy tier (0 none, 1, 2) for a type given how many of it are on a side.
 static func synergy_tier(type: String, count: int) -> int:
 	if not SYNERGIES.has(type):
