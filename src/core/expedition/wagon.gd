@@ -9,6 +9,9 @@ extends RefCounted
 enum Part { NONE, RUNNING_GEAR, HARNESS, CANOPY }
 
 const EMPTY_MASS := 80.0
+## What the crew and the wagon's old spring motor pull on their own when the Trailomon haulers
+## can't do better: enough for a light wagon on easy ground, a slow push in the mountains.
+const BASE_PULL := 190.0
 const CAPACITY := 240.0
 const WARN_WEAR := 60.0
 const BREAKDOWN_DAMAGE := 20

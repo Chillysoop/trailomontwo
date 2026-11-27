@@ -40,10 +40,10 @@ const KIND_WEIGHTS := {
 
 ## Stall templates per stop kind: good -> [price, stock].
 const STALLS := {
-	"town": {"food": [2, 10], "water": [1, 8], "repair_kit": [12, 3], "medicine": [8, 2], "technique": [24, 1], "BATTLE": [10, 2]},
-	"village": {"food": [2, 6], "water": [1, 6], "medicine": [8, 1], "BATTLE": [10, 1]},
+	"town": {"food": [2, 10], "water": [1, 8], "repair_kit": [12, 3], "medicine": [8, 2], "technique": [24, 1], "BATTLE": [10, 2], "lure": [6, 3]},
+	"village": {"food": [2, 6], "water": [1, 6], "medicine": [8, 1], "BATTLE": [10, 1], "lure": [5, 2]},
 	"waystation": {"water": [1, 5], "food": [3, 4], "repair_kit": [14, 1]},
-	"post": {"food": [3, 6], "water": [1, 5], "repair_kit": [13, 2], "BATTLE": [10, 2], "technique": [24, 1]},
+	"post": {"food": [3, 6], "water": [1, 5], "repair_kit": [13, 2], "BATTLE": [10, 2], "technique": [24, 1], "lure": [6, 2]},
 	"ruins": {"dark_dust": [16, 1], "BATTLE": [9, 2]},
 	"stilts": {"water": [1, 6], "food": [3, 4], "medicine": [7, 2], "light_dust": [18, 1]},
 	"lookout": {"water": [2, 3], "food": [4, 2]},

@@ -93,14 +93,15 @@ static func title_for(terrain: String) -> String:
 	return "Wild %s Trailomon" % terrain
 
 
-## Roll a pack from the terrain's table: 4 creatures on risk 1, up to 6 on risk 3. At most
-## one legendary. Guards and bruisers stand in front.
-static func build(terrain: String, crossing_no: int, risk: int, rng: RandomNumberGenerator) -> Dictionary:
+## Roll a pack from the terrain's table: 4 creatures on risk 1, up to 6 on risk 3. A small team
+## meets smaller packs (team size + risk - 1), so a lone starter faces one wild Trailomon on a
+## safe road. At most one legendary. Guards and bruisers stand in front.
+static func build(terrain: String, crossing_no: int, risk: int, rng: RandomNumberGenerator, team_size := 6) -> Dictionary:
 	var table := weighted_pool(terrain, crossing_no)
 	if table.is_empty():
 		return {}
 	var plain := table.filter(func(id): return Species.rarity(id) != "legendary")
-	var size := clampi(3 + risk, 3, 6)
+	var size := pack_size(team_size, risk)
 	var picks: Array[String] = []
 	var legend := false
 	for i in size:
@@ -146,3 +147,35 @@ static func _text(terrain: String) -> String:
 		"Blight": return "Dark dust swirls across the road, and things move inside it: %s."
 		"Glow": return "The air shimmers with Light dust. Out of the glare step %s."
 	return "Wild Trailomon block the road: %s."
+
+
+## How many foes a wild pack has for a team of `team_size` on a road of this risk.
+static func pack_size(team_size: int, risk: int) -> int:
+	return clampi(mini(3 + risk, team_size + risk - 1), 1, 6)
+
+
+## A copy of a pack with at most `keep` creatures (the front row's middle lane first, then
+## its sides, then the back row). The boss of a guardian pack is not counted.
+static func trim(pack: Dictionary, keep: int) -> Dictionary:
+	var out := pack.duplicate(true)
+	for row in ["front", "back"]:
+		var lanes: Array = out.get(row, ["", "", ""])
+		for i in [1, 0, 2]:
+			if i >= lanes.size() or String(lanes[i]) == "":
+				continue
+			if keep > 0:
+				keep -= 1
+			else:
+				lanes[i] = ""
+		out[row] = lanes
+	# A pack with a back row but no front row moves its middle creature forward.
+	var front: Array = out.get("front", [])
+	var back: Array = out.get("back", [])
+	if not front.is_empty() and front.all(func(x): return String(x) == "") and not back.is_empty():
+		for i in [1, 0, 2]:
+			if i < back.size() and String(back[i]) != "":
+				front[1] = back[i]
+				back[i] = ""
+				break
+	return out
+

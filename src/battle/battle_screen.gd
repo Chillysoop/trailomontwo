@@ -644,18 +644,21 @@ func _end_combat() -> void:
 		_after_buttons.add_child(cont)
 		if crossing.pending_recruit != "":
 			var rid := crossing.pending_recruit
-			var take := Ui.button("Take in %s (%s)" % [Species.info(rid)["name"], Species.RARITIES[Species.rarity(rid)]["name"]], 10)
+			var take := Ui.button("Catch %s (%d%%)" % [Species.info(rid)["name"], roundi(crossing.catch_chance(rid) * 100.0)], 10)
 			take.icon = CompanionsScreen.portrait(rid)
 			take.expand_icon = false
 			take.add_theme_constant_override("icon_max_width", 16)
 			take.pressed.connect(func():
-				var line := crossing.recruit()
-				if line != "":
-					_result_lines.append(line)
+				var r := crossing.try_catch()
+				if String(r["line"]) != "":
+					_result_lines.append(String(r["line"]))
 					Rich.set_text(_after_body, "\n".join(_result_lines))
 				take.disabled = true
-				take.text = "%s joined" % Species.info(rid)["name"])
-			Tips.attach(take, func(): return CreatureCard.markup(rid, {"enemy": false}) + "\n[color=#ffe3a3]It goes to storage. Swap it into your team from the Companions screen.[/color]")
+				take.text = ("%s caught" if r["caught"] else "%s got away") % Species.info(rid)["name"])
+			Tips.attach(take, func():
+				var where := "It joins your team." if crossing.roster.size() < Expedition.TEAM_MAX else "Your team is full, so it goes to storage."
+				var lure := "{i:lure} You carry %d lure%s: one is used on this try (+%d%%)." % [crossing.lures, "" if crossing.lures == 1 else "s", roundi(Expedition.LURE_BONUS * 100.0)] if crossing.lures > 0 else "{i:lure} No lures. Buy them at towns and villages for better odds."
+				return CreatureCard.markup(rid, {"enemy": false}) + "\n[color=#ffe3a3]One try. If it breaks free, it's gone. %s[/color]\n%s" % [where, lure])
 			_after_buttons.add_child(take)
 		if crossing.pending_count() > 0:
 			var lv := Ui.button("Level ups (%d)" % crossing.pending_count(), 10)

@@ -14,6 +14,8 @@ var shots_taken := {}
 var log_lines: Array[String] = []
 var stats := {"battles": 0, "wins": 0, "losses": 0, "retreats": 0, "events": 0, "guardian": [], "crossing_days": [], "fails": [], "levels": [], "recruits": 0, "evolved": 0, "offscreen": {}}
 var exp: Node
+## Which first partner to pick (starter=<id>); empty = a random one of the three.
+var starter := ""
 var started_ms := 0
 var _crossing_seen := 0
 
@@ -28,6 +30,7 @@ func _initialize() -> void:
 			"crossings": crossings = int(kv[1])
 			"seed": seed_value = int(kv[1])
 			"style": style = kv[1]
+			"starter": starter = kv[1]
 	rng.seed = seed_value
 	seed(seed_value)
 	DirAccess.make_dir_recursive_absolute(out_dir)
@@ -49,6 +52,11 @@ func _run() -> void:
 	await _shot("01_save_picker")
 	_find_button(root, "New caravan").pressed.emit()
 	await _frames(30)
+	await _shot("02_starter_pick")
+	if starter == "":
+		starter = Expedition.STARTERS[rng.randi_range(0, Expedition.STARTERS.size() - 1)]
+	_find_button(root, "Choose %s" % Species.info(starter)["name"]).pressed.emit()
+	await _frames(10)
 	exp = current_scene
 	Engine.time_scale = 40.0 if DisplayServer.get_name() == "headless" else 6.0
 	_say("Started crossing 1 at %s" % _c().map.name_of(_c().at))
@@ -369,7 +377,7 @@ func _battle_tick(b: Node) -> void:
 			elif not shots_taken.has("after"):
 				shots_taken["after"] = true
 				await _shot("battle_aftermath")
-			var take := _find_button(b, "Take in")
+			var take := _find_button(b, "Catch ")
 			if take != null and not take.disabled:
 				take.pressed.emit()
 				stats["recruits"] += 1

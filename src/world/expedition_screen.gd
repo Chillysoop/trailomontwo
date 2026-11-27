@@ -13,6 +13,8 @@ var _backdrop: TravelBackdrop
 var _foreground: Node2D
 var _caravan: Caravan
 var _ui: CanvasLayer
+## True while the starter picker is open: the caravan behind it is only a stand-in.
+var _picking_starter := false
 var _hud: RichTextLabel
 var _hud_health: RichTextLabel
 var _hover: HoverZones
@@ -96,12 +98,24 @@ func start_new() -> void:
 	var loaded: Dictionary = SaveGame.pending
 	SaveGame.pending = {}
 	if loaded.is_empty():
-		_begin(Expedition.new_default(), 1)
+		_choose_starter()
 		return
 	crossing = loaded["expedition"]
 	_start = loaded["start"] if not (loaded["start"] as Dictionary).is_empty() else SaveGame.caravan(crossing)
 	_reset_view()
 	_resume(loaded["ui"])
+
+
+## A brand-new caravan: pick the first partner, then set out with it alone.
+## Nothing is saved until the pick is made.
+func _choose_starter() -> void:
+	_picking_starter = true
+	_begin(Expedition.new_game(Expedition.STARTERS[0]), 1)
+	var s := StarterScreen.open(_ui)
+	s.picked.connect(func(id: String):
+		_picking_starter = false
+		_begin(Expedition.new_game(id), 1)
+		_save())
 
 
 ## Start a crossing (new, next or retried) and save it.
@@ -183,7 +197,7 @@ func _auto_battle(ambush: bool) -> void:
 
 ## Autosave to the picked slot. A failed hardcore crossing deletes the save instead.
 func _save() -> void:
-	if _slot == "" or crossing == null:
+	if _slot == "" or crossing == null or _picking_starter:
 		return
 	if SaveGame.is_hardcore(_slot) and crossing.state == Expedition.State.FAILED:
 		SaveGame.delete(_slot)
@@ -211,7 +225,7 @@ func _next_crossing() -> void:
 ## A failed hardcore caravan is gone, so it starts over from scratch.
 func _retry() -> void:
 	if SaveGame.is_hardcore(_slot):
-		_begin(Expedition.new_default(), 1)
+		_choose_starter()
 	else:
 		_begin(SaveGame.next_crossing(_start, -1, crossing_no), crossing_no)
 
@@ -476,7 +490,8 @@ func _offer_recruit(id: String) -> void:
 		for c in _event_choices.get_children():
 			c.queue_free()
 		if line != "":
-			_event_result.text += "\n" + Rich.bb("[color=#9fe0a0]{i:ev_wildlife} {c:%s} joined you (in storage).[/color]" % id)
+			var where := "your team" if crossing.roster.has(id) else "you (in storage)"
+			_event_result.text += "\n" + Rich.bb("[color=#9fe0a0]{i:ev_wildlife} {c:%s} joined %s.[/color]" % [id, where])
 		_refresh_hud())
 	_event_choices.add_child(take)
 
@@ -608,8 +623,8 @@ func _refresh_trade() -> void:
 		return
 	var rumor := crossing.hear_rumor()
 	Rich.set_text(_rumor, ("{i:ev_travelers} [color=#e8dcc0]%s[/color]" % rumor) if rumor != "" else "")
-	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  {i:repair_kit}%d  {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d" % [
-		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), crossing.repair_kits, _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust])
+	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  {i:repair_kit}%d  {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d  {i:lure}%d" % [
+		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), crossing.repair_kits, _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust, crossing.lures])
 	for c in _trade_list.get_children():
 		c.queue_free()
 	var stall: Dictionary = crossing.stop()["stall"]
