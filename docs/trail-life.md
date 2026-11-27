@@ -230,3 +230,26 @@ Paths matter: which road you take, and when, decides how the crossing goes.
   `user://graves.json` (shared by all slots) and turns up as a roadside grave on the same crossing in
   later runs (60% of graves there, when you have one). Code: `src/core/trail/graves.gd`.
 - Tests: `tests/core/test_stakes.gd`. Shots: `tools/shots/stakes_shots.gd`.
+
+## People on the trail (wave 4 of the wagon-trail ideas)
+
+- **Pip Gasket's workshop** (`src/core/data/inventor.gd`). Each crossing, Pip sets up at one
+  stop (a town, post, village, waystation or stilt village, never the start or goal; picked from
+  the map seed and the crossing number). The outfitter and the locals say where, and it shows on
+  the map. Pip sells six permanent wagon upgrades, kept in `Expedition.upgrades` and carried
+  between crossings:
+  - spring wheels (wear x0.8), cargo rack (+40 room, `Expedition.capacity()`),
+  - dew still (+2 water a travel day), float tanks (+3 on Float checks, rivers and rapids),
+  - brass horn (wild packs x0.6), lantern mast (+1 sight through the fog).
+  Prices are 30 to 50 coins, +5 each crossing.
+- **Locals** (`src/core/trail/folk.gd`). Two named locals at every stop, each with a tip drawn
+  from the real game state: what the guardian fears (the habitat strong against its boss), the
+  frost day, the dangerous road out, a river's depth, Pip's workshop, whether there's game.
+  About one tip in four is wrong (`Folk.WRONG_CHANCE`). What they said is kept per stop
+  (`Expedition.folk_heard`), so it doesn't change when you come back.
+- **The Fernwicks** (`src/core/trail/family.gd`). Bram, Ottilie and Wren, met once per crossing
+  (12% a road day from the second road, world map only). Each meeting is the next beat: the
+  wagon in the mud, the split water barrel, Wren's fever, a shared fire, then old friends.
+  Choices change `family_trust` (fx key `trust`); at 3+ trust the old-friends beat brings a gift.
+  `family_stage` and `family_trust` carry between crossings.
+- Tests: `tests/core/test_people.gd`. Shots: `tools/shots/people_shots.gd`.

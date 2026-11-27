@@ -23,7 +23,8 @@ const SALT := "trailomon-hardcore-v1"
 ## Team progress that carries into the next crossing. Fields a build doesn't have are skipped.
 const CARRY := ["roster", "stored", "levels", "xp", "kits", "boosts", "known", "pending_levels",
 	"memory", "lineup", "items", "item_slots", "techniques", "light_dust", "dark_dust", "dust_used", "coins",
-	"map", "seen", "encountered", "met_in", "lures", "fresh_start", "score_history", "nicknames", "seals", "flares", "caught", "glints", "lead"]
+	"map", "seen", "encountered", "met_in", "lures", "fresh_start", "score_history", "nicknames", "seals",
+	"upgrades", "family_stage", "family_trust", "flares", "caught", "glints", "lead"]
 
 ## The save picked on the title screen for the crossing being played ("" = none, e.g. tests).
 static var current_slot := ""

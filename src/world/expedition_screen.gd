@@ -55,6 +55,7 @@ var _trade_page: VBoxContainer
 var _trade_list: GridContainer
 var _rumor: RichTextLabel
 var _job_box: HBoxContainer
+var _shop_box: VBoxContainer
 var _end_score: RichTextLabel
 var _end_grave: HBoxContainer
 var _epitaph: LineEdit
@@ -518,6 +519,8 @@ func _choice_markup(v: Dictionary) -> String:
 			var help := ""
 			for a in v.get("assists", []):
 				help += " [color=#%s]+{i:cap_%s}[/color]%s" % [TrailFx.GOOD, a["cap"], TrailFx.portrait(a["who"])]
+			if v.get("gear", "") != "":
+				help += " [color=#%s]+{i:%s}[/color]" % [TrailFx.GOOD, Inventor.info(v["gear"])["icon"]]
 			parts.append("%s%s%s%s %s" % [job, TrailFx.portrait(v["helper"]), bonus, help, TrailFx.odds(v["odds"])])
 		else:
 			parts.append("%s[color=#%s]nobody[/color] %s" % [job, TrailFx.BAD, TrailFx.odds(v["odds"])])
@@ -624,6 +627,8 @@ func _show_encounter() -> void:
 			line += (TrailFx.portrait(v["helper"]) if v["helper"] != "" else "[color=#%s]nobody[/color]" % TrailFx.BAD)
 			for a in v.get("assists", []):
 				line += " +{i:%s}%s" % [Glossary.icon("cap_" + String(a["cap"])), TrailFx.portrait(a["who"])]
+			if v.get("gear", "") != "":
+				line += " +{i:up_float_tanks}"
 			line += " " + TrailFx.odds(v["odds"])
 		elif not v["safe"]:
 			line = "[b]Slip past[/b]   {i:cap_scout}"
@@ -728,7 +733,13 @@ func _refresh_trade() -> void:
 		Rich.set_text(_rumor, "")
 	else:
 		var rumor := crossing.hear_rumor()
-		Rich.set_text(_rumor, ("{i:ev_travelers} [color=#e8dcc0]%s[/color]" % rumor) if rumor != "" else "")
+		var talk: Array[String] = []
+		if rumor != "":
+			talk.append("{i:ev_travelers} [color=#e8dcc0]%s[/color]" % rumor)
+		for f in crossing.hear_folk():
+			talk.append("{i:folk} [b]%s[/b], %s: [color=#e8dcc0]\"%s\"[/color]" % [f["name"], f["trade"], f["line"]])
+		Rich.set_text(_rumor, "\n".join(talk))
+	_refresh_workshop()
 	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  %s {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d  {i:lure}%d {i:flare}%d" % [
 		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), _spares_text(), _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust, crossing.lures, crossing.flares])
 	_refresh_job()
@@ -757,6 +768,33 @@ func _refresh_trade() -> void:
 			Tips.attach(back, func(): return "Hand one back for a full refund. Only before you set out.")
 			line.add_child(back)
 		_trade_list.add_child(line)
+
+
+## Pip Gasket's workshop: permanent wagon upgrades, when Pip has set up shop at this stop.
+func _refresh_workshop() -> void:
+	for c in _shop_box.get_children():
+		c.queue_free()
+	_shop_box.visible = crossing.at_workshop()
+	if not _shop_box.visible:
+		return
+	_shop_box.add_child(Rich.label("{i:inventor} [b]%s[/b], %s: [color=#e8dcc0]\"%s\"[/color]" % [Inventor.NAME, Inventor.TRADE, Inventor.hello(crossing.crossing_no)], 8, 284))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 3)
+	grid.add_theme_constant_override("v_separation", 3)
+	for id in Inventor.UPGRADES:
+		var u: Dictionary = Inventor.info(id)
+		var owned := crossing.has_upgrade(id)
+		var row := ClickRow.make("{i:%s} %s %s" % [u["icon"], u["name"], "[color=#9fe39a]fitted[/color]" if owned else "[color=#ffe3a3]{i:coins}%d[/color]" % crossing.upgrade_price(id)], 8, 128)
+		row.disabled = not crossing.can_buy_upgrade(id)
+		row.pressed.connect(func():
+			crossing.buy_upgrade(id)
+			_after_action()
+			_refresh_trade())
+		Tips.attach(row, func(): return "{i:%s} [b]%s[/b]\n%s\nA permanent upgrade: it stays with the wagon on every crossing.%s" % [u["icon"], u["name"], u["text"],
+			"" if owned or crossing.coins >= crossing.upgrade_price(id) else "\n[color=#ff8a7a]Not enough coins.[/color]"])
+		grid.add_child(row)
+	_shop_box.add_child(grid)
 
 
 ## The stop's job board: one delivery to a stop further on, paid on arrival, half if late.
@@ -788,13 +826,17 @@ func _refresh_outfitter() -> void:
 	var k := Outfitter.keeper(crossing.crossing_no)
 	_outfit_box.add_child(Rich.label("{i:trade} [b]%s[/b], %s: [color=#e8dcc0]\"%s\"[/color]" % [k["name"], k["trade"], k["hello"]], 8, 284))
 	var tip := Outfitter.advice(crossing.map)
+	var shop := crossing.workshop()
+	if shop != "":
+		crossing.seen[shop] = true
+		tip += (" " if tip != "" else "") + "%s the inventor is at %s this season, if you've coins to spare." % [Inventor.NAME, crossing.map.name_of(shop)]
 	if tip != "":
 		_outfit_box.add_child(Rich.label("[color=#c8bca8]\"%s\"[/color]" % tip, 8, 284))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	var used := crossing.load_weight()
-	var full := used >= Wagon.CAPACITY - 0.5
-	var bar := Rich.label("{i:weight} Load %d/%d%s" % [roundi(used), roundi(Wagon.CAPACITY), "  [color=#ff8a7a]FULL[/color]" if full else ""], 8)
+	var full := used >= crossing.capacity() - 0.5
+	var bar := Rich.label("{i:weight} Load %d/%d%s" % [roundi(used), roundi(crossing.capacity()), "  [color=#ff8a7a]FULL[/color]" if full else ""], 8)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	Tips.attach(bar, func(): return "{i:weight} Everything aboard counts: cargo %d, food and water %d, parts and curiosities %d.\nA heavier wagon wears faster and is harder to pull." % [
 		roundi(crossing.cargo_weight()), roundi((crossing.provisions + crossing.water * 2.0) / 2.0), roundi(crossing.supplies_weight() - (crossing.provisions + crossing.water * 2.0) / 2.0)])
@@ -873,9 +915,11 @@ func _buy(good: String) -> void:
 
 func _wagon_summary() -> String:
 	var w := crossing.wagon
-	var status := "{i:wagon} %d%%  wear %d/100   {i:weight}%d/%d   %s" % [w.integrity, roundi(w.wear), roundi(crossing.load_weight()), roundi(Wagon.CAPACITY), _spares_text()]
+	var status := "{i:wagon} %d%%  wear %d/100   {i:weight}%d/%d   %s" % [w.integrity, roundi(w.wear), roundi(crossing.load_weight()), roundi(crossing.capacity()), _spares_text()]
 	for c in crossing.curios:
 		status += "{i:%s}" % c
+	for u in crossing.upgrades:
+		status += "{i:%s}" % Inventor.info(u).get("icon", "wagon")
 	if w.broken != Wagon.Part.NONE:
 		status += "\n[color=#ff8a7a]BROKEN %s[/color]: %s" % [w.part_name().to_upper(), {
 			Wagon.Part.RUNNING_GEAR: "can't leave until repaired",
@@ -1157,7 +1201,7 @@ func _scrapbook_markup() -> String:
 func _lay_stone() -> void:
 	if not _epitaph.editable:
 		return
-	var lead: String = Species.info(crossing.roster[0])["name"] if not crossing.roster.is_empty() else "Your"
+	var lead: String = crossing.display_name(crossing.roster[0]) if not crossing.roster.is_empty() else "Your"
 	var region: String = crossing.map.regions.get(crossing.map.junctions.get(crossing.at, {}).get("region", ""), {}).get("name", "")
 	var g := Graves.lay(crossing_no, crossing.day, lead, region, _epitaph.text)
 	_epitaph.text = "\"%s\"" % g["epitaph"]
@@ -1289,6 +1333,10 @@ func _build_ui() -> void:
 	_trade_page.add_child(_outfit_box)
 	_rumor = Rich.label("", 8, 284)
 	_trade_page.add_child(_rumor)
+	_shop_box = VBoxContainer.new()
+	_shop_box.add_theme_constant_override("separation", 2)
+	_shop_box.visible = false
+	_trade_page.add_child(_shop_box)
 	_job_box = HBoxContainer.new()
 	_job_box.add_theme_constant_override("separation", 4)
 	_trade_page.add_child(_job_box)
