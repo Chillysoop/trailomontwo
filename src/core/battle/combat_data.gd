@@ -358,7 +358,7 @@ const GUARDIANS := [
 	GUARDIAN,
 	{"id": "bog_mother", "title": "The Bog Mother", "terrains": [], "min_risk": 1, "boss": "bogmother",
 		"text": "The marsh goes still. A toad the size of a cottage heaves out of the mire, her brood swarming around her.",
-		"front": ["bogjaw", "sporetoad", "bogjaw"], "back": ["sporetoad", "mirelamp", "lanternray"]},
+		"front": ["sporetoad", "sporetoad", "sporetoad"], "back": ["sporetoad", "mirelamp", "sporetoad"]},
 	{"id": "cogmammoth", "title": "The Cogmammoth", "terrains": [], "min_risk": 1, "boss": "cogmammoth",
 		"text": "Gears grind like thunder. A mammoth of moss and brass blocks the pass, its herd lowering their tusks.",
 		"front": ["quarrytusk", "", "quarrytusk"], "back": ["slatebeak", "", "slatebeak"]},
