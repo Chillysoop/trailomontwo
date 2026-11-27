@@ -277,6 +277,17 @@ const EVENTS := [
 				"failure": {"text": "She sighs and walks on."}},
 			{"label": "Decline", "success": {"text": "She shrugs and walks on."}},
 		]},
+	{"id": "nest", "kind": "wildlife", "title": "An abandoned nest", "terrains": [], "min_risk": 1,
+		"text": "A cold nest beside the road. One egg in it is still warm.",
+		"choices": [
+			{"label": "Keep it warm in the wagon", "cost": {"water": -3},
+				"success": {"text": "A hot-water bottle and a blanket. It wobbles.", "egg": 1}},
+			{"label": "Look for its parents", "cap": "scout", "difficulty": 6,
+				"success": {"text": "The parents are close by. They leave you berries.", "food": 8, "xp": 10},
+				"mixed": {"text": "No sign of them. You take the egg along.", "egg": 1},
+				"failure": {"text": "A parent finds you first, and it is not grateful.", "food": -6}},
+			{"label": "Leave it be", "success": {"text": "You leave it where it is."}},
+		]},
 	{"id": "trainer_beetles", "kind": "travelers", "title": "A trainer stares you down", "terrains": ["Forest", "Hills"], "min_risk": 1,
 		"text": "A boy in a cork helmet points at you. \"Nobody beats my beetles!\"",
 		"choices": [

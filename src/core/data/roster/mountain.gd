@@ -21,7 +21,7 @@ const SPECIES := {
 		"capabilities": {"strength": 3, "clear": 2}},
 	"scalecondor": {"rarity": "common", "name": "Scalecondor", "type": "Mountain", "size": "medium", "hauling": 0,
 		"capabilities": {"scout": 3, "steady": 2}},
-	"markhorn": {"rarity": "common", "name": "Markhorn", "type": "Mountain", "size": "medium", "hauling": 90, "evolves_to": "summitibex",
+	"markhorn": {"rarity": "common", "name": "Markhorn", "type": "Mountain", "size": "medium", "hauling": 90, "evolves_to": ["summitibex", "cairnhorn"],
 		"capabilities": {"steady": 3, "strength": 2}},
 	"summitibex": {"rarity": "rare", "name": "Summitibex", "type": "Mountain", "size": "large", "hauling": 120,
 		"capabilities": {"steady": 3, "strength": 3, "scout": 1}},
@@ -84,6 +84,9 @@ const SPECIES := {
 		"capabilities": {"strength": 3, "steady": 2}},
 	"rhinokhor": {"rarity": "legendary", "name": "Rhinokhor", "type": "Mountain", "size": "large", "hauling": 220,
 		"capabilities": {"strength": 3, "steady": 3}},
+	# ----- Branch: markhorn can grow into this instead of Summitibex -----
+	"cairnhorn": {"rarity": "rare", "branch": true, "name": "Cairnhorn", "type": "Mountain", "size": "large", "hauling": 130,
+		"capabilities": {"strength": 3, "guard": 2}},
 }
 
 const KITS := {
@@ -165,6 +168,8 @@ const KITS := {
 		"basic": "kodiak_ram", "passive": "granite_fur", "ultimate": "ridge_breaker"},
 	"rhinokhor": {"role": "Bruiser", "hp": 595, "atk": 37, "def": 36, "spd": 2.0,
 		"basic": "twist_horn", "passive": "ice_age_hide", "ultimate": "glacier_charge"},
+	"cairnhorn": {"role": "Guard", "hp": 520, "atk": 28, "def": 46, "spd": 2.2,
+		"basic": "antler_check", "passive": "granite_hide", "ultimate": "rockslide"},
 }
 
 const MOVES := {

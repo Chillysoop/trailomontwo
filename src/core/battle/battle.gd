@@ -95,6 +95,13 @@ static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 		f.atk = maxf(1.0, f.atk + float(boost.get("atk", 0.0)))
 		f.def = maxf(0.0, f.def + float(boost.get("def", 0.0)))
 		f.spd = maxf(0.6, f.spd - float(boost.get("spd", 0.0)))
+		var temper := String(player.get("tempers", {}).get(id, ""))
+		if temper != "":
+			f.max_hp *= Temperaments.factor(temper, "hp")
+			f.hp = f.max_hp
+			f.atk *= Temperaments.factor(temper, "atk")
+			f.def *= Temperaments.factor(temper, "def")
+			f.spd = maxf(0.6, f.spd * Temperaments.factor(temper, "spd"))
 		if hp.has(id):
 			f.hp = clampf(float(hp[id]), 0.0, f.max_hp)
 		var penalty := FATIGUE_PENALTY * clampf(float(fatigue.get(id, 0.0)), 0.0, 100.0) / 100.0

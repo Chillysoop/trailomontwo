@@ -215,10 +215,13 @@ func test_the_full_roster_is_300() -> void:
 			guardians += 1
 			continue
 		wild += 1
+		# Branch evolutions (a second form a line can grow into) come on top of the 300.
+		if Species.info(id).get("branch", false):
+			continue
 		if Species.biome(id) == "":
 			var key := "%s %s" % [Species.info(id)["type"], r]
 			per_habitat[key] = int(per_habitat.get(key, 0)) + 1
-	check_eq(wild, 300, "300 wild Trailomon")
+	check_eq(wild, 300 + 6, "300 wild Trailomon plus 6 branch forms")
 	check_eq(guardians, 12, "12 guardians")
 	check_eq(CombatData.GUARDIANS.size(), 12, "one guardian per crossing in the cycle")
 	for hab in ["Forest", "River", "Swamp", "Mountain", "Snow", "Jungle"]:

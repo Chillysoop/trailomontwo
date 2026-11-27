@@ -27,7 +27,7 @@ const SPECIES := {
 		"capabilities": {"light": 3, "heal": 1, "float": 2}},
 	"sluglet": {"rarity": "common", "name": "Sluglet", "type": "Swamp", "size": "small", "hauling": 0, "evolves_to": "slimewt",
 		"capabilities": {"forage": 2, "heal": 1}},
-	"slimewt": {"rarity": "common", "name": "Slimewt", "type": "Swamp", "size": "medium", "hauling": 0, "evolves_to": "axolurk",
+	"slimewt": {"rarity": "common", "name": "Slimewt", "type": "Swamp", "size": "medium", "hauling": 0, "evolves_to": ["axolurk", "sporewt"],
 		"capabilities": {"forage": 2, "heal": 2}},
 	"axolurk": {"rarity": "rare", "name": "Axolurk", "type": "Swamp", "size": "large", "hauling": 0,
 		"capabilities": {"float": 3, "heal": 2}},
@@ -84,6 +84,9 @@ const SPECIES := {
 		"capabilities": {"float": 2, "guard": 1}},
 	"komobill": {"rarity": "legendary", "name": "Komobill", "type": "Swamp", "size": "large", "hauling": 160,
 		"capabilities": {"strength": 3, "scout": 2}},
+	# ----- Branch: slimewt can grow into this instead of Axolurk -----
+	"sporewt": {"rarity": "rare", "branch": true, "name": "Sporewt", "type": "Swamp", "size": "medium", "hauling": 0,
+		"capabilities": {"light": 2, "heal": 2, "forage": 2}},
 }
 
 const KITS := {
@@ -165,6 +168,8 @@ const KITS := {
 		"basic": "shell_nudge", "passive": "bog_shell", "ultimate": "peat_shelter"},
 	"komobill": {"role": "Bruiser", "hp": 595, "atk": 37, "def": 36, "spd": 2.0,
 		"basic": "septic_bite", "passive": "carrion_wait", "ultimate": "komodo_rampage"},
+	"sporewt": {"role": "Support", "hp": 430, "atk": 30, "def": 26, "spd": 1.9,
+		"basic": "spore_spit", "passive": "spore_cloud", "ultimate": "plague_bloom"},
 }
 
 const MOVES := {

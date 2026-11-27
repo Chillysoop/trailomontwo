@@ -153,6 +153,18 @@ var caught := {}
 ## Glinting Trailomon the caravan owns (species id -> true), and the lead who walks beside the wagon.
 var glints := {}
 var lead := ""
+## Each Trailomon's temperament (Temperaments): species id -> kind.
+var tempers := {}
+## Eggs riding in the wagon: [{"species", "days"}]. Each day on the road or at rest brings one
+## closer; a hatchling joins without a catch roll.
+var eggs: Array = []
+const EGG_DAYS := 5
+const EGG_GLINT := 1.0 / 16.0
+## Rook, the rival caravan: met once a crossing; wins and losses across the whole journey.
+var rival_met := false
+var rival_record := {"wins": 0, "losses": 0}
+## The starter this caravan set out with (Rook picks against it).
+var starter := ""
 ## Flares: light one to scare off a wild pack and drive on (never works on a guardian).
 var flares := 0
 ## This crossing's obstacles (Obstacles.place): blocked roads by road key, and legendary lairs.
@@ -235,6 +247,8 @@ static func new_game(starter: String, rng_seed := -1) -> Expedition:
 	e.light_dust = 0
 	e.dark_dust = 0
 	e.lures = START_LURES
+	e.tempers = {starter: Temperaments.roll(e.life_rng)}
+	e.starter = starter
 	e.fresh_start = true
 	e.cargo.assign(START_CARGO.duplicate(true))
 	e.fatigue = {starter: 0.0}
@@ -684,7 +698,38 @@ func spend_day(travelling := false) -> String:
 		health = 0
 		state = State.FAILED
 		fail_reason = "Your traveller ran out of food and water." if notes.has("not enough food") or notes.has("not enough water") else "Your traveller couldn't go on."
+	if state != State.FAILED:
+		var hatched := _tend_eggs()
+		if hatched != "":
+			notes.append(hatched)
 	return "Day %d%s" % [day, (": " + ", ".join(notes)) if notes.size() > 0 else ""]
+
+
+## One more day for every egg; the first one that's ready hatches if there is room.
+func _tend_eggs() -> String:
+	for egg in eggs:
+		egg["days"] = maxi(0, int(egg["days"]) - 1)
+	for i in eggs.size():
+		if int(eggs[i]["days"]) <= 0 and has_room() and not roster.has(String(eggs[i]["species"])) and not stored.has(String(eggs[i]["species"])):
+			var sp := String(eggs[i]["species"])
+			eggs.remove_at(i)
+			var keep := pending_recruit
+			pending_recruit = sp
+			pending_glint = life_rng.randf() < EGG_GLINT
+			recruit()
+			pending_recruit = keep
+			note("egg", "An egg hatched: %s." % Species.info(sp)["name"])
+			return "the egg hatched into %s!" % Species.info(sp)["name"]
+	return ""
+
+
+## An egg of this habitat: a first-form Trailomon you don't have (not a legendary).
+func _find_egg(terrain: String) -> String:
+	var picks: Array[String] = []
+	for id in wild_for(terrain):
+		if Species.stage(id) == 1 and Species.rarity(id) != "legendary" and not eggs.any(func(e): return e["species"] == id):
+			picks.append(id)
+	return Species.pick_weighted(picks, life_rng) if not picks.is_empty() else ""
 
 
 var trip := {}
@@ -757,6 +802,10 @@ func step_day() -> bool:
 			journal.append("%s! The road is blocked." % String(o["name"]))
 	if has_upgrade("dew_still"):
 		water += minf(Inventor.STILL_WATER, room_for("water", Inventor.STILL_WATER))
+	if pending_event.is_empty() and _rival_turns_up():
+		rival_met = true
+		pending_event = Rival.event(crossing_no, rival_record)
+		journal.append("Rook's caravan pulls alongside!")
 	if pending_event.is_empty() and events_enabled and String(trip.get("terrain", "")) == "River" and not trip.get("forded", false):
 		trip["forded"] = true
 		pending_event = make_river(Rivers.depth_for(int(trip["risk"]), weather))
@@ -805,6 +854,15 @@ func step_day() -> bool:
 	return _arrive()
 
 
+## Rook shows up on the first road into the middle of the map (a caravan that started with a
+## starter; never on the test route).
+func _rival_turns_up() -> bool:
+	if not events_enabled or rival_met or starter == "" or map == null or map.is_test:
+		return false
+	var layer := int(map.junctions.get(String(trip.get("to", "")), {}).get("layer", -1))
+	return layer >= Rival.LAYERS_FROM and layer <= Rival.LAYERS_TO
+
+
 ## Pulling into a legendary's lair: it's asleep inside (once a trip, until it's beaten).
 func _lair_blocks() -> bool:
 	var to := String(trip.get("to", ""))
@@ -841,6 +899,9 @@ func _arrive() -> bool:
 		journal.append("The cargo is delivered: +%d coins." % cargo_paid)
 		note("score", "Reached %s on day %d." % [map.name_of(at), day])
 		score_history.append(arrival_score()["total"])
+		# Real games only (a save slot is in play), so tests and tools don't fill the hall.
+		if SaveGame.current_slot != "":
+			HallOfFame.record(self, SaveGame.current_slot)
 	elif events_enabled:
 		_landmark_card()
 	trip = {}
@@ -1484,6 +1545,11 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 	if fx.has("lures"):
 		lures = maxi(0, lures + int(fx["lures"]))
 		d.append({"icon": "lure", "amount": int(fx["lures"])})
+	if fx.has("egg"):
+		var sp := _find_egg(terrain)
+		if sp != "":
+			eggs.append({"species": sp, "days": EGG_DAYS})
+			d.append({"icon": "egg", "amount": 1, "label": "hatches in %d days" % EGG_DAYS})
 	if fx.has("flares"):
 		flares = maxi(0, flares + int(fx["flares"]))
 		d.append({"icon": "flare", "amount": int(fx["flares"])})
@@ -1581,7 +1647,11 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 			pending_recruit = wild[life_rng.randi_range(0, wild.size() - 1)]
 			meet(pending_recruit)
 			d.append({"icon": "ev_wildlife", "amount": 0, "who": pending_recruit, "label": "wants to join"})
-	if fx.get("battle", "") in ["giant", "lair"] and state == State.TRAVELLING:
+	if fx.get("battle", "") == "rival" and state == State.TRAVELLING:
+		pending_encounter = {"pack": Rival.pack(starter, crossing_no), "scale": float(CombatData.RISK_SCALE[2]), "guardian": false,
+			"bounty": int(fx.get("bounty", 0)), "from_event": true, "rival": true}
+		d.append({"icon": "rival", "amount": 0, "label": "battle"})
+	elif fx.get("battle", "") in ["giant", "lair"] and state == State.TRAVELLING:
 		pending_encounter = _obstacle_fight(String(fx["battle"]))
 		d.append({"icon": "risk", "amount": 0, "label": "fight"})
 	elif fx.has("battle") and state == State.TRAVELLING:
@@ -1968,16 +2038,17 @@ static func _same_goods(cost: Dictionary, fx: Dictionary) -> bool:
 # ---------- creatures and battle lineup ----------
 
 func max_hp(id: String) -> float:
-	return CombatData.max_hp(id) + float(boosts.get(id, {}).get("hp", 0.0))
+	return (CombatData.max_hp(id) + float(boosts.get(id, {}).get("hp", 0.0))) * Temperaments.factor(String(tempers.get(id, "")), "hp")
 
 
 ## A creature's current stat after level-up boosts ("atk", "def", "spd").
 func stat(id: String, key: String) -> float:
 	var base := float(CombatData.stats(id)[key])
 	var b := float(boosts.get(id, {}).get(key, 0.0))
+	var t := Temperaments.factor(String(tempers.get(id, "")), key)
 	if key == "spd":
-		return maxf(0.6, base - b)
-	return maxf(1.0 if key == "atk" else 0.0, base + b)
+		return maxf(0.6, (base - b) * t)
+	return maxf(1.0 if key == "atk" else 0.0, (base + b) * t)
 
 
 ## The move in use for "basic", "passive" or "ultimate".
@@ -2134,7 +2205,7 @@ func evolve(id: String, to: String) -> String:
 		var i: int = list.find(id)
 		if i >= 0:
 			list[i] = to
-	for d in [fatigue, levels, xp, kits, boosts, known, memory, dust_used, nicknames]:
+	for d in [fatigue, levels, xp, kits, boosts, known, memory, dust_used, nicknames, tempers, glints]:
 		if d.has(id):
 			d[to] = d[id]
 			d.erase(id)
@@ -2377,7 +2448,7 @@ func make_battle(ambush := false, rng_seed := -1) -> Battle:
 	opts["items"] = [] if is_hunt() else slotted_items()
 	return Battle.create(
 		{"slots": lineup.duplicate(), "hp": creature_hp.duplicate(), "fatigue": fatigue.duplicate(),
-			"kits": kits.duplicate(true), "boosts": boosts.duplicate(true)},
+			"kits": kits.duplicate(true), "boosts": boosts.duplicate(true), "tempers": tempers.duplicate()},
 		{"front": pack["front"], "back": pack["back"], "boss": pack.get("boss", ""), "scale": enemy_scale()},
 		opts)
 
@@ -2451,6 +2522,9 @@ func finish_battle(battle: Battle) -> Array[String]:
 	var giant := bool(pending_encounter.get("giant", false))
 	var deep := bool(pending_encounter.get("deep", false))
 	var glint := String(pending_encounter.get("glint", ""))
+	var rival := bool(pending_encounter.get("rival", false))
+	if rival:
+		rival_record[("wins" if outcome == Battle.Outcome.VICTORY else "losses")] = int(rival_record.get("wins" if outcome == Battle.Outcome.VICTORY else "losses", 0)) + 1
 	catch_bonus = float(pending_encounter.get("catch_bonus", 0.0)) + (Obstacles.DEEP_CATCH if deep else 0.0)
 	pending_encounter = {}
 	pending_recruit = ""
@@ -2462,7 +2536,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 			if guardian:
 				finale = "fight"
 				note("ultimate", "Beat %s." % String(pack.get("title", "the guardian")))
-			lines.append("Victory! %s" % (("%s falls back and the road to %s is clear." % [String(pack.get("title", "The guardian")), map.name_of(map.goal)]) if guardian else "The pack scatters."))
+			lines.append("Victory! %s" % (("%s falls back and the road to %s is clear." % [String(pack.get("title", "The guardian")), map.name_of(map.goal)]) if guardian else ("Rook groans and hands over the purse." if rival else "The pack scatters.")))
 			var gid := String(pack.get("id", ""))
 			if guardian and gid != "" and not seals.has(gid):
 				seals.append(gid)
@@ -2475,6 +2549,8 @@ func finish_battle(battle: Battle) -> Array[String]:
 			wagon.wear = minf(100.0, wagon.wear + RETREAT_WEAR)
 			lines.append("Both sides are exhausted and pull back." if outcome == Battle.Outcome.WITHDRAW else "You pull the team back and the wagon rattles away.")
 			lines.append("The scramble costs %d food and %d wagon wear." % [RETREAT_FOOD, RETREAT_WEAR])
+		_ when rival:
+			lines.append("Rook pockets your bet. \"Better luck next crossing!\"")
 		_ when spar:
 			lines.append("The trainer wins this one, grins, and moves on. No harm done.")
 		_:
@@ -2685,6 +2761,8 @@ func recruit() -> String:
 	else:
 		stored.append(id)
 		line = "%s joined you%s. It waits in storage until you swap it into the team." % [Species.info(id)["name"], at_lv]
+	if not tempers.has(id):
+		tempers[id] = Temperaments.roll(life_rng)
 	creature_hp[id] = max_hp(id)
 	encountered[id] = true
 	caught[id] = true

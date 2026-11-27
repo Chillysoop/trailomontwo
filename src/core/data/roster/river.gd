@@ -27,7 +27,7 @@ const SPECIES := {
 		"capabilities": {"scout": 3, "float": 2}},
 	"crayhopper": {"rarity": "common", "name": "Crayhopper", "type": "River", "size": "small", "hauling": 0, "evolves_to": "pincerfrog",
 		"capabilities": {"float": 2, "forage": 2}},
-	"pincerfrog": {"rarity": "common", "name": "Pincerfrog", "type": "River", "size": "medium", "hauling": 0, "evolves_to": "bullcray",
+	"pincerfrog": {"rarity": "common", "name": "Pincerfrog", "type": "River", "size": "medium", "hauling": 0, "evolves_to": ["bullcray", "riptoad"],
 		"capabilities": {"float": 3, "forage": 2}},
 	"bullcray": {"rarity": "rare", "name": "Bullcray", "type": "River", "size": "large", "hauling": 110,
 		"capabilities": {"strength": 2, "float": 3}},
@@ -84,6 +84,9 @@ const SPECIES := {
 		"capabilities": {"float": 3, "strength": 3}},
 	"belugacrane": {"rarity": "legendary", "name": "Belugacrane", "type": "River", "size": "large", "hauling": 150,
 		"capabilities": {"float": 3, "heal": 3}},
+	# ----- Branch: pincerfrog can grow into this instead of Bullcray -----
+	"riptoad": {"rarity": "rare", "branch": true, "name": "Riptoad", "type": "River", "size": "medium", "hauling": 0,
+		"capabilities": {"float": 3, "scout": 2}},
 }
 
 const KITS := {
@@ -165,6 +168,8 @@ const KITS := {
 		"basic": "breach_bite", "passive": "pod_hunger", "ultimate": "death_spiral"},
 	"belugacrane": {"role": "Healer", "hp": 545, "atk": 31, "def": 30, "spd": 1.7,
 		"basic": "crane_song", "passive": "melon_hum", "ultimate": "white_chorus"},
+	"riptoad": {"role": "Striker", "hp": 400, "atk": 37, "def": 20, "spd": 1.6,
+		"basic": "drain_lance", "passive": "riptide_pull", "ultimate": "whirlpool"},
 }
 
 const MOVES := {
