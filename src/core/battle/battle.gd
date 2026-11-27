@@ -34,6 +34,15 @@ const RETREAT_SECS := 3.0
 const FATIGUE_PENALTY := 0.25
 ## A heal ultimate waits until someone is below this share of health.
 const HEAL_ULT_BELOW := 0.75
+## Hunts: a grazing herd. Prey never fight back and bolt one by one (between HUNT_FLEE seconds);
+## a prey hit but not knocked out bolts STARTLE_SECS later. One charger stands its ground
+## and fights. At HUNT_SECS everything left runs off and the hunt is over. The wagon stays
+## quiet so it doesn't spook them.
+const HUNT_SECS := 25.0
+const HUNT_FLEE := Vector2(7.0, 18.0)
+const STARTLE_SECS := 3.0
+## Prey are fragile next to fighters: this share of their usual health.
+const PREY_HP := 0.1
 
 var fighters: Array[Fighter] = []
 var time := 0.0
@@ -50,13 +59,15 @@ var _wagon_timer := WAGON_INTERVAL * 0.6
 var _next_uid := 0
 ## Battle items in use: names for the screen, and Mending Moss style heals [pct, every, timer].
 var items_used: Array[String] = []
+var hunt := false
 var _regen: Array = []
 
 
 ## player: {"slots": {Vector2i(row, lane): species}, "hp": {species: hp}, "fatigue": {species: 0-100},
 ##          "kits": {species: {"basic", "passive", "ultimate"}}, "boosts": {species: {"hp", "atk", "def", "spd"}}}
 ## enemy: {"front": [3 ids], "back": [3 ids], "boss": id or "", "scale": float}
-## opts: {"seed": int, "ambush": bool, "items": [battle item ids]}
+## opts: {"seed": int, "ambush": bool, "items": [battle item ids], "hunt": bool}
+## In a hunt the enemy front-middle creature is the charger; everything else is prey.
 static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 	var b := Battle.new()
 	if opts.has("seed"):
@@ -110,6 +121,14 @@ static func create(player: Dictionary, enemy: Dictionary, opts := {}) -> Battle:
 		f.ult = 0.0 if caught else (30.0 if ambush else 0.0)
 	for id in opts.get("items", []):
 		b._use_item(String(id))
+	if bool(opts.get("hunt", false)):
+		b.hunt = true
+		for f in b.fighters:
+			if f.side == Formation.Side.ENEMY and not (f.row == Formation.Row.FRONT and f.lane == 1):
+				f.prey = true
+				f.max_hp *= PREY_HP
+				f.hp = f.max_hp
+				f.bolt_at = b.rng.randf_range(HUNT_FLEE.x, HUNT_FLEE.y)
 	return b
 
 
@@ -235,6 +254,13 @@ func step() -> void:
 			_tick_fighter(f)
 		if _check_end():
 			return
+	if hunt:
+		if time >= HUNT_SECS:
+			for f in fighters:
+				if f.side == Formation.Side.ENEMY and f.alive():
+					_bolt_off(f)
+			_finish(Outcome.VICTORY)
+		return
 	if _any_alive(Formation.Side.PLAYER):
 		_wagon_timer -= TICK
 		if _wagon_timer <= 0.0:
@@ -259,6 +285,10 @@ func request_retreat() -> void:
 
 
 func _tick_fighter(f: Fighter) -> void:
+	if f.prey:
+		if time >= f.bolt_at:
+			_bolt_off(f)
+		return
 	for i in range(f.mods.size() - 1, -1, -1):
 		f.mods[i]["secs"] = float(f.mods[i]["secs"]) - TICK
 		if float(f.mods[i]["secs"]) <= 0.0:
@@ -862,6 +892,8 @@ func _deal(src: Fighter, t: Fighter, amount: float, tag: String, label: String, 
 	var m := CombatData.matchup(src.type, t.type) if src != null else 1.0
 	events.append({"t": "hit", "src": src.uid if src != null else WAGON_UID, "dst": t.uid, "amount": total,
 		"absorbed": absorbed, "label": label, "matchup": m, "tag": tag})
+	if t.prey and t.hp > 0.0:
+		t.bolt_at = minf(t.bolt_at, time + STARTLE_SECS)
 	if t.hp <= 0.0:
 		t.hp = 0.0
 		t.shield = 0.0
@@ -869,6 +901,31 @@ func _deal(src: Fighter, t: Fighter, amount: float, tag: String, label: String, 
 		t.poison_secs = 0.0
 		t.mods.clear()
 		events.append({"t": "ko", "src": src.uid if src != null else WAGON_UID, "dst": t.uid})
+
+
+## A prey animal (or anything left at the end of a hunt) runs off the field.
+func _bolt_off(f: Fighter) -> void:
+	f.fled = true
+	f.mods.clear()
+	f.poison_secs = 0.0
+	events.append({"t": "flee", "src": f.uid, "dst": f.uid})
+
+
+## Hunts: the creatures knocked out before they got away (species ids).
+func hunt_bag() -> Array[String]:
+	var out: Array[String] = []
+	for f in fighters:
+		if f.side == Formation.Side.ENEMY and f.hp <= 0.0 and not f.fled:
+			out.append(f.species)
+	return out
+
+
+## Hunts: did the charger go down?
+func charger_down() -> bool:
+	for f in fighters:
+		if f.side == Formation.Side.ENEMY and not f.prey:
+			return f.hp <= 0.0 and not f.fled
+	return false
 
 
 func _check_end() -> bool:

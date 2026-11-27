@@ -11,6 +11,9 @@ extends RefCounted
 ## regions: id -> {"name", "terrain", "center": Vector2}
 
 const LAYERS := 14
+## Rough tracks per map, and how much harder they are to haul over.
+const ROUGH_TRACKS := 4
+const ROUGH_FACTOR := 1.2
 const LAYER_GAP := 180.0
 const HEIGHT := 1000.0
 const SIZE := Vector2(LAYER_GAP * (LAYERS - 1) + 160.0, HEIGHT)
@@ -163,11 +166,30 @@ static func generate(rng_seed: int) -> WorldMap:
 		for id in layers[l]:
 			m.junctions[id]["kind"] = "town"
 	m._make_stops(rng)
+	m._add_rough_tracks(layers, rng)
 	m.start = layers[0][1]
 	m.goal = layers[LAYERS - 1][2]
 	m.junctions[m.start]["name"] = "Eastgate"
 	m.junctions[m.goal]["name"] = "Westwatch"
 	return m
+
+
+## Rough tracks: a few steep, risky shortcuts that skip a column of stops. Fewer days than the
+## roads around, but risk 3 and harder going. Added last, so the rest of the map is unchanged.
+func _add_rough_tracks(layers: Array, rng: RandomNumberGenerator) -> void:
+	for k in ROUGH_TRACKS:
+		var l := rng.randi_range(1, LAYERS - 4)
+		var here: Array = layers[l]
+		var from: String = here[rng.randi_range(0, here.size() - 1)]
+		var p: Vector2 = junctions[from]["pos"]
+		var far: Array = layers[l + 2].duplicate()
+		far.sort_custom(func(a, b): return p.distance_to(junctions[a]["pos"]) < p.distance_to(junctions[b]["pos"]))
+		var to: String = far[0]
+		if has_segment(from, to):
+			continue
+		var terrain: String = regions[junctions[to]["region"]]["terrain"]
+		segments.append({"a": from, "b": to, "terrain": terrain, "days": 3, "rough": true,
+			"terrain_factor": float(TERRAIN_FACTOR[terrain]) * ROUGH_FACTOR, "risk": 3})
 
 
 func _make_regions(rng: RandomNumberGenerator) -> void:
@@ -383,6 +405,35 @@ func kind_of(id: String) -> String:
 
 func region_of(id: String) -> Dictionary:
 	return regions.get(junctions.get(id, {}).get("region", ""), {})
+
+
+## Fewest travel days from a to b (roads' "days"), or -1 if there is no way.
+func shortest_days(a: String, b: String) -> int:
+	var dist := {a: 0}
+	var open: Array[String] = [a]
+	while not open.is_empty():
+		var best := 0
+		for i in open.size():
+			if int(dist[open[i]]) < int(dist[open[best]]):
+				best = i
+		var j: String = open.pop_at(best)
+		if j == b:
+			return int(dist[j])
+		for s in exits(j):
+			var d := int(dist[j]) + int(s["days"])
+			if not dist.has(s["to"]) or d < int(dist[s["to"]]):
+				dist[s["to"]] = d
+				if not open.has(s["to"]):
+					open.append(s["to"])
+	return -1
+
+
+## A river road has a ferry if either end is a place people live by the water.
+func has_ferry(seg: Dictionary) -> bool:
+	for j in [seg["a"], seg["b"]]:
+		if ["town", "post", "village", "stilts"].has(kind_of(j)):
+			return true
+	return false
 
 
 func has_segment(a: String, b: String) -> bool:

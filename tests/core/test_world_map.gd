@@ -17,7 +17,8 @@ func test_generated_map_is_big_and_connected() -> void:
 		check(m.junctions.size() >= 60, "seed %d has %d stops" % [s, m.junctions.size()])
 		check(m.segments.size() >= 70, "seed %d has %d roads" % [s, m.segments.size()])
 		var h := m.hops(m.start, m.goal)
-		check(h >= WorldMap.LAYERS - 1, "seed %d goal %d roads away" % [s, h])
+		# Rough tracks skip a column each, so a few roads can be saved.
+		check(h >= WorldMap.LAYERS - 1 - WorldMap.ROUGH_TRACKS, "seed %d goal %d roads away" % [s, h])
 		for id in m.junctions:
 			check(m.hops(m.start, id) >= 0, "seed %d: %s is reachable" % [s, id])
 

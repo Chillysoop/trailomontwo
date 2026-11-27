@@ -111,6 +111,8 @@ const ENTRIES := {
 		"text": "Fixes a broken harness in a day. {k:cap_steady|Steady} Trailomon can jury-rig one."},
 	"spare_canvas": {"name": "Canopy canvas", "icon": "spare_canvas",
 		"text": "Fixes a torn canopy in a day. {k:cap_guard|Guard} Trailomon can jury-rig one."},
+	"frost": {"name": "Frost", "icon": "w_cold",
+		"text": "The season is closing. A few days before frost the weather turns cold and stalls charge more. After it every day is cold, the crew loses health and haulers tire."},
 	"lucky_cog": {"name": "Lucky cog", "icon": "lucky_cog", "text": "Stops the first breakdown of the crossing, then rattles loose."},
 	"reed_pipe": {"name": "Reed pipe", "icon": "reed_pipe", "text": "A tune at camp: rest days heal the team and haulers much more."},
 	"ember_kettle": {"name": "Ember kettle", "icon": "ember_kettle", "text": "Hot meals: cold and snowy days don't eat extra food."},
@@ -134,6 +136,8 @@ const ENTRIES := {
 		"text": "Past 60 wear a wagon part can break: the axle (can't leave), harness (weaker hauling) or canopy (water spoils)."},
 	"pierce": {"name": "pierces",
 		"text": "Ignores {k:def} completely."},
+	"hunt": {"name": "Hunting", "icon": "food",
+		"text": "Spend a day hunting a grazing herd near a wild stop (once per stop, never in towns). Prey never fight back and bolt one by one, sooner if hit but not knocked out. One charger fights. Every creature knocked out before it gets away is {i:food} food, if it fits in the wagon. Battle items stay packed."},
 	"ambush": {"name": "ambush",
 		"text": "You were caught off guard: your team starts the fight slower."},
 	# trail jobs (capabilities): who can help in trail events and moments
