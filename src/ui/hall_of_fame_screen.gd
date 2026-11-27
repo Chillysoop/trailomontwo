@@ -61,7 +61,7 @@ func _ready() -> void:
 func _row(e: Dictionary) -> Control:
 	var row := VBoxContainer.new()
 	row.add_theme_constant_override("separation", 1)
-	var how := {"toll": " by the toll road", "rapids": " by the rapids", "fight": ""}.get(String(e.get("finale", "")), "")
+	var how: String = {"toll": " by the toll road", "rapids": " by the rapids", "fight": ""}.get(String(e.get("finale", "")), "")
 	row.add_child(Rich.label("[b]Crossing %d[/b]%s   day %d   {i:score} %d [color=#ffe3a3]%s[/color]   [color=#%s]%s[/color]" % [
 		int(e.get("crossing", 1)), how, int(e.get("day", 0)), int(e.get("score", 0)), String(e.get("rank", "")),
 		CreatureCard.MUTED, String(e.get("date", ""))], 9, 560))
