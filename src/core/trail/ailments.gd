@@ -34,9 +34,9 @@ static func info(kind: String) -> Dictionary:
 
 
 ## The doctor's card for `who` catching `kind`.
-static func make(kind: String, who: String, light_dust: int) -> Dictionary:
+static func make(kind: String, who: String, light_dust: int, shown := "") -> Dictionary:
 	var k := info(kind)
-	var nm := String(Species.info(who)["name"])
+	var nm := shown if shown != "" else String(Species.info(who)["name"])
 	var choices: Array = [
 		{"label": "A healer tends it", "cap": "heal", "difficulty": HEAL_DIFFICULTY,
 			"success": {"text": "Gentle hands and a warm poultice. %s is right again." % nm, "ail_cure": who},

@@ -159,6 +159,16 @@ ICONS = {
     "starter": "a small brass compass rose with a green leaf in its center",
     "map": "a folded parchment treasure map with a dotted trail and a red x",
     "job_forage": "a small woven basket full of red berries and mushrooms",
+    # people on the trail (wave 4)
+    "inventor": "a brass wrench crossed with a small spring and a cog, tinkerer tools",
+    "folk": "two small speech bubbles, one brown and one cream, with tiny leaves",
+    "family": "a small covered pioneer wagon with a heart on its canvas",
+    "up_spring_wheels": "a wooden wagon wheel with a coiled brass spring on its hub",
+    "up_cargo_rack": "a wooden roof rack piled with tied crates and a rope",
+    "up_dew_still": "a small copper still with a coiled pipe dripping a blue water drop",
+    "up_float_tanks": "two sealed brass barrels with rivets floating on blue water",
+    "up_brass_horn": "a big curved brass horn with a flared bell and sound lines",
+    "up_lantern_mast": "a tall wooden mast with a glowing teal lantern at the top",
 }
 
 

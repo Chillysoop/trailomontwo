@@ -121,6 +121,15 @@ var finale := ""
 var deliveries_on_time := 0
 ## Arrival scores of earlier crossings (carried between crossings).
 var score_history: Array = []
+## Pip Gasket's permanent wagon upgrades: id -> true (see Inventor). Kept between crossings.
+var upgrades := {}
+## The Fernwicks (see Family): which beat of their story comes next, how much they trust you,
+## and whether you've met them on this crossing.
+var family_stage := 0
+var family_trust := 0
+var family_met := false
+## What the locals said at each stop (see Folk), so they say the same thing if you come back.
+var folk_heard := {}
 ## Dice for weather and trail moments, so they don't change which events and battles roll.
 var life_rng := RandomNumberGenerator.new()
 ## Every trail moment so far: {"id", "icon", "text", "who", "fx", "deltas", "sight"}. The screen shows new ones.
@@ -314,6 +323,8 @@ func reveal(id: String) -> void:
 		depth = 2
 	if has_curio("brass_spyglass"):
 		depth += 1
+	if has_upgrade("lantern_mast"):
+		depth += 1
 	if map.kind_of(id) == "lookout":
 		depth = 3
 	for j in map.around(id, depth):
@@ -429,8 +440,13 @@ func load_weight() -> float:
 	return cargo_weight() + supplies_weight()
 
 
+## How much the wagon holds (Pip's cargo rack adds room).
+func capacity() -> float:
+	return Wagon.CAPACITY + (Inventor.RACK_ROOM if has_upgrade("cargo_rack") else 0.0)
+
+
 func free_space() -> float:
-	return maxf(0.0, Wagon.CAPACITY - load_weight())
+	return maxf(0.0, capacity() - load_weight())
 
 
 ## What the haulers have to pull: the empty wagon plus part of the load.
@@ -444,6 +460,73 @@ func spare_count(id: String) -> int:
 
 func has_curio(id: String) -> bool:
 	return curios.has(id)
+
+
+# ---------- Pip Gasket's workshop ----------
+
+func has_upgrade(id: String) -> bool:
+	return upgrades.has(id)
+
+
+## Wear multiplier from upgrades (spring wheels).
+func wear_mult() -> float:
+	return Inventor.WEAR_MULT if has_upgrade("spring_wheels") else 1.0
+
+
+## The stop where Pip has set up shop this crossing.
+func workshop() -> String:
+	return Inventor.workshop(map, crossing_no)
+
+
+func at_workshop() -> bool:
+	return state == State.AT_JUNCTION and at == workshop() and at != ""
+
+
+func upgrade_price(id: String) -> int:
+	return Inventor.price(id, crossing_no)
+
+
+func can_buy_upgrade(id: String) -> bool:
+	return at_workshop() and Inventor.is_upgrade(id) and not has_upgrade(id) and coins >= upgrade_price(id)
+
+
+func buy_upgrade(id: String) -> bool:
+	if not can_buy_upgrade(id):
+		return false
+	coins -= upgrade_price(id)
+	upgrades[id] = true
+	journal.append("%s bolts a %s onto the wagon." % [Inventor.NAME, String(Inventor.info(id)["name"]).to_lower()])
+	note(Inventor.info(id)["icon"], "Fitted the %s." % String(Inventor.info(id)["name"]).to_lower())
+	if id == "lantern_mast":
+		reveal(at)
+	return true
+
+
+# ---------- folk at the stops ----------
+
+## The two locals at this stop and their advice (see Folk). Anything they point at shows on the map.
+func hear_folk() -> Array:
+	if state != State.AT_JUNCTION or map == null:
+		return []
+	var key := "%d:%s" % [crossing_no, at]
+	if not folk_heard.has(key):
+		folk_heard[key] = Folk.at_stop(self)
+		for f in folk_heard[key]:
+			if f.has("to"):
+				seen[String(f["to"])] = true
+	return folk_heard[key]
+
+
+# ---------- the Fernwicks ----------
+
+## Their next story beat as an event (and count this crossing's meeting).
+func meet_family() -> Dictionary:
+	family_met = true
+	var e := Family.beat(family_stage, family_trust, crossing_no)
+	family_stage += 1
+	journal.append("You meet %s." % Family.NAME)
+	note("family", "Met the Fernwicks: %s." % String(e["title"]).to_lower())
+	return e
 
 
 func hauling_available() -> float:
@@ -469,7 +552,7 @@ func forecast(seg: Dictionary) -> Dictionary:
 	var pushing := result == Hauling.Result.PUSH
 	var distance := trip_distance(seg, pushing)
 	var days := maxi(1, ceili((distance - carry) / float(TrailLife.pace(pace)["speed"]) - 0.0001))
-	var wear_added := Wagon.wear_per_day(float(seg["terrain_factor"]), load_weight(), pushing) * float(TrailLife.pace(pace)["wear"]) * days
+	var wear_added := Wagon.wear_per_day(float(seg["terrain_factor"]), load_weight(), pushing) * float(TrailLife.pace(pace)["wear"]) * days * wear_mult()
 	return {
 		"wear": wear_added,
 		"wear_after": wagon.wear + wear_added,
@@ -595,6 +678,8 @@ func step_day() -> bool:
 	_wear_day(float(trip["terrain_factor"]), trip["pushing"])
 	if state == State.FAILED:
 		return false
+	if has_upgrade("dew_still"):
+		water += minf(Inventor.STILL_WATER, room_for("water", Inventor.STILL_WATER))
 	if events_enabled and String(trip.get("terrain", "")) == "River" and not trip.get("forded", false):
 		trip["forded"] = true
 		pending_event = make_river(Rivers.depth_for(int(trip["risk"]), weather))
@@ -611,7 +696,10 @@ func step_day() -> bool:
 			_trip_had_event = true
 			_trip_events += 1
 			journal.append(pending_event["title"] + "!")
-	if pending_event.is_empty() and events_enabled and not _trip_had_battle and battle_rng.randf() < BATTLE_CHANCE + BATTLE_RISK_CHANCE * int(trip["risk"]) + TrailLife.weather_value(weather, "ambush"):
+	if pending_event.is_empty() and events_enabled and not map.is_test and not family_met and visited.size() >= 2 and life_rng.randf() < Family.DAILY_CHANCE:
+		pending_event = meet_family()
+		_trip_had_event = true
+	if pending_event.is_empty() and events_enabled and not _trip_had_battle and battle_rng.randf() < (BATTLE_CHANCE + BATTLE_RISK_CHANCE * int(trip["risk"]) + TrailLife.weather_value(weather, "ambush")) * (Inventor.HORN_MULT if has_upgrade("brass_horn") else 1.0):
 		var packs := CombatData.packs_for(trip, crossing_no)
 		if not packs.is_empty():
 			var pack: Dictionary = CombatData.pick_pack(packs, battle_rng)
@@ -703,7 +791,7 @@ func _wear_day(terrain_factor: float, pushing: bool) -> void:
 	for id in haulers:
 		fatigue[id] = clampf(float(fatigue.get(id, 0.0)) + HAUL_FATIGUE * (2.0 if pushing else 1.0) * float(p["fatigue"]) + TrailLife.weather_value(weather, "fatigue"), 0.0, 100.0)
 	var chance := Wagon.breakdown_chance(wagon.wear)
-	wagon.wear = minf(100.0, wagon.wear + Wagon.wear_per_day(terrain_factor, load_weight(), pushing) * float(p["wear"]) + TrailLife.weather_value(weather, "wear"))
+	wagon.wear = minf(100.0, wagon.wear + Wagon.wear_per_day(terrain_factor, load_weight(), pushing) * float(p["wear"]) * wear_mult() + TrailLife.weather_value(weather, "wear"))
 	if wagon.broken == Wagon.Part.NONE and rng.randf() < chance:
 		var parts := [Wagon.Part.RUNNING_GEAR, Wagon.Part.HARNESS, Wagon.Part.CANOPY]
 		_break(parts[rng.randi_range(0, parts.size() - 1)])
@@ -783,7 +871,7 @@ func catch_ailment(kind := "", who := "") -> Dictionary:
 	ailments[who] = {"kind": kind, "days": Ailments.DAYS}
 	journal.append("%s has %s!" % [Species.info(who)["name"], String(Ailments.info(kind)["name"]).to_lower()])
 	note(Ailments.info(kind)["icon"], "%s caught %s." % [Species.info(who)["name"], String(Ailments.info(kind)["name"]).to_lower()])
-	return Ailments.make(kind, who, light_dust)
+	return Ailments.make(kind, who, light_dust, display_name(who))
 
 
 func _ailment_day() -> void:
@@ -1225,6 +1313,9 @@ func event_choices(event: Dictionary) -> Array:
 					score += int(a[cap])
 					assists.append({"who": who, "cap": cap, "bonus": int(a[cap])})
 			view["assists"] = assists
+			if c["cap"] == "float" and has_upgrade("float_tanks"):
+				score += Inventor.FLOAT_BONUS
+				view["gear"] = "float_tanks"
 			view["odds"] = CheckOdds.for_scores(score, int(c["difficulty"]))
 		out.append(view)
 	return out
@@ -1296,6 +1387,10 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 	if fx.has("coins"):
 		coins = maxi(0, coins + int(fx["coins"]))
 		d.append({"icon": "coins", "amount": int(fx["coins"])})
+	if fx.has("trust"):
+		family_trust = clampi(family_trust + int(fx["trust"]), 0, Family.MAX_TRUST)
+		if int(fx["trust"]) != 0:
+			d.append({"icon": "family", "amount": int(fx["trust"]), "label": "trust"})
 	if fx.has("lures"):
 		lures = maxi(0, lures + int(fx["lures"]))
 		d.append({"icon": "lure", "amount": int(fx["lures"])})
@@ -2115,7 +2210,9 @@ func _rapids_check() -> Dictionary:
 		if a != "" and job_rank(a, cap) >= Rivers.ASSIST_RANK:
 			assists.append({"who": a, "cap": cap, "bonus": 2})
 			score += 2
-	return {"helper": helper, "assists": assists, "odds": CheckOdds.for_scores(score, RAPIDS_DIFFICULTY + crossing_no / 3)}
+	if has_upgrade("float_tanks"):
+		score += Inventor.FLOAT_BONUS
+	return {"helper": helper, "assists": assists, "gear": "float_tanks" if has_upgrade("float_tanks") else "", "odds": CheckOdds.for_scores(score, RAPIDS_DIFFICULTY + crossing_no / 3)}
 
 
 ## Can anyone fight right now?
