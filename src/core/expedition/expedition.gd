@@ -133,6 +133,12 @@ var bought := {}
 var lures := 0
 ## True for a caravan that set out with one starter (see small_team_factor).
 var fresh_start := false
+## Names the player gave their Trailomon: species id -> name.
+var nicknames := {}
+## Crossing seals: the id of every guardian this caravan has beaten, in order.
+var seals: Array[String] = []
+## Stops where the healer has already patched the team up this crossing.
+var healed_at: Array[String] = []
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -1900,7 +1906,7 @@ func evolve(id: String, to: String) -> String:
 		var i: int = list.find(id)
 		if i >= 0:
 			list[i] = to
-	for d in [fatigue, levels, xp, kits, boosts, known, memory, dust_used]:
+	for d in [fatigue, levels, xp, kits, boosts, known, memory, dust_used, nicknames]:
 		if d.has(id):
 			d[to] = d[id]
 			d.erase(id)
@@ -2196,7 +2202,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 	var pack: Dictionary = pending_encounter.get("pack", {})
 	var bounty := int(pending_encounter.get("bounty", 0))
 	var from_event := bool(pending_encounter.get("from_event", false))
-	var spar := String(pack.get("id", "")) == "trainer_spar"
+	var spar := String(pack.get("id", "")).begins_with("trainer_")
 	pending_encounter = {}
 	pending_recruit = ""
 	match outcome:
@@ -2207,6 +2213,10 @@ func finish_battle(battle: Battle) -> Array[String]:
 				finale = "fight"
 				note("ultimate", "Beat %s." % String(pack.get("title", "the guardian")))
 			lines.append("Victory! %s" % (("%s falls back and the road to %s is clear." % [String(pack.get("title", "The guardian")), map.name_of(map.goal)]) if guardian else "The pack scatters."))
+			var gid := String(pack.get("id", ""))
+			if guardian and gid != "" and not seals.has(gid):
+				seals.append(gid)
+				lines.append("{i:seal_%s} You earn the %s." % [gid, seal_name(gid)])
 			lines.append("You gather what they left behind: +%d food, +%d water." % [VICTORY_FOOD, VICTORY_WATER])
 			coins += VICTORY_COINS + bounty
 			lines.append("+%d {i:coins} coins." % (VICTORY_COINS + bounty))
@@ -2216,7 +2226,7 @@ func finish_battle(battle: Battle) -> Array[String]:
 			lines.append("Both sides are exhausted and pull back." if outcome == Battle.Outcome.WITHDRAW else "You pull the team back and the wagon rattles away.")
 			lines.append("The scramble costs %d food and %d wagon wear." % [RETREAT_FOOD, RETREAT_WEAR])
 		_ when spar:
-			lines.append("The trainer wins this one. She tips her hat and moves on.")
+			lines.append("The trainer wins this one, grins, and moves on. No harm done.")
 		_:
 			var food := roundf(provisions * BREACH_SUPPLY_SHARE)
 			var drink := roundf(water * BREACH_SUPPLY_SHARE)
@@ -2516,3 +2526,77 @@ func auto_fight() -> Array[String]:
 	var b := make_battle()
 	b.run_to_end()
 	return finish_battle(b)
+
+
+# ---------- names, seals and the town healer ----------
+
+const NICKNAME_MAX := 14
+
+
+## The name to show for one of your Trailomon: its nickname, or its species name.
+func display_name(id: String) -> String:
+	var n := String(nicknames.get(id, ""))
+	return n if n != "" else String(Species.info(id)["name"])
+
+
+## Give a Trailomon a name (trimmed, at most NICKNAME_MAX letters). An empty name clears it.
+func rename(id: String, name: String) -> void:
+	var n := name.strip_edges().left(NICKNAME_MAX)
+	if n == "" or n == String(Species.info(id)["name"]):
+		nicknames.erase(id)
+	else:
+		nicknames[id] = n
+
+
+## When a Trailomon evolves its nickname comes along.
+func carry_nickname(from_id: String, to_id: String) -> void:
+	if nicknames.has(from_id):
+		nicknames[to_id] = nicknames[from_id]
+		nicknames.erase(from_id)
+
+
+## The seal a guardian gives: "Seal of the Hollow Stag".
+static func seal_name(guardian_id: String) -> String:
+	var title := String(CombatData.pack_by_id(guardian_id).get("title", guardian_id.capitalize()))
+	if title.begins_with("The "):
+		title = "the " + title.substr(4)
+	return "Seal of " + title
+
+
+## Stop kinds with a healer, and what a visit costs.
+const HEALER_KINDS := ["town", "village", "stilts", "sanctum"]
+const HEAL_COST_HURT := 3
+const HEAL_COST_KO := 6
+
+
+## Whether this stop has a healer who hasn't seen you yet this crossing.
+func has_healer() -> bool:
+	return state == State.AT_JUNCTION and HEALER_KINDS.has(String(stop().get("kind", ""))) and not healed_at.has(at)
+
+
+## Coins for a full heal of the team (0 when nobody needs it).
+func heal_cost() -> int:
+	var cost := 0
+	for id in roster:
+		var hp := float(creature_hp.get(id, 0.0))
+		if hp <= 0.0:
+			cost += HEAL_COST_KO
+		elif hp < max_hp(id) - 0.5:
+			cost += HEAL_COST_HURT
+	return cost
+
+
+## Pay the healer: the whole team back to full health, knocked out ones awake, no day spent.
+## Once per stop each crossing.
+func visit_healer() -> String:
+	var cost := heal_cost()
+	if not has_healer() or cost <= 0 or coins < cost:
+		return ""
+	coins -= cost
+	healed_at.append(at)
+	for id in roster:
+		creature_hp[id] = max_hp(id)
+	var line := "The healer looks the team over and sends everyone off fresh (-%d coins)." % cost
+	journal.append(line)
+	return line
+
