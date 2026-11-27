@@ -31,7 +31,7 @@ const SPECIES := {
 }
 
 const KITS := {
-	"bogmother": {"role": "Boss", "hp": 1250, "atk": 39, "def": 30, "spd": 2.2,
+	"bogmother": {"role": "Boss", "hp": 1050, "atk": 35, "def": 30, "spd": 2.2,
 		"basic": "brood_spit", "passive": "mother_brood", "ultimate": "fen_flood",
 		"ult_per_attack": 10.0, "ult_per_hit": 0.6},
 	"cogmammoth": {"role": "Boss", "hp": 950, "atk": 33, "def": 38, "spd": 2.4,
@@ -68,9 +68,9 @@ const KITS := {
 
 const MOVES := {
 	# Bog Mother
-	"brood_spit": {"name": "Brood Spit", "slot": "basic", "pct": 95, "poison": [18, 4], "splash": 40},
-	"mother_brood": {"name": "Mother's Brood", "slot": "passive", "kind": "every", "n": 3, "poison_all": [15, 4]},
-	"fen_flood": {"name": "Fen Flood", "slot": "ultimate", "target": "all", "pct": 95, "poison": [28, 5]},
+	"brood_spit": {"name": "Brood Spit", "slot": "basic", "pct": 95, "poison": [10, 4], "splash": 40},
+	"mother_brood": {"name": "Mother's Brood", "slot": "passive", "kind": "every", "n": 3, "poison_all": [8, 4]},
+	"fen_flood": {"name": "Fen Flood", "slot": "ultimate", "target": "all", "pct": 95, "poison": [16, 5]},
 	# Cogmammoth
 	"gear_tusk": {"name": "Gear Tusk", "slot": "basic", "pct": 100, "stagger": 15, "splash": 25},
 	"iron_hide": {"name": "Iron Hide", "slot": "passive", "kind": "armor_low", "amount": 20},
