@@ -227,6 +227,8 @@ const ENTRIES := {
 		"text": "Found in abandoned nests. It rides in the wagon and hatches after 5 days into a Trailomon of that habitat, who joins without a catch roll. Now and then a hatchling glints."},
 	"temperament": {"name": "Temperament", "icon": "starter",
 		"text": "Every Trailomon you catch has one: a small lean in its stats. Bold hits harder but guards less, Hardy is tougher but hits softer, Quick attacks faster, Sturdy guards better, Calm has no lean."},
+	"personality": {"name": "Personality", "icon": "campfire",
+		"text": "Every Trailomon you catch has a quirk that moves the crew's morale. Show-offs cheer after wins, gluttons love hot meals, homebodies like their own habitat's roads, sunny ones lift the camp, curious ones love landmarks, loyal ones like being the lead, sore losers take defeats hard and stormy ones hate the rain."},
 	"glint": {"name": "Glinting", "icon": "glint",
 		"text": "Now and then a wild Trailomon turns up in odd, shimmering colours. Win the fight and it's the one that stays behind: catch it and it glints for good. Looks only, no extra power."},
 	"lead": {"name": "Lead companion", "icon": "lead",
