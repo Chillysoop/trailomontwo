@@ -5,7 +5,7 @@ extends RefCounted
 
 const NAME := "Pip Gasket"
 const TRADE := "travelling inventor"
-## Stop kinds Pip will set up in (never the start or the goal).
+## Stop kinds Pip will set up in (never the start or the goal, nor anywhere on the map's edges).
 const KINDS := ["town", "post", "village", "waystation", "stilts"]
 
 const UPGRADES := {
@@ -60,7 +60,9 @@ static func workshop(map: WorldMap, crossing_no: int) -> String:
 		return ""
 	var spots: Array = []
 	for id in map.junctions:
-		if id != map.start and id != map.goal and KINDS.has(String(map.junctions[id].get("kind", ""))):
+		var layer := int(map.junctions[id].get("layer", 0))
+		var edge := not map.is_test and (layer == 0 or layer == WorldMap.LAYERS - 1)
+		if id != map.start and id != map.goal and not edge and KINDS.has(String(map.junctions[id].get("kind", ""))):
 			spots.append(id)
 	if spots.is_empty():
 		return ""

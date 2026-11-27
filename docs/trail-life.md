@@ -275,3 +275,20 @@ All in `src/core/trail/camp.gd` (class Camp), wired into `Expedition`.
   Camp cards left open are dropped when you set off.
 - Fixed the wagon tab's action row overflowing: the Healer button moved to the camp row.
 - Tests: `tests/core/test_camp.gd`. Shots: `tools/shots/camp_shots.gd`.
+
+## Trail boss and destinations (wave 6 of the wagon-trail ideas)
+
+- **Trail-boss background** (`src/core/data/backgrounds.gd`, `src/ui/background_screen.gd`).
+  After the first partner, a second screen asks who leads the caravan. Picked once per run,
+  kept in `Expedition.background` (carried between crossings):
+  - Tinker: wagon wear x0.9, every jury-rig is skilled, starts with a spare axle and harness.
+  - Herbalist: +2 on Forage and Heal checks, knows every wild plant, ailments x0.67.
+  - Ranger: hunts bring x1.4 food, +2 on Scout checks, +1 sight.
+  - Merchant: +40 coins, cargo and delivery jobs pay x1.25, each barter adds 10 coins.
+- **Destinations** (`Expedition.destinations()` / `choose_destination()`). While outfitting at
+  the start, pick where the cargo goes: the usual goal or the other market on the same far edge
+  that's furthest by road. It pays 15% more per extra day (0.7 to 1.6x, `dest_pay`). The frost
+  is reckoned from the chosen goal, and the guardian waits on its last stretch. Pip's workshop
+  is never on a map edge.
+- Tests: `tests/core/test_backgrounds.gd`. Shots: `tools/shots/boss_shots.gd`.
+- Not built from the rated list: the packing puzzle, voiced towns, the telegraph, and a home base.

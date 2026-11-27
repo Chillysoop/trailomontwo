@@ -127,10 +127,15 @@ func _choose_starter() -> void:
 	_begin(Expedition.new_game(Expedition.STARTERS[0]), 1)
 	var s := StarterScreen.open(_ui)
 	s.picked.connect(func(id: String):
-		_picking_starter = false
 		_begin(Expedition.new_game(id), 1)
-		_save()
-		_open_guide())
+		var b := BackgroundScreen.open(_ui)
+		b.picked.connect(func(bg: String):
+			_picking_starter = false
+			crossing.set_background(bg)
+			_start = SaveGame.caravan(crossing)
+			_after_action()
+			_save()
+			_open_guide()))
 
 
 ## Start a crossing (new, next or retried) and save it.
@@ -524,6 +529,8 @@ func _choice_markup(v: Dictionary) -> String:
 				help += " [color=#%s]+{i:cap_%s}[/color]%s" % [TrailFx.GOOD, a["cap"], TrailFx.portrait(a["who"])]
 			if v.get("gear", "") != "":
 				help += " [color=#%s]+{i:%s}[/color]" % [TrailFx.GOOD, Inventor.info(v["gear"])["icon"]]
+			if int(v.get("bg", 0)) != 0:
+				help += " [color=#%s]+{i:bg_%s}[/color]" % [TrailFx.GOOD, crossing.background]
 			if int(v.get("morale", 0)) != 0:
 				help += " [color=#%s]{i:morale}%+d[/color]" % [TrailFx.GOOD if int(v["morale"]) > 0 else TrailFx.BAD, int(v["morale"])]
 			parts.append("%s%s%s%s %s" % [job, TrailFx.portrait(v["helper"]), bonus, help, TrailFx.odds(v["odds"])])
@@ -839,6 +846,22 @@ func _refresh_outfitter() -> void:
 		tip += (" " if tip != "" else "") + "%s the inventor is at %s this season, if you've coins to spare." % [Inventor.NAME, crossing.map.name_of(shop)]
 	if tip != "":
 		_outfit_box.add_child(Rich.label("[color=#c8bca8]\"%s\"[/color]" % tip, 8, 284))
+	var dests := crossing.destinations()
+	if dests.size() > 1:
+		var drow := HBoxContainer.new()
+		drow.add_theme_constant_override("separation", 3)
+		for d in dests:
+			var mine: bool = crossing.destination() == String(d["id"])
+			var pay := "" if float(d["pay"]) == 1.0 else (" [color=#%s]x%s[/color]" % ["9fe39a" if float(d["pay"]) > 1.0 else "ff8a7a", str(d["pay"])])
+			var b := ClickRow.make("%s%s {i:day}%d%s" % ["[b]" if mine else "", crossing.map.name_of(String(d["to"])), int(d["days"]), pay + ("[/b]" if mine else "")], 8, 128)
+			b.disabled = mine
+			b.pressed.connect(func():
+				crossing.choose_destination(String(d["id"]))
+				_after_action()
+				_refresh_trade())
+			Tips.attach(b, func(): return "[b]%s[/b]: %s\nWhere the cargo goes. The quickest road there takes about %d days, and the frost comes on that reckoning. Choose before you set out." % [d["label"], d["text"], int(d["days"])])
+			drow.add_child(b)
+		_outfit_box.add_child(drow)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	var used := crossing.load_weight()
@@ -927,6 +950,8 @@ func _wagon_summary() -> String:
 		status += "{i:%s}" % c
 	for u in crossing.upgrades:
 		status += "{i:%s}" % Inventor.info(u).get("icon", "wagon")
+	if crossing.background != "":
+		status += "  {i:%s}{k:%s|%s}" % [Backgrounds.info(crossing.background)["icon"], Backgrounds.info(crossing.background)["icon"], Backgrounds.info(crossing.background)["name"]]
 	if w.broken != Wagon.Part.NONE:
 		status += "\n[color=#ff8a7a]BROKEN %s[/color]: %s" % [w.part_name().to_upper(), {
 			Wagon.Part.RUNNING_GEAR: "can't leave until repaired",
