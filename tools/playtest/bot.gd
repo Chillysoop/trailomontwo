@@ -19,6 +19,8 @@ var shots_taken := {}
 var log_lines: Array[String] = []
 var stats := {"battles": 0, "wins": 0, "losses": 0, "retreats": 0, "events": 0, "guardian": [], "crossing_days": [], "fails": [], "levels": [], "recruits": 0, "evolved": 0, "offscreen": {}}
 var exp: Node
+## Which first partner to pick (starter=<id>); empty = a random one of the three.
+var starter := ""
 var started_ms := 0
 var _crossing_seen := 0
 
@@ -33,6 +35,7 @@ func _initialize() -> void:
 			"crossings": crossings = int(kv[1])
 			"seed": seed_value = int(kv[1])
 			"style": style = kv[1]
+			"starter": starter = kv[1]
 	rng.seed = seed_value
 	seed(seed_value)
 	DirAccess.make_dir_recursive_absolute(out_dir)
@@ -54,6 +57,17 @@ func _run() -> void:
 	await _shot("01_save_picker")
 	_find_button(root, "New caravan").pressed.emit()
 	await _frames(30)
+	await _shot("02_starter_pick")
+	if starter == "":
+		starter = Expedition.STARTERS[rng.randi_range(0, Expedition.STARTERS.size() - 1)]
+	var choose := _find_button(root, "Choose %s" % Species.info(starter)["name"])
+	var waited := 0
+	while choose == null and waited < 300:
+		await _frames(5)
+		waited += 1
+		choose = _find_button(root, "Choose %s" % Species.info(starter)["name"])
+	choose.pressed.emit()
+	await _frames(10)
 	exp = current_scene
 	# The how-to-play guide opens for a new caravan: read it page by page, like a new player.
 	var guide: GuideScreen = exp.get("_guide")
@@ -159,6 +173,11 @@ func _junction_tick(c: Expedition) -> void:
 		for k in Wagon.SPARES:
 			if c.spare_count(k) == 0 and c.coins > 30:
 				c.buy("spare_" + k)
+		# A smart player keeps a couple of lures while the team is still small.
+		if style == "smart" and c.roster.size() < Expedition.TEAM_MAX and c.coins > 25:
+			for i in 2:
+				if c.lures < 2:
+					c.buy("lure")
 		if c.wagon.broken != Wagon.Part.NONE or c.wagon.wear > 60:
 			exp.call("_do_repair")
 		# Rest when half the team is hurt or anyone is knocked out.
@@ -498,7 +517,7 @@ func _battle_tick(b: Node) -> void:
 			elif not shots_taken.has("after"):
 				shots_taken["after"] = true
 				await _shot("battle_aftermath")
-			var take := _find_button(b, "Take in")
+			var take := _find_button(b, "Catch ")
 			if take != null and not take.disabled:
 				take.pressed.emit()
 				stats["recruits"] += 1

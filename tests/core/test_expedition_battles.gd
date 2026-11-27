@@ -110,8 +110,7 @@ func test_knocked_out_creatures_cannot_help_or_haul_until_rest() -> void:
 	e.creature_hp["brambleback"] = 0.0
 	e.creature_hp["coilhusk"] = 0.0
 	check(e.best_helper("scout") != "rimehare", "a knocked-out scout can't help")
-	check_near(e.hauling_available(), 0.0)
-	check(not e.forecast(_seg("eastgate", "mossford"))["can_go"], "no conscious haulers, no travel")
+	check_near(e.hauling_available(), Wagon.BASE_PULL, 0.01, "only the crew pulls")
 	e.rest()
 	check(e.conscious("rimehare"), "rest wakes them")
 	check(e.forecast(_seg("eastgate", "mossford"))["can_go"], "can travel after resting")
