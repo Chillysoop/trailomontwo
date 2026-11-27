@@ -34,16 +34,17 @@ func test_broken_axle_strands_the_wagon_until_repaired() -> void:
 	e.wagon.break_part(Wagon.Part.RUNNING_GEAR)
 	var seg := _seg("eastgate", "mossford")
 	check(not e.forecast(seg)["can_go"], "a broken axle should stop travel")
-	var kits := e.repair_kits
+	var spares := e.spare_count("axle")
 	e.repair()
-	check_eq(e.repair_kits, kits - 1)
+	check_eq(e.spare_count("axle"), spares - 1)
 	check_eq(e.day, 2)
 	check(e.forecast(seg)["can_go"], "repaired wagon should travel again")
 
 
-func test_repair_without_a_kit_takes_two_days_and_costs_integrity() -> void:
+func test_repair_without_a_spare_takes_two_days_and_costs_integrity() -> void:
 	var e := Expedition.new_default(1)
-	e.repair_kits = 0
+	e.spares = {}
+	e.roster.clear()
 	e.wagon.break_part(Wagon.Part.HARNESS)
 	var integrity := e.wagon.integrity
 	e.repair()

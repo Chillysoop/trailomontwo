@@ -7,7 +7,10 @@ extends RefCounted
 ##
 ## kind (icon on the card): wildlife, travelers, hazard, find, shrine.
 ## Effects use the TrailEffects delta convention (food: -10 means lose 10, coins: +8 means gain 8).
-## Keys: food, water, health, wear, integrity, days, fatigue, lose_cargo, coins, repair_kits,
+## Keys: food, water, health, wear, integrity, days, fatigue, lose_cargo, coins,
+## spare_axle / spare_harness / spare_canvas (spare parts), spare ("random" spare part),
+## break ("axle" / "harness" / "canopy": that part of the wagon breaks), salvage (a cargo crate
+## {"name", "weight", "value"}, only if it fits), curio (an outfitter curiosity id),
 ## light_dust, dark_dust, item ("random" or an id), technique (count), xp (helper), recruit
 ## ("wild" = a wild Trailomon of this road's habitat offers to join), fever (days), cure,
 ## progress (trip days), heal_team (share of max HP), battle (pack id; the fight comes next),
@@ -57,7 +60,7 @@ const EVENTS := [
 			{"label": "Float it across", "cap": "float", "difficulty": 6,
 				"success": {"text": "Guided across."},
 				"mixed": {"text": "Some food got soaked.", "food": -10},
-				"failure": {"text": "The current tips the wagon.", "lose_cargo": 1, "wear": 10}},
+				"failure": {"text": "The current tips the wagon. The canvas rips.", "lose_cargo": 1, "wear": 10, "break": "canopy"}},
 			{"label": "Ford it", "cap": "strength", "difficulty": 8,
 				"success": {"text": "The haulers plough through."},
 				"mixed": {"text": "Across, soaked and tired.", "fatigue": 15, "water": 4},
@@ -73,7 +76,7 @@ const EVENTS := [
 			{"label": "Pull it free", "cap": "strength", "difficulty": 7,
 				"success": {"text": "One great heave."},
 				"mixed": {"text": "Free, but spent.", "fatigue": 20},
-				"failure": {"text": "Something cracks.", "integrity": -10, "wear": 15}},
+				"failure": {"text": "Something cracks. The axle!", "integrity": -10, "wear": 15, "break": "axle"}},
 			{"label": "Light a firm path", "cap": "light", "difficulty": 6,
 				"success": {"text": "Glowing lamps show firm ground."},
 				"mixed": {"text": "Mostly firm ground.", "wear": 8},
@@ -91,7 +94,7 @@ const EVENTS := [
 			{"label": "Steady the wagon", "cap": "steady", "difficulty": 6,
 				"success": {"text": "Not a wobble."},
 				"mixed": {"text": "A wheel scrapes the rocks.", "wear": 10},
-				"failure": {"text": "The wagon slams a boulder.", "integrity": -15}},
+				"failure": {"text": "The wagon slams a boulder. The axle snaps.", "integrity": -15, "break": "axle"}},
 			{"label": "Wait it out",
 				"success": {"text": "The slope lets go overnight.", "days": 1}},
 		]},
@@ -114,7 +117,7 @@ const EVENTS := [
 		"choices": [
 			{"label": "Push through", "cap": "steady", "difficulty": 7,
 				"success": {"text": "Through the worst of it."},
-				"mixed": {"text": "The canopy tears.", "wear": 12},
+				"mixed": {"text": "The canopy tears.", "wear": 12, "break": "canopy"},
 				"failure": {"text": "The wagon tips in a gust.", "integrity": -12, "health": -8}},
 			{"label": "Make camp", "success": {"text": "You wait it out.", "days": 1, "fatigue": -10}},
 		]},
@@ -124,7 +127,7 @@ const EVENTS := [
 			{"label": "Stand firm", "cap": "guard", "difficulty": 7,
 				"success": {"text": "The herd splits around you."},
 				"mixed": {"text": "Haulers are rattled.", "fatigue": 15},
-				"failure": {"text": "The herd clips the wagon.", "integrity": -10, "wear": 10}},
+				"failure": {"text": "The herd tangles the harness.", "integrity": -10, "wear": 10, "break": "harness"}},
 			{"label": "Outrun them", "cap": "strength", "difficulty": 8,
 				"success": {"text": "The haulers bolt clear."},
 				"mixed": {"text": "Clear, and exhausted.", "fatigue": 25},
@@ -182,8 +185,8 @@ const EVENTS := [
 		"text": "A herd grazes in a meadow beside the road.",
 		"choices": [
 			{"label": "Forage the meadow", "cap": "forage", "difficulty": 5,
-				"success": {"text": "Roots and berries galore.", "food": 12},
-				"mixed": {"text": "A modest haul.", "food": 6},
+				"success": {"text": "Roots and berries galore.", "food": 35},
+				"mixed": {"text": "A modest haul.", "food": 12},
 				"failure": {"text": "The herd chases you off.", "health": -6}},
 			{"label": "Train on the slope", "cap": "strength", "difficulty": 6,
 				"success": {"text": "Your team races the herd.", "xp": 20},
@@ -236,8 +239,8 @@ const EVENTS := [
 		"choices": [
 			{"label": "Buy a battle item", "cost": {"coins": -10}, "safe_paid": true,
 				"success": {"text": "A fair trade.", "item": "random"}},
-			{"label": "Buy a repair kit", "cost": {"coins": -12}, "safe_paid": true,
-				"success": {"text": "Good tools.", "repair_kits": 1}},
+			{"label": "Buy a spare harness", "cost": {"coins": -10}, "safe_paid": true,
+				"success": {"text": "Good leather.", "spare_harness": 1}},
 			{"label": "Trade food for coin", "cost": {"food": -10}, "safe_paid": true,
 				"success": {"text": "She pays well for food.", "coins": 9}},
 			{"label": "Wave goodbye", "success": {"text": "Safe travels."}},
@@ -245,8 +248,8 @@ const EVENTS := [
 	{"id": "stranded_family", "kind": "travelers", "title": "Stranded travellers", "terrains": [], "min_risk": 1,
 		"text": "A family sits by a broken wagon with a cracked axle.",
 		"choices": [
-			{"label": "Give a repair kit", "cost": {"repair_kits": -1}, "safe_paid": true,
-				"success": {"text": "They press a gift on you.", "coins": 15, "technique": 1}},
+			{"label": "Give your spare axle", "cost": {"spare_axle": -1}, "safe_paid": true,
+				"success": {"text": "They press a gift on you.", "coins": 20, "technique": 1}},
 			{"label": "Fix it together", "cap": "steady", "difficulty": 6,
 				"success": {"text": "Good as new. They share supplies.", "food": 8, "coins": 8},
 				"mixed": {"text": "It holds, barely.", "fatigue": 10, "coins": 4},
@@ -276,23 +279,31 @@ const EVENTS := [
 				"failure": {"text": "She snores through it."}},
 			{"label": "Politely leave", "success": {"text": "She waves you off."}},
 		]},
+	# A traveller who wants one thing you carry and offers something you're short of. The deal is
+	# made up on the spot by Expedition.make_barter(); these choices are only a fallback.
+	{"id": "barter", "kind": "travelers", "title": "A roadside barter", "terrains": [], "min_risk": 1,
+		"text": "A traveller eyes your wagon.",
+		"choices": [
+			{"label": "Ride on", "success": {"text": "You keep what you have."}},
+		]},
 	# ----- finds -----
 	{"id": "abandoned_wagon", "kind": "find", "title": "Abandoned wagon", "terrains": [], "min_risk": 1,
 		"text": "An overgrown wagon sits off the road. Nobody's been here in years.",
 		"choices": [
 			{"label": "Search it", "cap": "scout", "difficulty": 5,
-				"success": {"text": "Supplies tucked under the seat.", "item": "random", "coins": 8},
+				"success": {"text": "Supplies under the seat, brass fittings in the bed.", "item": "random", "coins": 8,
+					"salvage": {"name": "Brass fittings", "weight": 30.0, "value": 60}},
 				"mixed": {"text": "A few coins.", "coins": 5},
 				"failure": {"text": "Something nests inside. It bites.", "health": -10}},
-			{"label": "Strip it for parts", "deal": true, "success": {"text": "A day of work.", "days": 1, "repair_kits": 1}},
+			{"label": "Strip it for parts", "deal": true, "success": {"text": "A day of work.", "days": 1, "spare": "random"}},
 			{"label": "Leave it be", "success": {"text": "Let it rest."}},
 		]},
 	{"id": "ruined_cache", "kind": "find", "title": "Old supply cache", "terrains": ["Hills", "Mountain"], "min_risk": 2,
 		"text": "A rusted hatch in the hillside, half buried.",
 		"choices": [
 			{"label": "Pry it open", "cap": "strength", "difficulty": 6,
-				"success": {"text": "Dry rations and a scroll!", "food": 10, "technique": 1},
-				"mixed": {"text": "Mostly rust. Some food.", "food": 6},
+				"success": {"text": "A whole store of dry rations, and a scroll!", "food": 45, "technique": 1},
+				"mixed": {"text": "Mostly rust. Some food.", "food": 20},
 				"failure": {"text": "The hatch gives way. Sprained paw.", "fatigue": 20}},
 			{"label": "Leave it", "success": {"text": "Not worth the risk."}},
 		]},

@@ -51,6 +51,8 @@ var _trade_page: VBoxContainer
 var _trade_list: GridContainer
 var _rumor: RichTextLabel
 var _coins_label: RichTextLabel
+## Outfitter header (keeper, advice, load bar, pack button), shown only in the start town.
+var _outfit_box: VBoxContainer
 var _event_continue: Button
 var _team_status: VBoxContainer
 var _battle: BattleScreen
@@ -240,7 +242,7 @@ func _show_junction() -> void:
 		b.pressed.connect(_pick.bind(seg))
 		_routes.add_child(b)
 	_pick(exits[0])
-	_show_tab(false)
+	_show_tab("trade" if crossing.outfitting() else false)
 	_refresh_wagon_page()
 	_refresh_hud()
 
@@ -606,23 +608,112 @@ func _show_tab(page: Variant) -> void:
 func _refresh_trade() -> void:
 	if _trade_list == null:
 		return
-	var rumor := crossing.hear_rumor()
-	Rich.set_text(_rumor, ("{i:ev_travelers} [color=#e8dcc0]%s[/color]" % rumor) if rumor != "" else "")
-	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  {i:repair_kit}%d  {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d" % [
-		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), crossing.repair_kits, _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust])
+	var outfit := crossing.outfitting()
+	_outfit_box.visible = outfit
+	if outfit:
+		_refresh_outfitter()
+		Rich.set_text(_rumor, "")
+	else:
+		var rumor := crossing.hear_rumor()
+		Rich.set_text(_rumor, ("{i:ev_travelers} [color=#e8dcc0]%s[/color]" % rumor) if rumor != "" else "")
+	Rich.set_text(_coins_label, "{i:coins} %d   {i:food}%d  {i:water}%d  %s {i:item_slot}%d  {i:technique}%d  {i:light_dust}%d {i:dark_dust}%d" % [
+		crossing.coins, roundi(crossing.provisions), roundi(crossing.water), _spares_text(), _count(crossing.items), _count(crossing.techniques), crossing.light_dust, crossing.dark_dust])
 	for c in _trade_list.get_children():
 		c.queue_free()
-	var stall: Dictionary = crossing.stop()["stall"]
+	var stall: Dictionary = crossing.stall()
 	if stall.is_empty():
 		_trade_list.add_child(Rich.label("Nothing for sale here.", 8))
 	for good in stall:
 		var left := crossing.stock_left(good)
-		var row := ClickRow.make("{i:%s} %s   [color=#ffe3a3]{i:coins}%d[/color]   [color=#c8bca8]x%d[/color]" % [
-			Settlements.good_icon(good), Settlements.good_name(good), int(stall[good]["price"]), left], 8, 128)
+		var w: float = Outfitter.weight_of(good)
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation", 1)
+		var row := ClickRow.make("{i:%s} %s [color=#ffe3a3]{i:coins}%d[/color] [color=#c8bca8]x%d%s[/color]" % [
+			Settlements.good_icon(good), Settlements.good_name(good), int(stall[good]["price"]), left,
+			("  {i:weight}%d" % roundi(w)) if w >= 2.0 else ""], 8, 116 if outfit else 128)
 		row.disabled = not crossing.can_buy(good)
 		row.pressed.connect(_buy.bind(good))
-		Tips.attach(row, "g:" + Settlements.good_icon(good) if Glossary.has(Settlements.good_icon(good)) else "g:trade")
-		_trade_list.add_child(row)
+		Tips.attach(row, _good_tip.bind(good))
+		line.add_child(row)
+		if outfit and crossing.sellable(good) > 0:
+			var back := _button("-", 8)
+			back.focus_mode = Control.FOCUS_NONE
+			back.custom_minimum_size = Vector2(12, 0)
+			back.pressed.connect(_sell_back.bind(good))
+			Tips.attach(back, func(): return "Hand one back for a full refund. Only before you set out.")
+			line.add_child(back)
+		_trade_list.add_child(line)
+
+
+func _refresh_outfitter() -> void:
+	for c in _outfit_box.get_children():
+		c.queue_free()
+	var k := Outfitter.keeper(crossing.crossing_no)
+	_outfit_box.add_child(Rich.label("{i:trade} [b]%s[/b], %s: [color=#e8dcc0]\"%s\"[/color]" % [k["name"], k["trade"], k["hello"]], 8, 284))
+	var tip := Outfitter.advice(crossing.map)
+	if tip != "":
+		_outfit_box.add_child(Rich.label("[color=#c8bca8]\"%s\"[/color]" % tip, 8, 284))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	var used := crossing.load_weight()
+	var full := used >= Wagon.CAPACITY - 0.5
+	var bar := Rich.label("{i:weight} Load %d/%d%s" % [roundi(used), roundi(Wagon.CAPACITY), "  [color=#ff8a7a]FULL[/color]" if full else ""], 8)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	Tips.attach(bar, func(): return "{i:weight} Everything aboard counts: cargo %d, food and water %d, parts and curiosities %d.\nA heavier wagon wears faster and is harder to pull." % [
+		roundi(crossing.cargo_weight()), roundi((crossing.provisions + crossing.water * 2.0) / 2.0), roundi(crossing.supplies_weight() - (crossing.provisions + crossing.water * 2.0) / 2.0)])
+	row.add_child(bar)
+	var pack := _button("Pack it for me", 8)
+	pack.focus_mode = Control.FOCUS_NONE
+	pack.pressed.connect(_pack_for_me)
+	Tips.attach(pack, func(): return "%s buys their usual kit with what you have left. %s" % [k["name"], k["bias"]])
+	row.add_child(pack)
+	_outfit_box.add_child(row)
+
+
+func _good_tip(good: String) -> String:
+	var t := Glossary.text(Settlements.good_icon(good)) if Glossary.has(Settlements.good_icon(good)) else ""
+	if Outfitter.is_curio(good):
+		t = "{ik:%s}\n%s" % [good, Outfitter.CURIOS[good]["text"]]
+	elif t == "":
+		t = "{ik:trade}\n" + Glossary.text("trade")
+	else:
+		t = "{ik:%s}\n%s" % [Settlements.good_icon(good), t]
+	var w: float = Outfitter.weight_of(good)
+	if w > 0.0:
+		t += "\n{i:weight} weighs %d" % roundi(w)
+	match crossing.buy_block(good):
+		"room":
+			t += "\n[color=#ff8a7a]No room in the wagon.[/color]"
+		"coins":
+			t += "\n[color=#ff8a7a]Not enough coins.[/color]"
+		"have":
+			t += "\n[color=#c8bca8]You have one.[/color]"
+	return t
+
+
+func _spares_text() -> String:
+	var t := ""
+	for k in Wagon.SPARES:
+		t += "{i:spare_%s}%d " % [k, crossing.spare_count(k)]
+	return t
+
+
+func _sell_back(good: String) -> void:
+	if crossing.sell_back(good).is_empty():
+		return
+	_refresh_trade()
+	_refresh_hud()
+	_refresh_wagon_page()
+	_pick(_picked)
+
+
+func _pack_for_me() -> void:
+	var n := crossing.pack_for_me()
+	_toast({"icon": "trade", "text": "Packed %d lot%s" % [n, "" if n == 1 else "s"] if n > 0 else "Nothing more fits", "who": "", "deltas": []})
+	_refresh_trade()
+	_refresh_hud()
+	_refresh_wagon_page()
+	_pick(_picked)
 
 
 static func _count(d: Dictionary) -> int:
@@ -639,12 +730,15 @@ func _buy(good: String) -> void:
 	_toast({"icon": "trade", "text": "Bought", "who": "", "deltas": d})
 	_refresh_trade()
 	_refresh_hud()
+	_refresh_wagon_page()
 	_pick(_picked)
 
 
 func _wagon_summary() -> String:
 	var w := crossing.wagon
-	var status := "{i:wagon} %d%%  wear %d/100     {i:repair_kit} %d kit%s" % [w.integrity, roundi(w.wear), crossing.repair_kits, "" if crossing.repair_kits == 1 else "s"]
+	var status := "{i:wagon} %d%%  wear %d/100   {i:weight}%d/%d   %s" % [w.integrity, roundi(w.wear), roundi(crossing.load_weight()), roundi(Wagon.CAPACITY), _spares_text()]
+	for c in crossing.curios:
+		status += "{i:%s}" % c
 	if w.broken != Wagon.Part.NONE:
 		status += "\n[color=#ff8a7a]BROKEN %s[/color]: %s" % [w.part_name().to_upper(), {
 			Wagon.Part.RUNNING_GEAR: "can't leave until repaired",
@@ -698,10 +792,49 @@ func _refresh_wagon_page() -> void:
 		_cargo_list.add_child(row)
 	if crossing.cargo.is_empty():
 		_cargo_list.add_child(PreviewHud.label("Nothing left to deliver.", 8))
-	var kit := crossing.repair_kits > 0
-	_repair.text = "Repair (1 day, uses a kit)" if kit else "Patch up (2 days, no kit)"
-	_repair.icon = Rich.icon_tex("repair_kit")
-	_repair.disabled = w.broken == Wagon.Part.NONE and w.wear < 1.0
+	# Supplies can be dumped too, to make room for something better.
+	var dumps := HBoxContainer.new()
+	dumps.add_theme_constant_override("separation", 3)
+	dumps.add_child(Rich.label("Dump:", 8))
+	for kind in ["food", "water", "spare_axle", "spare_harness", "spare_canvas"]:
+		var have := crossing.provisions >= 10.0 if kind == "food" else (crossing.water >= 10.0 if kind == "water" else crossing.spare_count(kind.trim_prefix("spare_")) > 0)
+		if not have:
+			continue
+		var b := _button("", 8)
+		b.icon = Rich.icon_tex(kind)
+		b.text = "10" if kind == "food" or kind == "water" else "1"
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_dump.bind(kind))
+		Tips.attach(b, func(): return "Leave %s by the road to make room. Gone for good." % ("10 " + kind if kind == "food" or kind == "water" else "the " + String(Wagon.SPARES[kind.trim_prefix("spare_")]["name"])))
+		dumps.add_child(b)
+	if dumps.get_child_count() > 1:
+		_cargo_list.add_child(dumps)
+	var plan := crossing.repair_plan()
+	match String(plan["kind"]):
+		"spare":
+			_repair.text = "Fit the %s (1 day)" % Wagon.SPARES[plan["spare"]]["name"]
+			_repair.icon = Rich.icon_tex("spare_" + String(plan["spare"]))
+		"jury":
+			_repair.text = "Jury-rig (%d day%s)" % [plan["days"], "" if plan["days"] == 1 else "s"]
+			_repair.icon = Rich.icon_tex("job_" + String(plan["job"]))
+		_:
+			_repair.text = "Tune up (1 day)"
+			_repair.icon = Rich.icon_tex("repair_kit")
+	_repair.disabled = plan["kind"] == "none"
+
+
+func _repair_tip() -> String:
+	var plan := crossing.repair_plan()
+	match String(plan["kind"]):
+		"spare":
+			return "Swap in your %s. Takes a {i:day} day, and the wagon is good as new." % Wagon.SPARES[plan["spare"]]["name"]
+		"jury":
+			var who := ("{c:%s} has the {i:job_%s} %s job and can rig something solid in a day." % [plan["helper"], plan["job"], String(plan["job"]).capitalize()]) if plan["skilled"] \
+				else "Nobody on the team is good enough at {i:job_%s} %s (rank %d+) to do it fast." % [plan["job"], String(plan["job"]).capitalize(), Wagon.JURY_RANK]
+			return "No %s aboard. Patch it with what you have: costs integrity.\n%s" % [Wagon.SPARES[plan["spare"]]["name"], who]
+		"tune":
+			return "Nothing is broken. A {i:day} day of upkeep takes 25 wear off, so a {k:breakdown} is less likely."
+	return "The wagon is in perfect shape."
 
 
 func _setup_caravan() -> void:
@@ -764,6 +897,11 @@ func _drop(index: int) -> void:
 	_after_action()
 
 
+func _dump(kind: String) -> void:
+	crossing.dump(kind)
+	_after_action()
+
+
 func _do_rest() -> void:
 	crossing.rest()
 	_after_action()
@@ -778,9 +916,9 @@ func _do_repair() -> void:
 
 func _refresh_hud() -> void:
 	var w := TrailLife.weather(crossing.weather)
-	Rich.set_text(_hud, "{i:%s} {i:day}%d   {i:food}%d[color=#c8bca8]/%.0fd[/color]   {i:water}%d[color=#c8bca8]/%.0fd[/color]   {i:coins}%d   {i:cargo}%d   {i:haul}%d   {i:wagon}%d%%" % [
+	Rich.set_text(_hud, "{i:%s} {i:day}%d   {i:food}%d[color=#c8bca8]/%.0fd[/color]   {i:water}%d[color=#c8bca8]/%.0fd[/color]   {i:coins}%d   {i:weight}%d   {i:haul}%d   {i:wagon}%d%%" % [
 		w["icon"], crossing.day, roundi(crossing.provisions), floorf(crossing.days_of(crossing.provisions, crossing.daily_provisions())),
-		roundi(crossing.water), floorf(crossing.days_of(crossing.water, crossing.daily_water())), crossing.coins, roundi(crossing.cargo_weight()), roundi(crossing.hauling_available()), crossing.wagon.integrity])
+		roundi(crossing.water), floorf(crossing.days_of(crossing.water, crossing.daily_water())), crossing.coins, roundi(crossing.load_weight()), roundi(crossing.hauling_available()), crossing.wagon.integrity])
 	var hp := ("{i:health}[color=#ff8a7a]%d[/color]" if crossing.health < 50 else "{i:health}%d") % crossing.health
 	if crossing.fever_days > 0:
 		hp = "{i:fever}" + hp
@@ -801,7 +939,7 @@ func _show_end(won: bool) -> void:
 	var again: Button = _end.find_child("Again", true, false)
 	if won:
 		title.text = "Crossing %d: you reached %s" % [crossing_no, crossing.map.name_of(crossing.map.goal)]
-		body.text = "Day %d. %d food and %d water left.\nDelivered %d cargo worth %d. Wagon at %d%%.\nYour team, levels, dust and items come with you." % [crossing.day, roundi(crossing.provisions), roundi(crossing.water), crossing.cargo.size(), crossing.cargo_value(), crossing.wagon.integrity]
+		body.text = "Day %d. %d food and %d water left.\nDelivered %d cargo for %d coins. Wagon at %d%%.\nYour team, levels, dust, items and coins come with you." % [crossing.day, roundi(crossing.provisions), roundi(crossing.water), crossing.cargo.size(), crossing.cargo_paid, crossing.wagon.integrity]
 		again.text = "Next crossing"
 	else:
 		title.text = "Crossing %d failed" % crossing_no
@@ -917,6 +1055,10 @@ func _build_ui() -> void:
 	_trade_page.add_theme_constant_override("separation", 4)
 	_trade_page.visible = false
 	col.add_child(_trade_page)
+	_outfit_box = VBoxContainer.new()
+	_outfit_box.add_theme_constant_override("separation", 2)
+	_outfit_box.visible = false
+	_trade_page.add_child(_outfit_box)
 	_rumor = Rich.label("", 8, 284)
 	_trade_page.add_child(_rumor)
 	_coins_label = Rich.label("", 8)
@@ -953,6 +1095,7 @@ func _build_ui() -> void:
 	acts.add_child(_rest)
 	_repair = _button("Repair", 9)
 	_repair.pressed.connect(_do_repair)
+	Tips.attach(_repair, _repair_tip)
 	acts.add_child(_repair)
 	_wagon_page.add_child(acts)
 	_ui.add_child(_panel)

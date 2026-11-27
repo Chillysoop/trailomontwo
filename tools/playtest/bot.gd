@@ -128,6 +128,9 @@ func _junction_tick(c: Expedition) -> void:
 			exp.call("_toggle_world")
 	# Level ups and team upkeep, like a player at a stop.
 	await _upkeep(c)
+	# Outfit in the start town, like a player who lets the shopkeeper pack.
+	if c.outfitting():
+		c.pack_for_me()
 	# Buy supplies when low.
 	if style == "careful":
 		for i in 6:
@@ -136,9 +139,10 @@ func _junction_tick(c: Expedition) -> void:
 		for i in 6:
 			if c.water < 45 and c.buy("water").is_empty():
 				break
-		if c.wagon.wear > 45 and c.repair_kits == 0:
-			c.buy("repair_kit")
-		if c.wagon.broken != Wagon.Part.NONE or (c.wagon.wear > 60 and c.repair_kits > 0):
+		for k in Wagon.SPARES:
+			if c.spare_count(k) == 0 and c.coins > 30:
+				c.buy("spare_" + k)
+		if c.wagon.broken != Wagon.Part.NONE or c.wagon.wear > 60:
 			exp.call("_do_repair")
 		# Rest when half the team is hurt or anyone is knocked out.
 		var hurt := 0

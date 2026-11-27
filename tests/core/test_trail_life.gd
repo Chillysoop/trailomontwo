@@ -106,7 +106,7 @@ func test_moments_apply_and_reward_the_helper() -> void:
 
 func test_every_moment_and_event_effect_is_known() -> void:
 	var known := ["text", "food", "water", "health", "wear", "integrity", "days", "fatigue", "lose_cargo", "coins",
-		"repair_kits", "light_dust", "dark_dust", "item", "technique", "xp", "recruit", "fever", "cure", "progress",
+		"spare_axle", "spare_harness", "spare_canvas", "spare", "break", "salvage", "curio", "give_item", "light_dust", "dark_dust", "item", "technique", "xp", "recruit", "fever", "cure", "progress",
 		"heal_team", "battle", "bounty"]
 	for m in TrailMoments.MOMENTS:
 		for k in m["fx"]:
@@ -197,8 +197,8 @@ func test_buying_at_a_stall() -> void:
 	check(not e.can_buy("food"), "no coins, no food")
 	e.coins = 999
 	for i in 20:
-		e.buy("repair_kit")
-	check_eq(e.stock_left("repair_kit"), 0)
+		e.buy("spare_axle")
+	check_eq(e.stock_left("spare_axle"), 0)
 
 
 func test_every_stop_and_good_is_known() -> void:
