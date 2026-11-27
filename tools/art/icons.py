@@ -129,6 +129,15 @@ ICONS = {
     "job_cold": "a warm red knitted scarf with fur trim",
     "job_heal": "a green healing herb bundle tied with string",
     # catching
+    # stakes and story (wave 3)
+    "rust_itch": "a small creature paw covered in orange rust flakes with itch scratch lines",
+    "moss_lung": "a pair of small lungs with green moss growing on them and a cough puff",
+    "spore_sneeze": "an orange spore cloud puff bursting from a tiny sneezing nose",
+    "bramble_burrs": "a cluster of spiky green and brown bramble burrs with thorns",
+    "landmark": "a small stone obelisk monument with a brass plaque and ivy",
+    "score": "a brass trophy cup with a green leaf wreath",
+    "toll": "a striped wooden toll gate barrier arm with a brass coin slot",
+    "rapids": "white water rapids splashing over dark rocks",
     "lure": "a small woven brass and reed bait charm with a glowing teal berry hanging from a string",
     "starter": "a small brass compass rose with a green leaf in its center",
     "map": "a folded parchment treasure map with a dotted trail and a red x",

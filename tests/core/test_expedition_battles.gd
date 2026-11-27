@@ -52,7 +52,8 @@ func test_guardian_waits_on_the_last_stretch_to_westwatch() -> void:
 			break
 	check(bool(e.pending_encounter.get("guardian", false)), "the guardian should block the way")
 	check_eq(e.state, Expedition.State.TRAVELLING, "not arrived yet")
-	check(e.encounter_choices().size() == 1, "no way around the guardian")
+	var ids: Array = e.encounter_choices().map(func(v): return v["id"])
+	check_eq(ids, ["fight", "toll", "rapids"])
 	e.auto_fight()
 	while e.step_day():
 		pass

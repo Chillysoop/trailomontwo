@@ -207,3 +207,26 @@ Paths matter: which road you take, and when, decides how the crossing goes.
   `Expedition` (season, make_river, best_helper assists, hunt_block/start_hunt/_finish_hunt,
   delivery_offer/take_delivery), `Battle` hunt mode (prey, bolt_at, hunt_bag).
   Tests: `tests/core/test_paths.gd`, `tests/core/test_hunt.gd`.
+
+## Stakes and story (wave 3 of the wagon-trail ideas)
+
+- **Ailments and the trail doctor**: about 3.5% a day on the road (more on thin rations, in swamps and
+  jungles, and in the frost) one Trailomon catches something odd for 4 days: rust itch (pulls at half
+  strength), moss lung (+8 tiredness a day), spore sneezes (no trail jobs) or bramble burrs (loses 6%
+  health a day). The card: a Heal Trailomon tends it, a herbal remedy (Forage), a pinch of Light
+  dust, rest it a day, or press on (30% it spreads, else 40% it lasts 3 days longer). Resting at a
+  stop takes a day off. Code: `src/core/trail/ailments.gd`.
+- **Landmark cards**: the first stop in each region shows its landmark's card (name, day, one
+  line) with a small reward: dust, health, water, food, coins, wear off or experience.
+  Code: `src/core/data/landmarks.gd`.
+- **The guardian road**: the guardian's card offers Fight, the toll road around (30 + 6 per crossing
+  coins and 2 days) or run the rapids (Float check, Steady and Scout assist; a wreck loses supplies
+  and the guardian fight starts as an ambush). Going around gives no guardian rewards.
+- **Arrival score and scrapbook**: on arrival, a score from team, health, supplies, coins, the
+  wagon, days before the frost, how you passed the guardian and deliveries on time, with a rank
+  (Greenhorn, Trail hand, Wagon master, Trail legend) and your best earlier score. The scrapbook lists
+  the crossing's moments: ailments, landmarks, recruits, deliveries, the finale.
+- **Graves from your runs**: when a caravan fails you write its epitaph. The stone is kept in
+  `user://graves.json` (shared by all slots) and turns up as a roadside grave on the same crossing in
+  later runs (60% of graves there, when you have one). Code: `src/core/trail/graves.gd`.
+- Tests: `tests/core/test_stakes.gd`. Shots: `tools/shots/stakes_shots.gd`.
