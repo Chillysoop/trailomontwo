@@ -139,6 +139,22 @@ var nicknames := {}
 var seals: Array[String] = []
 ## Stops where the healer has already patched the team up this crossing.
 var healed_at: Array[String] = []
+## Every species this caravan has ever had (caught, joined, started with or evolved into).
+var caught := {}
+## Glinting Trailomon the caravan owns (species id -> true), and the lead who walks beside the wagon.
+var glints := {}
+var lead := ""
+## Flares: light one to scare off a wild pack and drive on (never works on a guardian).
+var flares := 0
+## This crossing's obstacles (Obstacles.place): blocked roads by road key, and legendary lairs.
+var obstacles := {}
+var lairs := {}
+## Roads and lairs a rumor has already pointed at.
+var rumored := {}
+## Extra odds on the pending catch (a lair's legendary, the deep wilds).
+var catch_bonus := 0.0
+## The pending catch is a glinting one.
+var pending_glint := false
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -254,6 +270,9 @@ func setup_map(no: int) -> void:
 	if map == null:
 		map = WorldMap.test_route() if default_map == "test" else WorldMap.generate(randi())
 	map.setup_crossing(no)
+	var placed := Obstacles.place(map, no)
+	obstacles = placed["roads"]
+	lairs = placed["lairs"]
 	at = map.start
 	visited = [at]
 	state = State.AT_JUNCTION
@@ -353,6 +372,10 @@ func hear_rumor() -> String:
 		return rumors[at]
 	var r := RandomNumberGenerator.new()
 	r.seed = int(base.get("rumor_seed", 0))
+	var tip := _obstacle_rumor(r)
+	if tip != "":
+		rumors[at] = tip
+		return tip
 	var far: Array[String] = []
 	for j in map.around(at, 4):
 		if not is_seen(j):
@@ -462,6 +485,41 @@ func days_of(supply: float, per_day: float) -> float:
 
 
 ## Everything the route card shows for one segment, before committing.
+## Rumors point at the crossing's sleeping giants, blocked roads and legendary lairs first.
+func _obstacle_rumor(r: RandomNumberGenerator) -> String:
+	var near := map.around(at, 4)
+	var picks: Array = []
+	for id in lairs:
+		if not bool(lairs[id]["done"]) and near.has(id) and not rumored.has(id):
+			picks.append(id)
+	for k in obstacles:
+		var ends := String(k).split("|")
+		if (near.has(ends[0]) or near.has(ends[1])) and not rumored.has(k) and String(obstacles[k]["kind"]) != "deep":
+			picks.append(k)
+	picks.sort()
+	if picks.is_empty() or r.randf() < 0.25:
+		return ""
+	var pick: String = picks[r.randi_range(0, picks.size() - 1)]
+	rumored[pick] = true
+	if lairs.has(pick):
+		seen[pick] = true
+		var sp := String(lairs[pick]["species"])
+		return "{i:lair} Old folk swear %s sleeps at %s. Nobody who woke it came back with a story." % [Species.name_markup(sp), map.name_of(pick)]
+	var ends := pick.split("|")
+	seen[ends[0]] = true
+	seen[ends[1]] = true
+	var o: Dictionary = obstacles[pick]
+	var road := "the road between %s and %s" % [map.name_of(ends[0]), map.name_of(ends[1])]
+	if o["kind"] == "giant":
+		return "{i:giant} A giant %s sleeps across %s. Bring food, or a strong team." % [Species.info(String(o["species"]))["name"], road]
+	return "{i:%s} %s on %s. A {k:cap_%s|%s} Trailomon could clear it." % [Glossary.icon("cap_" + String(o["cap"])), String(o["name"]), road, String(o["cap"]), String(o["cap"]).capitalize()]
+
+
+## The obstacle on a road ({} = none): {"kind": "giant"|"gate"|"deep", ...}.
+func obstacle_on(seg: Dictionary) -> Dictionary:
+	return obstacles.get(Obstacles.key(String(seg.get("from", seg.get("a", ""))), String(seg.get("to", seg.get("b", "")))), {})
+
+
 func forecast(seg: Dictionary) -> Dictionary:
 	var demand := pull_demand(float(seg["terrain_factor"]))
 	var available := hauling_available()
@@ -492,7 +550,17 @@ func trip_distance(seg: Dictionary, pushing: bool) -> float:
 
 
 func exits() -> Array[Dictionary]:
-	return map.exits(at)
+	var out := map.exits(at)
+	for seg in out:
+		var o := obstacle_on(seg)
+		if o.is_empty():
+			continue
+		seg["block"] = o.duplicate()
+		if o["kind"] == "deep":
+			seg["deep"] = true
+			seg["days"] = int(seg["days"]) + Obstacles.DEEP_DAYS
+			seg["risk"] = 3
+	return out
 
 
 ## Travel one day along a segment. Returns a line for the log.
@@ -584,7 +652,7 @@ func step_day() -> bool:
 		return true
 	if trip_days_left <= 0.0:
 		# An event or a fight on the last day of the final road must not skip the guardian.
-		if _guardian_blocks():
+		if _guardian_blocks() or _lair_blocks():
 			return true
 		return _arrive()
 	if events_enabled:
@@ -595,7 +663,16 @@ func step_day() -> bool:
 	_wear_day(float(trip["terrain_factor"]), trip["pushing"])
 	if state == State.FAILED:
 		return false
-	if events_enabled and String(trip.get("terrain", "")) == "River" and not trip.get("forded", false):
+	if events_enabled and not trip.get("block_met", false):
+		trip["block_met"] = true
+		var o := obstacle_on(trip)
+		if o.get("kind", "") == "giant":
+			pending_event = Obstacles.giant_event(String(o["species"]), provisions >= Obstacles.GIANT_FOOD)
+			journal.append("A sleeping giant blocks the road!")
+		elif o.get("kind", "") == "gate":
+			pending_event = Obstacles.gate_event(o, crossing_no)
+			journal.append("%s! The road is blocked." % String(o["name"]))
+	if pending_event.is_empty() and events_enabled and String(trip.get("terrain", "")) == "River" and not trip.get("forded", false):
 		trip["forded"] = true
 		pending_event = make_river(Rivers.depth_for(int(trip["risk"]), weather))
 		journal.append("A river blocks the road!")
@@ -611,7 +688,8 @@ func step_day() -> bool:
 			_trip_had_event = true
 			_trip_events += 1
 			journal.append(pending_event["title"] + "!")
-	if pending_event.is_empty() and events_enabled and not _trip_had_battle and battle_rng.randf() < BATTLE_CHANCE + BATTLE_RISK_CHANCE * int(trip["risk"]) + TrailLife.weather_value(weather, "ambush"):
+	var deep_fight := Obstacles.DEEP_FIGHT if trip.get("deep", false) else 0.0
+	if pending_event.is_empty() and events_enabled and not _trip_had_battle and battle_rng.randf() < BATTLE_CHANCE + BATTLE_RISK_CHANCE * int(trip["risk"]) + TrailLife.weather_value(weather, "ambush") + deep_fight:
 		var packs := CombatData.packs_for(trip, crossing_no)
 		if not packs.is_empty():
 			var pack: Dictionary = CombatData.pick_pack(packs, battle_rng)
@@ -619,7 +697,8 @@ func step_day() -> bool:
 				pack = Encounters.build(String(pack["terrain"]), crossing_no, int(trip["risk"]), battle_rng, roster.size())
 			elif roster.size() < TEAM_MAX:
 				pack = Encounters.trim(pack, Encounters.pack_size(roster.size(), int(trip["risk"])))
-			pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip["risk"]), 1.0)), "guardian": false}
+			pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip["risk"]), 1.0)), "guardian": false,
+				"deep": trip.get("deep", false), "glint": _roll_glint(pack)}
 			_trip_had_battle = true
 			journal.append(pack["title"] + "!")
 	if pending_event.is_empty() and pending_encounter.is_empty() and events_enabled and life_rng.randf() < TrailMoments.DAILY_CHANCE:
@@ -633,9 +712,20 @@ func step_day() -> bool:
 		return false
 	if trip_days_left > 0.0 or not pending_event.is_empty() or not pending_encounter.is_empty():
 		return true
-	if _guardian_blocks():
+	if _guardian_blocks() or _lair_blocks():
 		return true
 	return _arrive()
+
+
+## Pulling into a legendary's lair: it's asleep inside (once a trip, until it's beaten).
+func _lair_blocks() -> bool:
+	var to := String(trip.get("to", ""))
+	if not events_enabled or not lairs.has(to) or bool(lairs[to]["done"]) or trip.get("lair_met", false):
+		return false
+	trip["lair_met"] = true
+	pending_event = Obstacles.lair_event(String(lairs[to]["species"]))
+	journal.append("Something big is sleeping at %s." % map.name_of(to))
+	return true
 
 
 ## On the last stretch to the goal, the crossing's guardian steps out (once per crossing).
@@ -1299,6 +1389,12 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 	if fx.has("lures"):
 		lures = maxi(0, lures + int(fx["lures"]))
 		d.append({"icon": "lure", "amount": int(fx["lures"])})
+	if fx.has("flares"):
+		flares = maxi(0, flares + int(fx["flares"]))
+		d.append({"icon": "flare", "amount": int(fx["flares"])})
+	if fx.get("clear_block", false) and not trip.is_empty():
+		obstacles.erase(Obstacles.key(String(trip["from"]), String(trip["to"])))
+		d.append({"icon": "progress", "amount": 0, "label": "road clear"})
 	if fx.has("give_item"):
 		var gid := String(fx["give_item"])
 		items[gid] = item_count(gid) - 1
@@ -1390,7 +1486,10 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 			pending_recruit = wild[life_rng.randi_range(0, wild.size() - 1)]
 			meet(pending_recruit)
 			d.append({"icon": "ev_wildlife", "amount": 0, "who": pending_recruit, "label": "wants to join"})
-	if fx.has("battle") and state == State.TRAVELLING:
+	if fx.get("battle", "") in ["giant", "lair"] and state == State.TRAVELLING:
+		pending_encounter = _obstacle_fight(String(fx["battle"]))
+		d.append({"icon": "risk", "amount": 0, "label": "fight"})
+	elif fx.has("battle") and state == State.TRAVELLING:
 		var pack: Dictionary = TrailEvents.PACKS.get(String(fx["battle"]), {})
 		if pack.is_empty():
 			pack = CombatData.pack_by_id(String(fx["battle"]))
@@ -1418,6 +1517,40 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 		if state == State.FAILED:
 			return d
 	return d
+
+
+## The fight with a woken giant or a lair's legendary: it stands front and centre, with a few
+## wild Trailomon of its habitat around it (fewer for a small team). Beat it and it is the one
+## you get a try to catch (much likelier at a lair).
+func _obstacle_fight(kind: String) -> Dictionary:
+	var lair := kind == "lair"
+	var sp := String(lairs[trip["to"]]["species"]) if lair else String(obstacle_on(trip).get("species", ""))
+	var terrain := String(trip.get("terrain", "Forest"))
+	if lair:
+		terrain = String(map.region_of(String(trip["to"])).get("terrain", terrain)) if map != null else terrain
+	var risk := 2 if lair else 3
+	var pack := Encounters.build(terrain, crossing_no, risk, battle_rng, roster.size())
+	if pack.is_empty():
+		pack = {"front": ["", "", ""], "back": ["", "", ""]}
+	pack = Encounters.trim(pack, maxi(1, Encounters.pack_size(roster.size(), risk) - 1))
+	var front: Array = pack["front"]
+	var back: Array = pack["back"]
+	if String(front[1]) != "":
+		for i in [0, 2]:
+			if String(front[i]) == "":
+				front[i] = front[1]
+				break
+	front[1] = sp
+	for i in 3:
+		if String(back[i]) == sp:
+			back[i] = ""
+	var n := String(Species.info(sp)["name"])
+	pack["id"] = ("lair_" if lair else "giant_") + sp
+	pack["title"] = ("The legendary %s" if lair else "A woken %s") % n
+	pack["text"] = ("%s rises from its hollow." if lair else "The %s heaves itself up, furious and enormous.") % n
+	return {"pack": pack, "scale": float(CombatData.RISK_SCALE[3]) * (1.0 if lair else Obstacles.GIANT_SCALE), "guardian": false,
+		"prize": sp, "catch_bonus": Obstacles.LAIR_CATCH if lair else 0.0, "lair": String(trip["to"]) if lair else "",
+		"giant": not lair}
 
 
 ## Add (or with a negative count, take away) spare parts. Gains only come aboard if they fit.
@@ -1922,6 +2055,7 @@ func evolve(id: String, to: String) -> String:
 	if haulers.has(to) and not can_haul(to):
 		haulers.erase(to)
 	encountered[to] = true
+	caught[to] = true
 	var line := "%s evolved into %s!" % [Species.info(id)["name"], Species.info(to)["name"]]
 	journal.append(line)
 	return line
@@ -2020,6 +2154,8 @@ func encounter_choices() -> Array:
 		out.append({"id": "slip", "label": "Slip past quietly", "safe": false, "helper": helper,
 			"odds": CheckOdds.for_scores(score, SLIP_DIFFICULTY)})
 		out.append({"id": "bribe", "label": "Throw them food (%d food)" % BRIBE_FOOD, "safe": true, "helper": "", "odds": {}})
+		if flares > 0:
+			out.append({"id": "flare", "label": "Light a flare", "safe": true, "helper": "", "odds": {}})
 	return out
 
 
@@ -2068,6 +2204,14 @@ func resolve_encounter(choice_id: String, roll := -1) -> Dictionary:
 			note("rapids", "Wrecked in the rapids.")
 			journal.append(t)
 			return {"outcome": "failure", "text": t, "fight": true, "ambush": true}
+		"flare":
+			if flares <= 0:
+				return {}
+			flares -= 1
+			pending_encounter = {}
+			var t := "The flare goes up with a crack and a red glare. They scatter, and you drive on."
+			journal.append(t)
+			return {"outcome": "success", "text": t, "fight": false, "ambush": false}
 		"bribe":
 			provisions = maxf(0.0, provisions - BRIBE_FOOD)
 			pending_encounter = {}
@@ -2186,6 +2330,8 @@ const TEAM_MAX := 6
 ## Odds of catching a worn-out wild Trailomon after a win, by rarity; a lure adds LURE_BONUS.
 const CATCH_CHANCE := {"common": 0.65, "rare": 0.4, "legendary": 0.15}
 const LURE_BONUS := 0.2
+## Odds that a wild pack has one glinting Trailomon in it.
+const GLINT_CHANCE := 1.0 / 48.0
 
 ## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
 func finish_battle(battle: Battle) -> Array[String]:
@@ -2203,8 +2349,15 @@ func finish_battle(battle: Battle) -> Array[String]:
 	var bounty := int(pending_encounter.get("bounty", 0))
 	var from_event := bool(pending_encounter.get("from_event", false))
 	var spar := String(pack.get("id", "")).begins_with("trainer_")
+	var prize := String(pending_encounter.get("prize", ""))
+	var lair := String(pending_encounter.get("lair", ""))
+	var giant := bool(pending_encounter.get("giant", false))
+	var deep := bool(pending_encounter.get("deep", false))
+	var glint := String(pending_encounter.get("glint", ""))
+	catch_bonus = float(pending_encounter.get("catch_bonus", 0.0)) + (Obstacles.DEEP_CATCH if deep else 0.0)
 	pending_encounter = {}
 	pending_recruit = ""
+	pending_glint = false
 	match outcome:
 		Battle.Outcome.VICTORY:
 			provisions += VICTORY_FOOD
@@ -2251,9 +2404,22 @@ func finish_battle(battle: Battle) -> Array[String]:
 				found.append(BattleItems.item_name(id))
 		if not found.is_empty():
 			lines.append("Found a battle item: %s." % ", ".join(found))
+		if giant and not trip.is_empty():
+			obstacles.erase(Obstacles.key(String(trip["from"]), String(trip["to"])))
+		if lair != "" and lairs.has(lair):
+			lairs[lair]["done"] = true
+			note("lair", "Beat the legendary %s in its lair." % Species.info(prize)["name"])
 		var wild: Array[String] = recruit_candidates(pack)
-		if not wild.is_empty() and not from_event:
-			pending_recruit = Species.pick_weighted(wild, battle_rng)
+		if glint != "" and wild.has(glint) and prize == "":
+			pending_recruit = glint
+			pending_glint = true
+			lines.append("The glinting %s stays behind, shimmering. Try to catch it (%d%%)." % [Species.info(glint)["name"], roundi(catch_chance(glint) * 100.0)])
+		elif prize != "" and wild.has(prize):
+			pending_recruit = prize
+			lines.append("The %s is spent and still. Try to catch it (%d%%)." % [Species.info(prize)["name"], roundi(catch_chance(prize) * 100.0)])
+		elif not wild.is_empty() and not from_event:
+			# The deep wilds: the rarest of the pack is the one that stays behind.
+			pending_recruit = _rarest(wild) if deep else Species.pick_weighted(wild, battle_rng)
 			lines.append("A worn-out wild %s is still here. Try to catch it (%d%%)." % [Species.info(pending_recruit)["name"], roundi(catch_chance(pending_recruit) * 100.0)])
 		var bonus := biome_dust_bonus()
 		var light := (Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT) + int(bonus["light"])
@@ -2290,6 +2456,11 @@ func finish_battle(battle: Battle) -> Array[String]:
 	if wagon.integrity <= 0:
 		state = State.FAILED
 		fail_reason = "The wagon was torn apart in battle."
+	elif giant and outcome != Battle.Outcome.VICTORY and state == State.TRAVELLING:
+		var t := "You stagger away and take the long way round. It goes back to sleep."
+		lines.append(t)
+		journal.append(t)
+		apply_fx({"days": Obstacles.DETOUR_DAYS})
 	elif guardian and outcome != Battle.Outcome.VICTORY and not trip.is_empty():
 		lines.append(_turned_back())
 		journal.append(lines[-1])
@@ -2419,6 +2590,11 @@ func recruit() -> String:
 		line = "%s joined you%s. It waits in storage until you swap it into the team." % [Species.info(id)["name"], at_lv]
 	creature_hp[id] = max_hp(id)
 	encountered[id] = true
+	caught[id] = true
+	if pending_glint:
+		glints[id] = true
+		line += " It glints!"
+	pending_glint = false
 	journal.append(line)
 	note("starter", "%s joined the caravan." % Species.info(id)["name"])
 	return line
@@ -2440,7 +2616,61 @@ func has_room() -> bool:
 ## The odds of catching a worn-out wild Trailomon, with a lure if you carry one.
 func catch_chance(id: String) -> float:
 	var base := float(CATCH_CHANCE.get(Species.rarity(id), 0.5))
-	return minf(0.95, base + (LURE_BONUS if lures > 0 else 0.0))
+	return minf(0.95, base + (LURE_BONUS if lures > 0 else 0.0) + catch_bonus)
+
+
+## Field guide: has this species been met, and has the caravan ever had it?
+func has_met(id: String) -> bool:
+	return encountered.has(id) or has_caught(id)
+
+
+func has_caught(id: String) -> bool:
+	return caught.has(id) or roster.has(id) or stored.has(id)
+
+
+## Region names where a species was met, for its field guide page.
+func met_where(id: String) -> Array[String]:
+	var out: Array[String] = []
+	if map == null:
+		return out
+	for rid in met_in:
+		if met_in[rid].has(id) and map.regions.has(rid):
+			var n := String(map.regions[rid]["name"])
+			if not out.has(n):
+				out.append(n)
+	out.sort()
+	return out
+
+
+## A wild pack's glinting member, if it has one ("" mostly).
+func _roll_glint(pack: Dictionary) -> String:
+	if life_rng.randf() >= GLINT_CHANCE:
+		return ""
+	var ids: Array[String] = []
+	for id in pack.get("front", []) + pack.get("back", []):
+		if String(id) != "":
+			ids.append(String(id))
+	return ids[life_rng.randi_range(0, ids.size() - 1)] if not ids.is_empty() else ""
+
+
+## The Trailomon walking beside the wagon: the one picked as lead if it's in the team and not
+## in harness, else the first free one ("" if everyone is hauling).
+func lead_companion() -> String:
+	if lead != "" and roster.has(lead) and not haulers.has(lead):
+		return lead
+	for id in roster:
+		if not haulers.has(id):
+			return id
+	return ""
+
+
+## The rarest of a few species (first one on a tie).
+static func _rarest(ids: Array[String]) -> String:
+	var best := ids[0]
+	for id in ids:
+		if int(Species.RARITIES[Species.rarity(id)]["weight"]) < int(Species.RARITIES[Species.rarity(best)]["weight"]):
+			best = id
+	return best
 
 
 ## Try to catch the pending wild Trailomon: one try, a lure is used up if you carry one.
@@ -2457,6 +2687,7 @@ func try_catch() -> Dictionary:
 		var line := recruit()
 		return {"caught": true, "line": ("The lure works. " if lured else "") + "Caught! " + line}
 	pending_recruit = ""
+	pending_glint = false
 	var miss := "%s breaks free and slips into the brush." % Species.info(id)["name"]
 	journal.append(miss)
 	return {"caught": false, "line": miss}

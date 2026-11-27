@@ -157,6 +157,11 @@ func _junction_tick(c: Expedition) -> void:
 			await _frames(10)
 			await _shot("c%d_05_overworld" % c.crossing_no)
 			exp.call("_toggle_world")
+			exp.call("_open_field_guide")
+			await _frames(10)
+			await _shot("c%d_06_field_guide" % c.crossing_no)
+			exp.get("_field_guide").call("_close")
+			await _frames(5)
 	# Level ups and team upkeep, like a player at a stop.
 	await _upkeep(c)
 	# Outfit in the start town, like a player who lets the shopkeeper pack.
@@ -428,7 +433,8 @@ func _event_tick(c: Expedition, event: Control) -> void:
 	stats["events"] += 1
 	var ev := c.pending_event
 	_say("EVENT %s" % ev.get("title", "?"))
-	if not shots_taken.has("event_" + String(ev.get("id", ""))) and shots_taken.keys().filter(func(k): return String(k).begins_with("event_")).size() < 6:
+	var showcase := ["giant", "gate", "lair"].has(String(ev.get("id", "")))
+	if not shots_taken.has("event_" + String(ev.get("id", ""))) and (showcase or shots_taken.keys().filter(func(k): return String(k).begins_with("event_")).size() < 6):
 		shots_taken["event_" + String(ev.get("id", ""))] = true
 		await _shot("event_%s" % ev.get("id", ""))
 	var views := c.event_choices(ev)

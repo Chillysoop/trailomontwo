@@ -276,6 +276,7 @@ func _card(id: String, highlight := "") -> Control:
 	col.add_child(top)
 	var pic := TextureRect.new()
 	pic.texture = portrait(id)
+	Glint.apply(pic, crossing.glints.has(id))
 	pic.custom_minimum_size = Vector2(PIC, PIC)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -313,7 +314,22 @@ func _card(id: String, highlight := "") -> Control:
 	name_btn.focus_mode = Control.FOCUS_NONE
 	name_btn.pressed.connect(_ask_name.bind(id))
 	Tips.attach(name_btn, func(): return "Give %s a name." % crossing.display_name(id))
-	evo_col.add_child(name_btn)
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 1)
+	evo_col.add_child(btn_row)
+	btn_row.add_child(name_btn)
+	var lead_btn := Ui.button("", 7)
+	lead_btn.icon = Rich.icon_tex("lead")
+	lead_btn.focus_mode = Control.FOCUS_NONE
+	lead_btn.toggle_mode = true
+	lead_btn.button_pressed = crossing.lead_companion() == id
+	lead_btn.pressed.connect(func():
+		crossing.lead = id
+		Sound.cry(id)
+		refresh())
+	Tips.attach(lead_btn, func(): return "{i:lead} %s walks beside the wagon on the road%s." % [crossing.display_name(id),
+		" (once it's out of harness)" if crossing.haulers.has(id) else ""] if crossing.lead_companion() != id else "{i:lead} %s is walking beside the wagon." % crossing.display_name(id))
+	btn_row.add_child(lead_btn)
 	if not evo.is_empty():
 		for to in evo:
 			var eb := Ui.button("Evolve" if evo.size() == 1 else String(Species.info(to)["name"]), 7)
@@ -455,6 +471,7 @@ func _stored_tile(id: String) -> Control:
 	p.add_child(row)
 	var pic := TextureRect.new()
 	pic.texture = portrait(id)
+	Glint.apply(pic, crossing.glints.has(id))
 	pic.custom_minimum_size = Vector2(TILE, TILE)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

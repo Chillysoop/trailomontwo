@@ -9,6 +9,7 @@ const SCENES := {
 
 
 func _ready() -> void:
+	Sound.music("title")
 	var backdrop := TravelBackdrop.new()
 	backdrop.speed_scale = 0.5
 	add_child(backdrop)
