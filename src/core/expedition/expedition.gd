@@ -1332,8 +1332,8 @@ const STORAGE_MAX := 9
 ## Trailomon travelling in the team (the lineup has 6 cells).
 const TEAM_MAX := 6
 ## Odds of catching a worn-out wild Trailomon after a win, by rarity; a lure adds LURE_BONUS.
-const CATCH_CHANCE := {"common": 0.7, "rare": 0.45, "legendary": 0.2}
-const LURE_BONUS := 0.25
+const CATCH_CHANCE := {"common": 0.65, "rare": 0.4, "legendary": 0.15}
+const LURE_BONUS := 0.2
 
 ## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
 func finish_battle(battle: Battle) -> Array[String]:

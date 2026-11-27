@@ -275,7 +275,8 @@ func _pick(seg: Dictionary) -> void:
 	lines.append("{i:food} uses %d of %d%s     {i:water} uses %d of %d%s" % [
 		roundi(f["provisions"]), roundi(crossing.provisions), "" if f["enough_food"] else " " + bad % "NOT ENOUGH",
 		roundi(f["water"]), roundi(crossing.water), "" if f["enough_water"] else " " + bad % "NOT ENOUGH"])
-	var haul := "{i:haul} needs %d, haulers give %d  " % [roundi(f["demand"]), roundi(f["available"])]
+	var puller := "haulers give" if crossing.hauling_available() > Wagon.BASE_PULL else "your crew pulls"
+	var haul := "{i:haul} needs %d, %s %d  " % [roundi(f["demand"]), puller, roundi(f["available"])]
 	match f["hauling"]:
 		Hauling.Result.NORMAL: haul += "[color=#9fe0a0]OK[/color]"
 		Hauling.Result.PUSH: haul += "[color=#f0d27a]{k:push|PUSHING}[/color]"

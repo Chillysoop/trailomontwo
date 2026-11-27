@@ -162,7 +162,7 @@ const ENTRIES := {
 	"rations_thin": {"name": "Thin rations", "icon": "rations_thin", "text": "x0.6 food. -3 {i:health} a day and the team heals slower."},
 	"rations_full": {"name": "Full rations", "icon": "rations_full", "text": "x1.35 food. +3 {i:health} a day and the team heals faster."},
 	"lure": {"name": "Lure", "icon": "lure",
-		"text": "A bait charm. After a win you get one try to catch a worn-out wild Trailomon; a lure adds +25% to that try and is used up. Towns, villages and posts sell them."},
+		"text": "A bait charm. After a win you get one try to catch a worn-out wild Trailomon; a lure adds +20% to that try and is used up. Towns, villages and posts sell them."},
 	"starter": {"name": "First partner", "icon": "starter",
 		"text": "The Trailomon you set out with. Every other one has to be caught on the road or befriended in trail events."},
 	"coins": {"name": "Coins", "icon": "coins",
