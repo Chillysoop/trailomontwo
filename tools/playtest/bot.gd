@@ -3,7 +3,12 @@ extends SceneTree
 ## careful new player. Takes screenshots of firsts and keeps a log of everything that happens.
 ## Needs a display for screenshots (headless runs just log):
 ##   xvfb-run godot --path . --script res://tools/playtest/bot.gd -- out=<dir> crossings=N seed=S
-##   style=careful|reckless (careful rests, buys and evolves; reckless just keeps going)
+##   style=smart|careful|reckless
+##   smart: plans like a thoughtful player. Takes risky roads for experience while supplies
+##     allow, rests up before the guardian road, saves battle items for the guardian, sticks to
+##     one style per Trailomon, picks the rarest boosts, swaps in strong recruits.
+##   careful: buys supplies and rests, but picks moves at random and burns items on every fight.
+##   reckless: never shops or rests, picks at random.
 
 var out_dir := "user://playtest"
 var crossings := 3
@@ -58,6 +63,18 @@ func _run() -> void:
 	_find_button(root, "Choose %s" % Species.info(starter)["name"]).pressed.emit()
 	await _frames(10)
 	exp = current_scene
+	# The how-to-play guide opens for a new caravan: read it page by page, like a new player.
+	var guide: GuideScreen = exp.get("_guide")
+	if guide != null:
+		for i in GuideScreen.pages(_c()).size():
+			await _shot("01_guide_%d" % (i + 1))
+			var nb := _find_button(guide, "Next")
+			if nb == null:
+				nb = _find_button(guide, "Let's go")
+			nb.pressed.emit()
+			await _frames(4)
+	if exp.get("_guide") != null:
+		_say("ERROR: guide did not close")
 	Engine.time_scale = 40.0 if DisplayServer.get_name() == "headless" else 6.0
 	_say("Started crossing 1 at %s" % _c().map.name_of(_c().at))
 	var guard := 0
@@ -137,7 +154,7 @@ func _junction_tick(c: Expedition) -> void:
 	# Level ups and team upkeep, like a player at a stop.
 	await _upkeep(c)
 	# Buy supplies when low.
-	if style == "careful":
+	if style != "reckless":
 		for i in 6:
 			if c.provisions < 100 and c.buy("food").is_empty():
 				break
@@ -154,6 +171,17 @@ func _junction_tick(c: Expedition) -> void:
 			if float(c.creature_hp.get(id, 0.0)) < c.max_hp(id) * 0.5:
 				hurt += 1
 		var rests := 0
+		var goal_next := false
+		for seg in c.exits():
+			if seg["to"] == c.map.goal:
+				goal_next = true
+		# Smart: go into the guardian road rested and healthy.
+		if style == "smart" and goal_next and not c.guardian_faced:
+			hurt = 0
+			for id in c.roster:
+				if float(c.creature_hp.get(id, 0.0)) < c.max_hp(id) * 0.85:
+					hurt += 1
+			hurt = 3 if hurt > 0 else 0
 		while (hurt >= 3 or not c.knocked_out().is_empty()) and rests < 2 and c.provisions > 30:
 			exp.call("_do_rest")
 			rests += 1
@@ -176,6 +204,8 @@ func _junction_tick(c: Expedition) -> void:
 		elif h == best_h or (h == best_h + 1 and rng.randf() < 0.25):
 			best.append(seg)
 	var seg: Dictionary = best[rng.randi_range(0, best.size() - 1)]
+	if style == "smart":
+		seg = _smart_road(c, best_h)
 	exp.call("_pick", seg)
 	var go: Button = exp.get("_go")
 	var tries := 0
@@ -228,7 +258,7 @@ func _upkeep(c: Expedition) -> void:
 		if is_instance_valid(s):
 			s.call("close_screen")
 		await _frames(2)
-	if style != "careful":
+	if style == "reckless":
 		return
 	# Evolve when possible.
 	for id in c.roster.duplicate():
@@ -240,21 +270,26 @@ func _upkeep(c: Expedition) -> void:
 				_say("EVOLVE " + line)
 	# Spend dust on attack (light) and hp (dark)
 	for id in c.roster:
-		while c.light_dust > 0 and c.dust_left(id) > 0 and rng.randf() < 0.5:
+		while c.light_dust > 0 and c.dust_left(id) > 0 and (style == "smart" or rng.randf() < 0.5):
 			c.use_dust(id, "light", "atk")
+		while style == "smart" and c.dark_dust > 0 and c.dust_left(id) > 0:
+			if c.use_dust(id, "dark", "hp") == "":
+				break
 	# Swap in stored creatures that look stronger (higher base hp*atk).
 	for sid in c.stored.duplicate():
 		var weakest := ""
 		var weak_power := INF
 		for id in c.roster:
-			var p := c.stat(id, "atk") * c.max_hp(id)
+			var p := _power(c, id)
 			if p < weak_power:
 				weak_power = p
 				weakest = id
-		if weakest != "" and c.stat(sid, "atk") * c.max_hp(sid) > weak_power * 1.25 and not c.haulers.has(weakest):
+		if weakest != "" and _power(c, sid) > weak_power * (1.1 if style == "smart" else 1.25) and not c.haulers.has(weakest):
 			if c.swap_stored(sid, weakest):
 				_say("SWAP in %s for %s" % [sid, weakest])
-	# Fill item slots with anything we hold.
+	# Fill item slots with anything we hold (smart players save them for the guardian).
+	if style == "smart":
+		return
 	for i in 3:
 		if c.item_slots[i] == "" or int(c.items.get(c.item_slots[i], 0)) <= 0:
 			for id in c.items:
@@ -263,10 +298,66 @@ func _upkeep(c: Expedition) -> void:
 					break
 
 
+func _power(c: Expedition, id: String) -> float:
+	return c.stat(id, "atk") * c.max_hp(id) * (1.0 + 0.1 * c.level(id))
+
+
+## Smart road choice: risky roads for experience while supplies and health allow, the safest
+## road when they run low. Never strays more than one stop from the shortest way.
+func _smart_road(c: Expedition, best_h: int) -> Dictionary:
+	var hp := 0.0
+	var top := 0.0
+	for id in c.roster:
+		hp += float(c.creature_hp.get(id, 0.0))
+		top += c.max_hp(id)
+	var flush := c.provisions >= 60 and c.water >= 30 and hp >= top * 0.6
+	var pick: Dictionary = {}
+	var score := -INF
+	for seg in c.exits():
+		var h := c.map.hops(seg["to"], c.map.goal)
+		if h > best_h + (1 if flush and c.provisions >= 90 else 0):
+			continue
+		var sc := -float(h) * 2.0 - float(seg["days"]) * 0.3
+		sc += float(seg["risk"]) * (1.5 if flush else -1.5)
+		if sc > score:
+			score = sc
+			pick = seg
+	return pick
+
+
+const SMART_ITEMS := ["rally_horn", "ember_draught", "ironbark_salve", "stoneskin_tea", "mending_moss", "bitter_ash", "swiftwind_feather", "smoke_pouch"]
+
+## Smart: battle items only for the guardian (or a wild fight that looks too strong).
+func _smart_items(c: Expedition, use: bool) -> void:
+	for i in 3:
+		c.set_item_slot(i, "")
+	if not use:
+		return
+	var slot := 0
+	for id in SMART_ITEMS:
+		if slot < 3 and c.item_free(id) > 0:
+			c.set_item_slot(slot, id)
+			slot += 1
+
+
 func _best_option(p: Dictionary) -> int:
 	# Prefer the rarer stat option; moves: first.
 	var opts: Array = p["options"]
 	if opts.size() < 2:
+		return 0
+	if style == "smart":
+		if opts[0]["kind"] == "stat" and opts[1]["kind"] == "stat":
+			var pref := {"atk": 3, "hp": 2, "spd": 1, "def": 0}
+			var a := int(opts[0]["rarity"]) * 10 + int(pref[opts[0]["stat"]])
+			var b := int(opts[1]["rarity"]) * 10 + int(pref[opts[1]["stat"]])
+			return 1 if b > a else 0
+		# Stick to one style (archetype) per Trailomon.
+		var id := String(p["id"])
+		if not _style_of.has(id):
+			_style_of[id] = String(opts[0].get("archetype", ""))
+		for i in opts.size():
+			if String(opts[i].get("archetype", "")) == _style_of[id]:
+				return i
 		return 0
 	if opts[0]["kind"] == "stat" and opts[1]["kind"] == "stat":
 		return 1 if int(opts[1]["rarity"]) > int(opts[0]["rarity"]) else 0
@@ -322,6 +413,7 @@ func _event_tick(c: Expedition, event: Control) -> void:
 	(kids[pick] as ClickRow).pressed.emit()
 
 
+var _style_of := {}
 var _battle_state := ""
 func _battle_tick(b: Node) -> void:
 	var c := _c()
@@ -337,6 +429,8 @@ func _battle_tick(b: Node) -> void:
 				await _shot("battle_lineup")
 			_find_button(b, "Auto-arrange").pressed.emit()
 			await _frames(2)
+			if style == "smart":
+				_smart_items(c, guardian or float(c.pending_encounter.get("scale", 1.0)) >= 1.45)
 			_battle_state = "guardian" if guardian else "pack"
 			stats["battles"] += 1
 			var lv: Array = []
