@@ -40,7 +40,8 @@ static func pages(e: Expedition) -> Array:
 			+ "Safe roads keep you fed; risky ones make you strong. Choose your path to get your team ready for the guardian without running dry."],
 		["{i:xp} Growing your team",
 			"Every level-up is a choice: one of two stat boosts, or a new move from one of two styles. Make them on the [b]Companions[/b] screen.\n\n"
-			+ "Lean into a style, swap in the Trailomon you take in, and use {i:light_dust} dust on your best fighters.\n\n"
+			+ "You start with just your partner. After each wild win you get [b]one try to catch[/b] a worn-out foe; a {i:lure} lure improves the odds. Rare ones are harder to catch.\n\n"
+			+ "Lean into a style and use {i:light_dust} dust on your best fighters.\n\n"
 			+ "Before a battle, set your lineup (the front row is hit first) and fill the {i:item_slot} three item slots. Save your best items for the guardian."],
 	]
 

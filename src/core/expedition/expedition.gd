@@ -112,6 +112,10 @@ var moments: Array = []
 var carry := 0.0
 ## Shop purchases at each stop: junction -> {good: count bought}.
 var bought := {}
+## Lures carried: each one raises the odds of the next catch, and is used up by it.
+var lures := 0
+## True for a caravan that set out with one starter (see small_team_factor).
+var fresh_start := false
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -155,6 +159,43 @@ static func new_default(rng_seed := -1) -> Expedition:
 	return e
 
 
+## The three Trailomon a new caravan can pick from. Each is the first stage of a three-stage
+## line: a sturdy guard, a quick striker and a bruiser who can help pull. The rest of the team
+## has to be caught on the road.
+const STARTERS := ["mossmole", "crayhopper", "cragkid"]
+## What a brand-new caravan carries besides its starter.
+const START_ITEMS := {"ironbark_salve": 1, "mending_moss": 1}
+const START_LURES := 2
+const START_CARGO := [
+	{"name": "Medicine crates", "weight": 40.0, "value": 120},
+	{"name": "Seed stock", "weight": 40.0, "value": 90},
+]
+
+
+## A brand-new caravan: one starter Trailomon, a light wagon, a couple of lures. Everyone else
+## joins by being caught after wild fights (or befriended in trail events).
+static func new_game(starter: String, rng_seed := -1) -> Expedition:
+	var e := new_default(rng_seed)
+	if not STARTERS.has(starter):
+		starter = STARTERS[0]
+	e.roster = [starter]
+	e.stored = []
+	e.haulers = []
+	e.lineup.clear()
+	e.items = START_ITEMS.duplicate()
+	e.techniques = {}
+	e.light_dust = 0
+	e.dark_dust = 0
+	e.lures = START_LURES
+	e.fresh_start = true
+	e.cargo.assign(START_CARGO.duplicate(true))
+	e.fatigue = {starter: 0.0}
+	e.creature_hp = {starter: e.max_hp(starter)}
+	e.encountered = {starter: true}
+	e.tidy_lineup()
+	return e
+
+
 ## A world crossing starts with nothing aboard but the cargo: everything else comes from the outfitter.
 func empty_supplies() -> void:
 	provisions = 0.0
@@ -171,8 +212,10 @@ func set_crossing(no: int) -> void:
 
 
 ## The guardian waiting on the last stretch of this crossing.
+## A small team meets the guardian with fewer of its brood: at most one escort per team member.
 func guardian_pack() -> Dictionary:
-	return CombatData.guardian_for(crossing_no)
+	var g: Dictionary = CombatData.guardian_for(crossing_no)
+	return g if roster.size() >= TEAM_MAX else Encounters.trim(g, roster.size())
 
 
 ## Foes get tougher every crossing.
@@ -341,7 +384,8 @@ func hauling_available() -> float:
 	for id in haulers:
 		if conscious(id):
 			strengths.append(hauler_strength(id))
-	var total := Hauling.available(strengths)
+	# The crew pulls on their own when the Trailomon haulers can't do better.
+	var total := maxf(Wagon.BASE_PULL, Hauling.available(strengths))
 	return total * (Wagon.HARNESS_PENALTY if wagon.broken == Wagon.Part.HARNESS else 1.0)
 
 
@@ -371,7 +415,7 @@ func forecast(seg: Dictionary) -> Dictionary:
 		"water": daily_water() * days,
 		"enough_food": provisions >= daily_provisions() * days,
 		"enough_water": water >= daily_water() * days,
-		"can_go": result != Hauling.Result.BLOCKED and state == State.AT_JUNCTION and wagon.broken != Wagon.Part.RUNNING_GEAR and not haulers.is_empty() and available > 0.0,
+		"can_go": result != Hauling.Result.BLOCKED and state == State.AT_JUNCTION and wagon.broken != Wagon.Part.RUNNING_GEAR and available > 0.0,
 	}
 
 
@@ -493,7 +537,9 @@ func step_day() -> bool:
 		if not packs.is_empty():
 			var pack: Dictionary = CombatData.pick_pack(packs, battle_rng)
 			if pack.get("table", false):
-				pack = Encounters.build(String(pack["terrain"]), crossing_no, int(trip["risk"]), battle_rng)
+				pack = Encounters.build(String(pack["terrain"]), crossing_no, int(trip["risk"]), battle_rng, roster.size())
+			elif roster.size() < TEAM_MAX:
+				pack = Encounters.trim(pack, Encounters.pack_size(roster.size(), int(trip["risk"])))
 			pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip["risk"]), 1.0)), "guardian": false}
 			_trip_had_battle = true
 			journal.append(pack["title"] + "!")
@@ -818,6 +864,9 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 	if fx.has("coins"):
 		coins = maxi(0, coins + int(fx["coins"]))
 		d.append({"icon": "coins", "amount": int(fx["coins"])})
+	if fx.has("lures"):
+		lures = maxi(0, lures + int(fx["lures"]))
+		d.append({"icon": "lure", "amount": int(fx["lures"])})
 	if fx.has("give_item"):
 		var gid := String(fx["give_item"])
 		items[gid] = item_count(gid) - 1
@@ -913,6 +962,8 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 		var pack: Dictionary = TrailEvents.PACKS.get(String(fx["battle"]), {})
 		if pack.is_empty():
 			pack = CombatData.pack_by_id(String(fx["battle"]))
+		if roster.size() < TEAM_MAX:
+			pack = Encounters.trim(pack, Encounters.pack_size(roster.size(), int(trip.get("risk", 1))))
 		pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip.get("risk", 1)), 1.0)), "guardian": false,
 			"bounty": int(fx.get("bounty", 0)), "from_event": true}
 		d.append({"icon": "risk", "amount": 0, "label": "fight"})
@@ -1579,10 +1630,24 @@ func enemy_scale() -> float:
 		total += level(lineup[cell])
 		n += 1
 	var avg := float(total) / maxf(1.0, float(n))
-	return base * crossing_factor() * (1.0 + LEVEL_SCALE * maxf(0.0, avg - 1.0))
+	return base * crossing_factor() * (1.0 + LEVEL_SCALE * maxf(0.0, avg - 1.0)) * small_team_factor()
+
+
+## A caravan that set out with a lone starter meets weaker foes while it builds its team: the
+## smaller the team, the weaker. The help fades over the first crossings and is gone by
+## crossing FRESH_FADE_CROSSINGS + 1, where the full-strength balance takes over.
+func small_team_factor() -> float:
+	if not fresh_start:
+		return 1.0
+	var f := float(SMALL_TEAM_SCALE.get(roster.size(), 1.0))
+	var fade := clampf(float(crossing_no - 1) / float(FRESH_FADE_CROSSINGS), 0.0, 1.0)
+	return lerpf(f, 1.0, fade)
 
 
 const LEVEL_SCALE := 0.015
+## Foe strength by team size (see small_team_factor). Tuned with tools/sim/starter_sim.gd.
+const SMALL_TEAM_SCALE := {1: 0.55, 2: 0.58, 3: 0.62, 4: 0.66, 5: 0.7, 6: 0.75}
+const FRESH_FADE_CROSSINGS := 4
 
 ## What a battle defeat costs (breach): wagon integrity and a share of food and water.
 const BREACH_INTEGRITY := 15
@@ -1594,8 +1659,12 @@ const VICTORY_WATER := 4.0
 const VICTORY_COINS := 5
 const ITEM_DROP_CHANCE := 0.5
 const TECHNIQUE_DROP_CHANCE := 0.2
-const RECRUIT_CHANCE := 0.35
 const STORAGE_MAX := 9
+## Trailomon travelling in the team (the lineup has 6 cells).
+const TEAM_MAX := 6
+## Odds of catching a worn-out wild Trailomon after a win, by rarity; a lure adds LURE_BONUS.
+const CATCH_CHANCE := {"common": 0.65, "rare": 0.4, "legendary": 0.15}
+const LURE_BONUS := 0.2
 
 ## Apply a finished battle (or null when nobody could fight). Returns lines describing the aftermath.
 func finish_battle(battle: Battle) -> Array[String]:
@@ -1653,9 +1722,9 @@ func finish_battle(battle: Battle) -> Array[String]:
 		if not found.is_empty():
 			lines.append("Found a battle item: %s." % ", ".join(found))
 		var wild: Array[String] = recruit_candidates(pack)
-		if not wild.is_empty() and not from_event and battle_rng.randf() < RECRUIT_CHANCE:
+		if not wild.is_empty() and not from_event:
 			pending_recruit = Species.pick_weighted(wild, battle_rng)
-			lines.append("A wild %s lingers after the fight. It could join you." % Species.info(pending_recruit)["name"])
+			lines.append("A worn-out wild %s is still here. Try to catch it (%d%%)." % [Species.info(pending_recruit)["name"], roundi(catch_chance(pending_recruit) * 100.0)])
 		var bonus := biome_dust_bonus()
 		var light := (Dust.GUARDIAN_LIGHT if guardian else Dust.WIN_LIGHT) + int(bonus["light"])
 		var dark := (Dust.GUARDIAN_DARK if guardian else (1 if battle_scale >= Dust.STRONG_SCALE else 0)) + int(bonus["dark"])
@@ -1785,7 +1854,7 @@ func use_technique(id: String, mid: String, to_memory: bool) -> String:
 ## Species from a beaten pack that could join: not the boss, not one you already have.
 func recruit_candidates(pack: Dictionary) -> Array[String]:
 	var out: Array[String] = []
-	if stored.size() >= STORAGE_MAX:
+	if not has_room():
 		return out
 	for id in pack.get("front", []) + pack.get("back", []):
 		var sid := String(id)
@@ -1794,21 +1863,32 @@ func recruit_candidates(pack: Dictionary) -> Array[String]:
 	return out
 
 
-## Take in the creature that offered to join. It goes to storage, rested and healthy.
+## Take in the creature that offered to join. It joins the team while the team has fewer than
+## TEAM_MAX, otherwise it goes to storage. Either way it arrives rested and healthy.
 func recruit() -> String:
-	if pending_recruit == "" or stored.size() >= STORAGE_MAX:
+	if pending_recruit == "" or not has_room():
 		return ""
 	var id := pending_recruit
 	pending_recruit = ""
-	stored.append(id)
 	fatigue[id] = 0.0
 	# Newcomers have lived in the wild too: they join a little below your team's level, with
 	# their level-up choices waiting for you.
 	var join := recruit_level()
 	while level(id) < join:
 		gain_xp(id, Leveling.xp_to_next(level(id)) - int(xp.get(id, 0)))
+	var at_lv := " at Lv %d" % join if join > 1 else ""
+	var line := ""
+	if roster.size() < TEAM_MAX:
+		roster.append(id)
+		tidy_lineup()
+		if can_haul(id) and haulers.size() < 2:
+			haulers.append(id)
+		line = "%s joined your team%s." % [Species.info(id)["name"], at_lv]
+	else:
+		stored.append(id)
+		line = "%s joined you%s. It waits in storage until you swap it into the team." % [Species.info(id)["name"], at_lv]
 	creature_hp[id] = max_hp(id)
-	var line := "%s joined you%s. It waits in storage until you swap it into the team." % [Species.info(id)["name"], " at Lv %d" % join if join > 1 else ""]
+	encountered[id] = true
 	journal.append(line)
 	return line
 
@@ -1819,6 +1899,36 @@ func recruit_level() -> int:
 	for id in roster:
 		total += level(id)
 	return maxi(1, roundi(float(total) / maxf(1.0, float(roster.size()))) - 2)
+
+
+## Room for one more Trailomon, in the team or in storage.
+func has_room() -> bool:
+	return roster.size() < TEAM_MAX or stored.size() < STORAGE_MAX
+
+
+## The odds of catching a worn-out wild Trailomon, with a lure if you carry one.
+func catch_chance(id: String) -> float:
+	var base := float(CATCH_CHANCE.get(Species.rarity(id), 0.5))
+	return minf(0.95, base + (LURE_BONUS if lures > 0 else 0.0))
+
+
+## Try to catch the pending wild Trailomon: one try, a lure is used up if you carry one.
+## Returns {"caught": bool, "line": String}. A miss means it slips away for good.
+func try_catch() -> Dictionary:
+	if pending_recruit == "" or not has_room():
+		return {"caught": false, "line": ""}
+	var id := pending_recruit
+	var chance := catch_chance(id)
+	var lured := lures > 0
+	if lured:
+		lures -= 1
+	if battle_rng.randf() < chance:
+		var line := recruit()
+		return {"caught": true, "line": ("The lure works. " if lured else "") + "Caught! " + line}
+	pending_recruit = ""
+	var miss := "%s breaks free and slips into the brush." % Species.info(id)["name"]
+	journal.append(miss)
+	return {"caught": false, "line": miss}
 
 
 ## Swap a stored creature with one travelling in the team. The stored one takes its place in
