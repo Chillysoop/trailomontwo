@@ -181,6 +181,15 @@ ICONS = {
     "up_float_tanks": "two sealed brass barrels with rivets floating on blue water",
     "up_brass_horn": "a big curved brass horn with a flared bell and sound lines",
     "up_lantern_mast": "a tall wooden mast with a glowing teal lantern at the top",
+    # camp life (wave 5)
+    "morale": "a small smiling sun face with a green leaf, cheerful spirit symbol",
+    "cook": "a small black iron cooking pot with steam and a wooden spoon",
+    "forage": "a small woven wicker basket with a green leaf and a mushroom",
+    "campfire": "a small crackling campfire with logs and orange flames",
+    "ing_herbs": "a small bundle of green wild herbs tied with twine",
+    "ing_mushrooms": "two small brown and red capped mushrooms",
+    "ing_berries": "a small cluster of round purple and red berries on a twig",
+    "ing_fish": "a small silver blue fish with a green fin",
 }
 
 
