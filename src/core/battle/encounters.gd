@@ -94,8 +94,8 @@ static func title_for(terrain: String) -> String:
 
 
 ## Roll a pack from the terrain's table: 4 creatures on risk 1, up to 6 on risk 3. A small team
-## meets smaller packs (team size + risk - 1), so a lone starter faces one wild Trailomon on a
-## safe road. At most one legendary. Guards and bruisers stand in front.
+## meets smaller packs (one fewer than the team on a safe road, as many on risk 2, one more on
+## risk 3), so a lone starter faces one wild Trailomon on a safe road. At most one legendary. Guards and bruisers stand in front.
 static func build(terrain: String, crossing_no: int, risk: int, rng: RandomNumberGenerator, team_size := 6) -> Dictionary:
 	var table := weighted_pool(terrain, crossing_no)
 	if table.is_empty():
@@ -151,7 +151,7 @@ static func _text(terrain: String) -> String:
 
 ## How many foes a wild pack has for a team of `team_size` on a road of this risk.
 static func pack_size(team_size: int, risk: int) -> int:
-	return clampi(mini(3 + risk, team_size + risk - 1), 1, 6)
+	return clampi(mini(3 + risk, team_size + risk - 2), 1, 6)
 
 
 ## A copy of a pack with at most `keep` creatures (the front row's middle lane first, then

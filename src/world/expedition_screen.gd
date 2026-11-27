@@ -291,10 +291,6 @@ func _pick(seg: Dictionary) -> void:
 		_go.text = "Set off"
 	elif f["stranded"]:
 		_go.text = "The axle is broken. Repair the wagon first"
-	elif crossing.haulers.is_empty():
-		_go.text = "No haulers in harness"
-	elif f["available"] <= 0.0:
-		_go.text = "Haulers are knocked out. Rest first"
 	else:
 		_go.text = "Too heavy to travel this way"
 

@@ -64,7 +64,8 @@ func test_every_wild_win_offers_a_catch() -> void:
 
 func test_small_teams_meet_small_packs() -> void:
 	check_eq(Encounters.pack_size(1, 1), 1, "a lone starter meets one foe on a safe road")
-	check_eq(Encounters.pack_size(1, 3), 3)
+	check_eq(Encounters.pack_size(1, 3), 2)
+	check_eq(Encounters.pack_size(3, 2), 3, "an even fight on a risky road")
 	check_eq(Encounters.pack_size(6, 1), 4, "a full team meets the usual pack")
 	check_eq(Encounters.pack_size(6, 3), 6)
 	var g := CombatData.guardian_for(1)
@@ -78,3 +79,15 @@ func test_small_teams_meet_small_packs() -> void:
 	check_eq(trimmed.get("boss", ""), g.get("boss", ""), "the guardian itself always comes")
 	var e := Expedition.new_game("mossmole", 3)
 	check_eq(e.guardian_pack()["front"], trimmed["front"], "the caravan's guardian is trimmed too")
+
+
+func test_fresh_caravans_get_early_help_that_fades() -> void:
+	var e := Expedition.new_game("mossmole", 3)
+	var lone := e.small_team_factor()
+	check(lone < 1.0, "a lone starter meets weaker foes")
+	e.pending_recruit = "thornfang"
+	e.recruit()
+	check(e.small_team_factor() > lone, "the help shrinks as the team grows")
+	e.set_crossing(Expedition.FRESH_FADE_CROSSINGS + 1)
+	check_eq(e.small_team_factor(), 1.0, "and is gone after the first crossings")
+	check_eq(Expedition.new_default(3).small_team_factor(), 1.0, "a veteran caravan gets no help")

@@ -105,6 +105,8 @@ var carry := 0.0
 var bought := {}
 ## Lures carried: each one raises the odds of the next catch, and is used up by it.
 var lures := 0
+## True for a caravan that set out with one starter (see small_team_factor).
+var fresh_start := false
 
 
 static func new_default(rng_seed := -1) -> Expedition:
@@ -175,6 +177,7 @@ static func new_game(starter: String, rng_seed := -1) -> Expedition:
 	e.light_dust = 0
 	e.dark_dust = 0
 	e.lures = START_LURES
+	e.fresh_start = true
 	e.cargo.assign(START_CARGO.duplicate(true))
 	e.fatigue = {starter: 0.0}
 	e.creature_hp = {starter: e.max_hp(starter)}
@@ -359,7 +362,7 @@ func forecast(seg: Dictionary) -> Dictionary:
 		"water": daily_water() * days,
 		"enough_food": provisions >= daily_provisions() * days,
 		"enough_water": water >= daily_water() * days,
-		"can_go": result != Hauling.Result.BLOCKED and state == State.AT_JUNCTION and wagon.broken != Wagon.Part.RUNNING_GEAR and not haulers.is_empty() and available > 0.0,
+		"can_go": result != Hauling.Result.BLOCKED and state == State.AT_JUNCTION and wagon.broken != Wagon.Part.RUNNING_GEAR and available > 0.0,
 	}
 
 
@@ -798,6 +801,8 @@ func apply_fx(fx: Dictionary, helper := "", terrain := "Forest") -> Array:
 		var pack: Dictionary = TrailEvents.PACKS.get(String(fx["battle"]), {})
 		if pack.is_empty():
 			pack = CombatData.pack_by_id(String(fx["battle"]))
+		if roster.size() < TEAM_MAX:
+			pack = Encounters.trim(pack, Encounters.pack_size(roster.size(), int(trip.get("risk", 1))))
 		pending_encounter = {"pack": pack, "scale": float(CombatData.RISK_SCALE.get(int(trip.get("risk", 1)), 1.0)), "guardian": false,
 			"bounty": int(fx.get("bounty", 0)), "from_event": true}
 		d.append({"icon": "risk", "amount": 0, "label": "fight"})
@@ -1294,10 +1299,24 @@ func enemy_scale() -> float:
 		total += level(lineup[cell])
 		n += 1
 	var avg := float(total) / maxf(1.0, float(n))
-	return base * crossing_factor() * (1.0 + LEVEL_SCALE * maxf(0.0, avg - 1.0))
+	return base * crossing_factor() * (1.0 + LEVEL_SCALE * maxf(0.0, avg - 1.0)) * small_team_factor()
+
+
+## A caravan that set out with a lone starter meets weaker foes while it builds its team: the
+## smaller the team, the weaker. The help fades over the first crossings and is gone by
+## crossing FRESH_FADE_CROSSINGS + 1, where the full-strength balance takes over.
+func small_team_factor() -> float:
+	if not fresh_start:
+		return 1.0
+	var f := float(SMALL_TEAM_SCALE.get(roster.size(), 1.0))
+	var fade := clampf(float(crossing_no - 1) / float(FRESH_FADE_CROSSINGS), 0.0, 1.0)
+	return lerpf(f, 1.0, fade)
 
 
 const LEVEL_SCALE := 0.015
+## Foe strength by team size (see small_team_factor). Tuned with tools/sim/starter_sim.gd.
+const SMALL_TEAM_SCALE := {1: 0.55, 2: 0.58, 3: 0.62, 4: 0.66, 5: 0.7, 6: 0.75}
+const FRESH_FADE_CROSSINGS := 4
 
 ## What a battle defeat costs (breach): wagon integrity and a share of food and water.
 const BREACH_INTEGRITY := 15
