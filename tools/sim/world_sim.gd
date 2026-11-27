@@ -28,15 +28,18 @@ func _init() -> void:
 			var guard := 0
 			while e.state == Expedition.State.AT_JUNCTION and guard < 60:
 				guard += 1
+				if e.outfitting():
+					e.pack_for_me()
 				for i in 6:
 					if e.provisions < 110 and e.buy("food").is_empty():
 						break
 				for i in 6:
 					if e.water < 45 and e.buy("water").is_empty():
 						break
-				if e.wagon.wear > 45 and e.repair_kits == 0:
-					e.buy("repair_kit")
-				if e.wagon.broken != Wagon.Part.NONE or (e.wagon.wear > 60 and e.repair_kits > 0):
+				for k in Wagon.SPARES:
+					if e.spare_count(k) == 0 and e.coins > 30:
+						e.buy("spare_" + k)
+				if e.wagon.broken != Wagon.Part.NONE or e.wagon.wear > 60:
 					e.repair()
 					repairs += 1
 				var best: Array = []

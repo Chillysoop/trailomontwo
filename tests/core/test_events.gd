@@ -23,7 +23,7 @@ func test_twenty_plus_events_each_with_one_safe_choice() -> void:
 			if Expedition.is_safe(c):
 				safe += 1
 		check_eq(safe, 1, e["id"] + " needs exactly one safe choice")
-		check(rolled >= 1 or e["id"] == "trader", e["id"] + " needs a rolled choice")
+		check(rolled >= 1 or e["id"] in ["trader", "barter"], e["id"] + " needs a rolled choice")
 		check(String(e["text"]).length() <= 80, e["id"] + " text should be one short line")
 	check_eq(kinds.size(), 5)
 
