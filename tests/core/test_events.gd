@@ -105,6 +105,8 @@ func test_travel_pauses_for_an_event_until_resolved() -> void:
 func test_main_route_still_completes_with_events() -> void:
 	for s in 20:
 		var e := Expedition.new_default(s)
+		# Events are what's tested here; losing to the guardian sends you back (tested elsewhere).
+		e.guardian_enabled = false
 		for to in ["mossford", "rail_bridge", "thornmarsh", "westwatch"]:
 			# Like a player would: rest at a stop until the team can travel again.
 			var tries := 0

@@ -54,6 +54,8 @@ var _coins_label: RichTextLabel
 var _event_continue: Button
 var _team_status: VBoxContainer
 var _battle: BattleScreen
+## The how-to-play guide while it's open.
+var _guide: GuideScreen
 ## What happens when the event panel's Continue is pressed: "" resumes travel, "battle" or "ambush" opens a fight.
 var _continue_to := ""
 var _picked: Dictionary = {}
@@ -97,6 +99,7 @@ func start_new() -> void:
 	SaveGame.pending = {}
 	if loaded.is_empty():
 		_begin(Expedition.new_default(), 1)
+		_open_guide()
 		return
 	crossing = loaded["expedition"]
 	_start = loaded["start"] if not (loaded["start"] as Dictionary).is_empty() else SaveGame.caravan(crossing)
@@ -207,13 +210,13 @@ func _next_crossing() -> void:
 	_begin(SaveGame.next_crossing(SaveGame.caravan(crossing), -1, crossing_no + 1), crossing_no + 1)
 
 
-## After a failed crossing: try it again with the team as it was when the crossing began.
+## After a failed crossing: try it again from the start, keeping the team's experience.
 ## A failed hardcore caravan is gone, so it starts over from scratch.
 func _retry() -> void:
 	if SaveGame.is_hardcore(_slot):
 		_begin(Expedition.new_default(), 1)
 	else:
-		_begin(SaveGame.next_crossing(_start, -1, crossing_no), crossing_no)
+		_begin(SaveGame.next_crossing(SaveGame.retry_caravan(_start, crossing), -1, crossing_no), crossing_no)
 
 
 # ---------- junction ----------
@@ -315,7 +318,7 @@ func _set_off() -> void:
 func _process(delta: float) -> void:
 	if _travel_map != null:
 		_travel_map.visible = crossing != null and crossing.state == Expedition.State.TRAVELLING and _battle == null
-	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null or _companions != null or _world.visible:
+	if crossing == null or crossing.state != Expedition.State.TRAVELLING or _event.visible or _battle != null or _companions != null or _guide != null or _world.visible:
 		return
 	_day_timer -= delta
 	if _day_timer > 0.0:
@@ -810,7 +813,7 @@ func _show_end(won: bool) -> void:
 			body.text += "\nHardcore: this caravan is gone for good."
 			again.text = "New hardcore caravan"
 		else:
-			body.text += "\nTrying again starts this crossing over, with your team as it set out."
+			body.text += "\nTrying again starts this crossing over with fresh supplies.\nYour team keeps the experience it earned."
 			again.text = "Try this crossing again"
 	_save()
 	(_end.find_child("Again", true, false) as Button).grab_focus.call_deferred()
@@ -857,6 +860,11 @@ func _build_ui() -> void:
 	Tips.attach(comp, func(): return "Your team: stats, moves and memory slots, plus the Trailomon in storage. Travel pauses while it's open.")
 	row.add_child(comp)
 	_comp_btn = comp
+	var guide := _button("Guide", 8)
+	guide.focus_mode = Control.FOCUS_NONE
+	guide.pressed.connect(_open_guide)
+	Tips.attach(guide, func(): return "How to play: the goal, food and water, roads and growing your team. Travel pauses while it's open.")
+	row.add_child(guide)
 	var map_btn := _button("", 8)
 	map_btn.icon = Rich.icon_tex("map")
 	map_btn.focus_mode = Control.FOCUS_NONE
@@ -1073,6 +1081,14 @@ func _open_companions() -> void:
 	_companions.closed.connect(func():
 		_companions = null
 		_refresh_hud())
+
+
+## The how-to-play guide (opens by itself when a new caravan sets out).
+func _open_guide() -> void:
+	if _guide != null and is_instance_valid(_guide):
+		return
+	_guide = GuideScreen.open(_ui, crossing)
+	_guide.closed.connect(func(): _guide = null)
 
 
 func _button(text: String, size: int) -> Button:

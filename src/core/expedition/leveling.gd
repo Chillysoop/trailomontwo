@@ -13,10 +13,10 @@ const MAX_LEVEL := 30
 const ABILITY_LEVELS := [3, 6, 9, 12, 15, 18]
 
 ## Experience for a battle, given to every creature that stood in the lineup.
-const XP_WIN := 35
-const XP_GUARDIAN := 70
-const XP_LOSS := 12
-const XP_RETREAT := 8
+const XP_WIN := 70
+const XP_GUARDIAN := 150
+const XP_LOSS := 25
+const XP_RETREAT := 15
 
 const RARITIES := ["common", "uncommon", "rare", "epic", "legendary", "mythic"]
 const RARITY_NAMES := ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic"]

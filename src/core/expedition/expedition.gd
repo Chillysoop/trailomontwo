@@ -157,7 +157,7 @@ func guardian_pack() -> Dictionary:
 
 
 ## Foes get tougher every crossing.
-const CROSSING_SCALE := 0.06
+const CROSSING_SCALE := 0.04
 
 
 func crossing_factor() -> float:
@@ -1360,7 +1360,24 @@ func finish_battle(battle: Battle) -> Array[String]:
 	if wagon.integrity <= 0:
 		state = State.FAILED
 		fail_reason = "The wagon was torn apart in battle."
+	elif guardian and outcome != Battle.Outcome.VICTORY and not trip.is_empty():
+		lines.append(_turned_back())
+		journal.append(lines[-1])
 	return lines
+
+
+## The guardian still holds the road: the wagon falls back to the stop it came from, and the
+## guardian waits there for the next try. Rest, regroup and come back stronger.
+func _turned_back() -> String:
+	var from := String(trip.get("from", at))
+	guardian_faced = false
+	trip = {}
+	trip_days_left = 0.0
+	carry = 0.0
+	state = State.AT_JUNCTION
+	if from != "":
+		at = from
+	return "%s still holds the road. Your caravan falls back to %s to regroup." % [String(guardian_pack().get("title", "The guardian")), map.name_of(at)]
 
 
 # ---------- battle items ----------
@@ -1454,10 +1471,23 @@ func recruit() -> String:
 	pending_recruit = ""
 	stored.append(id)
 	fatigue[id] = 0.0
+	# Newcomers have lived in the wild too: they join a little below your team's level, with
+	# their level-up choices waiting for you.
+	var join := recruit_level()
+	while level(id) < join:
+		gain_xp(id, Leveling.xp_to_next(level(id)) - int(xp.get(id, 0)))
 	creature_hp[id] = max_hp(id)
-	var line := "%s joined you. It waits in storage until you swap it into the team." % Species.info(id)["name"]
+	var line := "%s joined you%s. It waits in storage until you swap it into the team." % [Species.info(id)["name"], " at Lv %d" % join if join > 1 else ""]
 	journal.append(line)
 	return line
+
+
+## The level a recruit joins at: two below the team's average.
+func recruit_level() -> int:
+	var total := 0
+	for id in roster:
+		total += level(id)
+	return maxi(1, roundi(float(total) / maxf(1.0, float(roster.size()))) - 2)
 
 
 ## Swap a stored creature with one travelling in the team. The stored one takes its place in
