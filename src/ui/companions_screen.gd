@@ -21,6 +21,7 @@ var _cards: VBoxContainer
 var _card_nodes: Array[Control] = []
 var _stored: HBoxContainer
 var _level_btn: Button
+var _seals: RichTextLabel
 var _tech_btn: Button
 var _dust_btns := {}
 ## A stored Trailomon picked for a swap ("" if none).
@@ -100,6 +101,8 @@ func _ready() -> void:
 	_level_btn.pressed.connect(open_level_ups)
 	Tips.attach(_level_btn, func(): return "Your Trailomon levelled up. Pick their upgrades and new moves.")
 	head.add_child(_level_btn)
+	_seals = Rich.label("", 8)
+	head.add_child(_seals)
 	var close := Ui.button("Close (Esc)", 8)
 	close.focus_mode = Control.FOCUS_NONE
 	close.pressed.connect(close_screen)
@@ -147,6 +150,10 @@ func refresh() -> void:
 	_tech_btn.text = "Techniques (%d)" % techs
 	for k in _dust_btns:
 		(_dust_btns[k] as Button).text = "%s (%d)" % ["Light" if k == "light" else "Dark", crossing.dust_count(k)]
+	var seal_icons := ""
+	for g in crossing.seals:
+		seal_icons += "[hint=%s]{i:seal_%s}[/hint]" % [Expedition.seal_name(g), g]
+	Rich.set_text(_seals, seal_icons)
 	_level_btn.visible = crossing.pending_count() > 0
 	_level_btn.text = "Level ups (%d)" % crossing.pending_count()
 
@@ -169,9 +176,52 @@ func open_techniques() -> void:
 
 
 func _evolve(id: String, to: String) -> void:
+	var name := crossing.display_name(id)
 	if crossing.evolve(id, to) != "":
 		Tips.hide_from(null)
 		refresh()
+		EvolveScreen.open(self, id, to, name)
+
+
+## A small box to type a name for one of your Trailomon. Enter keeps it, Esc cancels, an
+## empty name goes back to the species name.
+func _ask_name(id: String) -> void:
+	var dim := ColorRect.new()
+	dim.color = Color(0.05, 0.04, 0.06, 0.6)
+	dim.size = SCREEN
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(dim)
+	var center := CenterContainer.new()
+	center.size = SCREEN
+	dim.add_child(center)
+	var panel := _panel(Color(0.16, 0.12, 0.18, 0.98), Vector2(220, 0))
+	center.add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	panel.add_child(col)
+	col.add_child(Rich.label("{i:rename} [b]Name %s[/b]" % Species.info(id)["name"], 9))
+	var field := LineEdit.new()
+	field.text = String(crossing.nicknames.get(id, ""))
+	field.placeholder_text = String(Species.info(id)["name"])
+	field.max_length = Expedition.NICKNAME_MAX
+	field.add_theme_font_size_override("font_size", 9)
+	col.add_child(field)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	col.add_child(row)
+	var done := func(keep: bool):
+		if keep:
+			crossing.rename(id, field.text)
+		dim.queue_free()
+		refresh()
+	var ok := Ui.button("Keep name", 8)
+	ok.pressed.connect(done.bind(true))
+	row.add_child(ok)
+	var cancel := Ui.button("Cancel", 8)
+	cancel.pressed.connect(done.bind(false))
+	row.add_child(cancel)
+	field.text_submitted.connect(func(_t): done.call(true))
+	field.grab_focus.call_deferred()
 
 
 func close_screen() -> void:
@@ -240,8 +290,11 @@ func _card(id: String, highlight := "") -> Control:
 	var spd := crossing.stat(id, "spd")
 	var dps := atk * float(CombatData.move(kit[0]).get("pct", 100)) / 100.0 / spd
 	var xp_text := "max" if crossing.level(id) >= Leveling.MAX_LEVEL else "%d/%d xp" % [int(crossing.xp.get(id, 0)), Leveling.xp_to_next(crossing.level(id))]
+	var shown := Species.name_markup(id)
+	if crossing.nicknames.has(id):
+		shown = "%s[/b] [font_size=7]%s[/font_size][b]" % [crossing.display_name(id), Species.name_markup(id)]
 	var text := "[font_size=10][b]%s[/b][/font_size]  {i:%s} {i:%s}  [font_size=7][color=#%s]%s[/color][/font_size]\n" % [
-		Species.name_markup(id), Glossary.habitat_id(info["type"]), role, CreatureCard.MUTED, xp_text]
+		shown, Glossary.habitat_id(info["type"]), role, CreatureCard.MUTED, xp_text]
 	text += "{i:hp} [color=#%s]%d[/color][color=#%s]/%d[/color]    {i:atk} [color=#%s]%d[/color]    {i:def} [color=#%s]%d[/color]\n" % [
 		CreatureCard.HP_COL, roundi(hp), CreatureCard.MUTED, roundi(max_hp), CreatureCard.ATK_COL, roundi(atk), CreatureCard.DEF_COL, roundi(def)]
 	text += "{i:spd} [color=#%s]%.2fs[/color]    {i:dps} [color=#%s]%.1f[/color]" % [CreatureCard.SPD_COL, spd, CreatureCard.DPS_COL, dps]
@@ -252,10 +305,16 @@ func _card(id: String, highlight := "") -> Control:
 	stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(stats)
 	var evo := crossing.evolve_options(id)
+	var evo_col := VBoxContainer.new()
+	evo_col.add_theme_constant_override("separation", 1)
+	top.add_child(evo_col)
+	var name_btn := Ui.button("", 7)
+	name_btn.icon = Rich.icon_tex("rename")
+	name_btn.focus_mode = Control.FOCUS_NONE
+	name_btn.pressed.connect(_ask_name.bind(id))
+	Tips.attach(name_btn, func(): return "Give %s a name." % crossing.display_name(id))
+	evo_col.add_child(name_btn)
 	if not evo.is_empty():
-		var evo_col := VBoxContainer.new()
-		evo_col.add_theme_constant_override("separation", 1)
-		top.add_child(evo_col)
 		for to in evo:
 			var eb := Ui.button("Evolve" if evo.size() == 1 else String(Species.info(to)["name"]), 7)
 			eb.focus_mode = Control.FOCUS_NONE

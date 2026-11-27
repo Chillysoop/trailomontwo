@@ -128,6 +128,23 @@ ICONS = {
     "job_steady": "a brass anchor with a green vine",
     "job_cold": "a warm red knitted scarf with fur trim",
     "job_heal": "a green healing herb bundle tied with string",
+    # crossing seals (one per guardian) and matchup markers
+    "seal_hollow_stag": "a round polished brass medal seal with a ribbon, embossed with a stag head with glowing hollow antlers, simple shape",
+    "seal_bog_mother": "a round polished brass medal seal with a ribbon, embossed with a huge toad, simple shape",
+    "seal_cogmammoth": "a round polished brass medal seal with a ribbon, embossed with a mammoth with brass gears, simple shape",
+    "seal_rimewyrm": "a round polished brass medal seal with a ribbon, embossed with a coiled ice serpent, simple shape",
+    "seal_duskmaw": "a round polished brass medal seal with a ribbon, embossed with a panther face with bat wings, simple shape",
+    "seal_dawnshell": "a round polished brass medal seal with a ribbon, embossed with a sea turtle shell with peacock feathers, simple shape",
+    "seal_briarking": "a round polished brass medal seal with a ribbon, embossed with a crown of thorny briars, simple shape",
+    "seal_sturgebull": "a round polished brass medal seal with a ribbon, embossed with a sturgeon fish with bull horns, simple shape",
+    "seal_mirewyrm": "a round polished brass medal seal with a ribbon, embossed with a swamp serpent rising from mud, simple shape",
+    "seal_condorgon": "a round polished brass medal seal with a ribbon, embossed with a condor with dragon wings, simple shape",
+    "seal_tuskursa": "a round polished brass medal seal with a ribbon, embossed with a bear head with long tusks, simple shape",
+    "seal_cobrilla": "a round polished brass medal seal with a ribbon, embossed with a hooded cobra with gorilla arms, simple shape",
+    "adv_up": "a small bright green upward pointing triangle arrow with a dark outline, simple shape",
+    "adv_down": "a small bright red downward pointing triangle arrow with a dark outline, simple shape",
+    "healer": "a small brass medicine kit with a green leaf cross on the lid",
+    "rename": "a small quill pen writing on a brass name tag",
     # catching
     # stakes and story (wave 3)
     "rust_itch": "a small creature paw covered in orange rust flakes with itch scratch lines",
