@@ -60,7 +60,13 @@ func _run() -> void:
 	await _shot("02_starter_pick")
 	if starter == "":
 		starter = Expedition.STARTERS[rng.randi_range(0, Expedition.STARTERS.size() - 1)]
-	_find_button(root, "Choose %s" % Species.info(starter)["name"]).pressed.emit()
+	var choose := _find_button(root, "Choose %s" % Species.info(starter)["name"])
+	var waited := 0
+	while choose == null and waited < 300:
+		await _frames(5)
+		waited += 1
+		choose = _find_button(root, "Choose %s" % Species.info(starter)["name"])
+	choose.pressed.emit()
 	await _frames(10)
 	exp = current_scene
 	# The how-to-play guide opens for a new caravan: read it page by page, like a new player.
