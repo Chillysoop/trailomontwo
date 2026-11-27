@@ -110,3 +110,17 @@ func test_hardcore_refuses_old_copies_and_edits() -> void:
 	f.close()
 	check(SaveGame.read("hardcore").has("error"), "an edited save is refused")
 	_fresh_dir()
+
+
+func test_retrying_a_failed_crossing_keeps_the_teams_experience() -> void:
+	var e := Expedition.new_default(3)
+	var start := SaveGame.caravan(e)
+	var id: String = e.roster[0]
+	e.gain_xp(id, 500)
+	var lv := e.level(id)
+	e.provisions = 0.0
+	e.items["rally_horn"] = 5
+	var again := SaveGame.next_crossing(SaveGame.retry_caravan(start, e), -1, 1)
+	check_eq(again.level(id), lv, "levels kept")
+	check(again.level(id) > 1, "it did level")
+	check_eq(again.item_count("rally_horn"), Expedition.new_default(3).item_count("rally_horn"), "items as the crossing began")

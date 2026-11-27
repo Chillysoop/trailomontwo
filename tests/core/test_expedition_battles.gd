@@ -142,3 +142,35 @@ func test_random_battles_happen_on_risky_routes() -> void:
 			if line.begins_with("Victory") or line.begins_with("Defeat") or line.begins_with("Both sides"):
 				seen += 1
 	check(seen > 0, "some crossings should meet a wild pack")
+
+
+func test_losing_to_the_guardian_sends_the_caravan_back() -> void:
+	var e := _fresh()
+	e.at = "thornmarsh"
+	check(e.start_trip(_seg("thornmarsh", "westwatch")), "can set off")
+	while e.step_day():
+		if not e.pending_encounter.is_empty():
+			break
+	check(bool(e.pending_encounter.get("guardian", false)), "the guardian should block the way")
+	for id in e.roster:
+		e.creature_hp[id] = 0.0
+	var lines := e.auto_fight()
+	check_eq(e.state, Expedition.State.AT_JUNCTION, "not arrived after losing")
+	check_eq(e.at, "thornmarsh", "back at the stop it came from")
+	check(not e.guardian_faced, "the guardian waits for another try")
+	check(lines[-1].contains("falls back"), "says so: " + lines[-1])
+	e.rest()
+	check(e.start_trip(_seg("thornmarsh", "westwatch")), "can try again")
+	while e.step_day():
+		if not e.pending_encounter.is_empty():
+			break
+	check(bool(e.pending_encounter.get("guardian", false)), "the guardian blocks the road again")
+
+
+func test_guide_has_the_goal_and_food() -> void:
+	var e := _fresh()
+	var text := ""
+	for p in GuideScreen.pages(e):
+		text += p[0] + p[1]
+	check(text.contains(e.map.name_of(e.map.goal)), "names the goal")
+	check(text.contains("food") and text.contains("Trade"), "tells you to buy food")
